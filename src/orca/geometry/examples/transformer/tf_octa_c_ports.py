@@ -17,6 +17,9 @@ class TransformerOcta(BaseGeometry):
 
         self.n_inputs = 0
         self.n_outputs = 4
+    
+    def get_next_input_parameters(self):
+        return None
 
     def create_gds_file(self):
         super().create_gds_file()
@@ -25,5 +28,3 @@ class TransformerOcta(BaseGeometry):
         # TODO: Replace with actual geometry creation code
         return f"{os.path.dirname(__file__)}/REFERENCE.gds"
     
-    def get_next_input_parameters(self):
-        return None
