@@ -13,8 +13,9 @@ class RAPID:
     """
 
     def __init__(self, geometry: BaseGeometry):
-        self.geometry = geometry
-        self.geometry_instances = []
+        self.geometry: BaseGeometry = geometry
+        self.geometry_instances: list[tuple[BaseGeometry, str]] = []
+        self.palace_models: list[tuple[str, str]] = []
 
     def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000):
         """
@@ -24,7 +25,8 @@ class RAPID:
 
         print(f"Running {num_samples} RAPID simulations of {self.geometry.name} with {cpu_cores} CPU cores...")                
 
-        self.generate_data(num_samples)
+        self.generate_gds_data(num_samples)
+        self.convert_gds_to_palace()
         self.run_simulation()
         self.train_model()
         self.evaluate_model()
@@ -44,7 +46,7 @@ class RAPID:
         print("Welcome to RAPID - RF AI Pipeline for Integrated Circuit Design")
         print("")
 
-    def generate_data(self, num_samples: int):
+    def generate_gds_data(self, num_samples: int):
         """
         Generates data based on the defined geometry.
         """
@@ -53,20 +55,31 @@ class RAPID:
             # TODO: Generate input parameters for the geometry
             input_params = self.geometry.get_next_input_parameters()
             geo_inst = self.geometry.create_geometry_instance(name=f"{self.geometry.name}_{i}", input_parameters=input_params)
-            self.geometry_instances.append(geo_inst)                   
+            gds_filename = geo_inst.create_gds_file()
+            self.geometry_instances.append((geo_inst, gds_filename))                 
             
         print("#----------- Data generation completed. -----------#")
+
+    def convert_gds_to_palace(self):
+        """
+        Converts GDS files to Palace models.
+        """
+        print("Starting GDS to Palace conversion...")
+        for geo_inst, gds_filename in self.geometry_instances:
+            config_name, palace_folder = create_palace_model_from_gds(
+                geometry=geo_inst,
+                gds_filename=gds_filename,
+                simconfig_filename=geo_inst.simconfig_filename
+            )
+            self.palace_models.append((config_name, palace_folder))
+        print("#----------- GDS to Palace conversion completed. -----------#")
 
     def run_simulation(self):
         """
         Runs simulations on the generated data.
         """
         print("Starting simulations with palace...")
-        create_palace_model_from_gds(
-            geometry=self.geometry,
-            gds_filename=self.geometry.create_geometry_instance([]),
-            simconfig_filename=self.geometry.simconfig_filename
-        )
+        
         print("#----------- Simulations completed. -----------#")
 
     def train_model(self):

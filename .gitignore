@@ -6,3 +6,4 @@ testing.py
 /**/*.pyo
 /**/*.pyd
 /**/*.pyc
+/**/palace_model

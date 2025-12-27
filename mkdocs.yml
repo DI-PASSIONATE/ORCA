@@ -10,7 +10,10 @@ edit_uri: edit/main/docs/
 # Page tree
 nav:
   - Home: index.md
-  
+  - Getting Started: setup.md
+  - Custom Classes: custom_class.md
+  - Running RAPID: running_rapid.md
+
 
 # Configuration
 theme:

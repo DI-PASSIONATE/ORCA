@@ -3,7 +3,7 @@ from rapid.geometry.base_geometry import BaseGeometry
 from rapid.simulation.read_simconfig import read_simconfig
 from gds2palace import gds_reader, stackup_reader, utilities, simulation_setup
 
-def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simconfig_filename: str):
+def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simconfig_filename: str) -> tuple[str, str]:
     """
     Uses gds2palace to create a Palace model from a GDS file and simulation configuration.
     The simconfig is a json and can either be created manually or by using setupEM GUI and saving the configuration.
@@ -13,6 +13,9 @@ def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simc
     Args:
         gds_filename (str): Path to the GDS file.
         simconfig_filename (str): Path to the simulation configuration file (json).
+
+    Returns:
+        tuple[str, str]: Palace config name and data directory of the created Palace model.
     """
     # Path where the output simulation files will be stored -> use current working directory
     script_path = os.getcwd()
@@ -75,6 +78,7 @@ def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simc
     utilities.create_run_script(settings['sim_path'])
 
     print(f"Palace model created at: {data_dir}")
+    return config_name, data_dir
 
 
 

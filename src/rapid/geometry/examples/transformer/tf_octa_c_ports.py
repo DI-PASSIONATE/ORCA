@@ -1,4 +1,5 @@
-from rapid.geometry.base_geometry import BaseGeometry
+from rapid import BaseGeometry
+import os
 
 class Transformer(BaseGeometry):
     def __init__(self, name, stackup_xml, simconfig_filename):
@@ -6,12 +7,12 @@ class Transformer(BaseGeometry):
         self.n_inputs = 0
         self.n_outputs = 4
 
-    def create_gds_file(self, input_parameters):
-        super().create_gds_file(input_parameters)
+    def create_gds_file(self):
+        super().create_gds_file()
         # Implement geometry creation logic here
 
         # TODO: Replace with actual geometry creation code
-        return "/home/david/Documents/git/RAPID/src/rapid/geometry/examples/transformer/REFERENCE.gds"
+        return f"{os.path.dirname(__file__)}/REFERENCE.gds"
     
     def get_next_input_parameters(self):
         return None

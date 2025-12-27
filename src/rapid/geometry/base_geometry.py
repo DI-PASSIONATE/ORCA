@@ -67,7 +67,7 @@ class BaseGeometry:
         Returns:
             str: Path to the created GDS file.
         """
-        assert self._input_parameters is not None, "Input parameters must be set before creating GDS file."
+        assert self._input_parameters is not None if self.n_inputs > 0 else True, "Input parameters must be set before creating GDS file."
         # Implement geometry creation logic here using gdsfactory
         # This is a placeholder implementation
     
