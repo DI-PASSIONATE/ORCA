@@ -3,3 +3,6 @@ testing.py
 /**/.venv
 /**/*.pytest_cache
 /**/.pycache
+/**/*.pyo
+/**/*.pyd
+/**/*.pyc

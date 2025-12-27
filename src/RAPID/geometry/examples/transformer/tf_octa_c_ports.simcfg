@@ -1,0 +1,75 @@
+{
+    "application": "setupEM",
+    "data_format": "1.0",
+    "saved_values": {
+        "preprocess_gds": true,
+        "merge_polygon_size": 0.5,
+        "purpose": [
+            0
+        ],
+        "fstart": 0.0,
+        "fstop": 170.0,
+        "refined_cellsize": 2.0,
+        "order": 2,
+        "cells_per_wavelength": 20.0,
+        "meshsize_max": 100.0,
+        "adaptive_mesh_iterations": 0,
+        "iterative": false,
+        "boundary": [
+            "PEC",
+            "PEC",
+            "PEC",
+            "PEC",
+            "PEC",
+            "PEC"
+        ],
+        "margin": 200.0,
+        "air_around": 200.0,
+        "ELMER_MPI_THREADS": 4,
+        "model_basename": "tf_octa_c_ports",
+        "sim_path": "/home/users/simone/OpenSource_LNA",
+        "fstep": 1.0
+    },
+    "ports": [
+        {
+            "portnumber": 1,
+            "source_layernum": 201,
+            "target_layername": null,
+            "from_layername": "Metal5",
+            "to_layername": "TopMetal1",
+            "direction": "Z",
+            "port_Z0": 50.0,
+            "voltage": 1.0
+        },
+        {
+            "portnumber": 2,
+            "source_layernum": 204,
+            "target_layername": null,
+            "from_layername": "Metal5",
+            "to_layername": "TopMetal1",
+            "direction": "Z",
+            "port_Z0": 50.0,
+            "voltage": 1.0
+        },
+        {
+            "portnumber": 3,
+            "source_layernum": 202,
+            "target_layername": null,
+            "from_layername": "Metal5",
+            "to_layername": "TopMetal2",
+            "direction": "Z",
+            "port_Z0": 50.0,
+            "voltage": 1.0
+        },
+        {
+            "portnumber": 4,
+            "source_layernum": 203,
+            "target_layername": null,
+            "from_layername": "Metal5",
+            "to_layername": "TopMetal2",
+            "direction": "Z",
+            "port_Z0": 50.0,
+            "voltage": 1.0
+        }
+    ]
+}

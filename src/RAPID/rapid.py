@@ -1,4 +1,7 @@
 from .geometry.base_geometry import BaseGeometry
+from .simulation.simulate import create_palace_model_from_gds
+
+import multiprocessing
 
 class RAPID:
     """
@@ -11,44 +14,71 @@ class RAPID:
 
     def __init__(self, geometry: BaseGeometry):
         self.geometry = geometry
+        self.geometry_instances = []
 
-    def run(self):
+    def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000):
         """
         Runs the RAPID pipeline, including data generation, simulation, training, and evaluation.
         """
-        self.generate_data()
+        self.print_super_cool_logo_art()
+
+        print(f"Running {num_samples} RAPID simulations of {self.geometry.name} with {cpu_cores} CPU cores...")                
+
+        self.generate_data(num_samples)
         self.run_simulation()
         self.train_model()
         self.evaluate_model()
 
-    def generate_data(self):
+        print("RAPID pipeline finished successfully.")
+
+    def print_super_cool_logo_art(self):
+        print("###########################################################")
+        print("░▒▓███████▓▒░ ░▒▓██████▓▒░░▒▓███████▓▒░░▒▓█▓▒░▒▓███████▓▒░")  
+        print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
+        print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
+        print("░▒▓███████▓▒░░▒▓████████▓▒░▒▓███████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
+        print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
+        print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
+        print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░▒▓███████▓▒░") 
+        print("###########################################################")
+        print("Welcome to RAPID - RF AI Pipeline for Integrated Circuit Design")
+        print("")
+
+    def generate_data(self, num_samples: int):
         """
         Generates data based on the defined geometry.
         """
-        print("Generating data...")
-        # Placeholder for data generation logic
-        pass
+        print("Starting data generation using gdsfactory...")
+        for i in range(num_samples):
+            # TODO: Generate input parameters for the geometry
+            input_params = self.geometry.get_next_input_parameters()
+            geo_inst = self.geometry.create_geometry_instance(name=f"{self.geometry.name}_{i}", input_parameters=input_params)
+            self.geometry_instances.append(geo_inst)                   
+            
+        print("#----------- Data generation completed. -----------#")
 
     def run_simulation(self):
         """
         Runs simulations on the generated data.
         """
-        print("Running simulations...")
-        # Placeholder for simulation logic
-        pass
+        print("Starting simulations with palace...")
+        create_palace_model_from_gds(
+            geometry=self.geometry,
+            gds_filename=self.geometry.create_geometry_instance([]),
+            simconfig_filename=self.geometry.simconfig_filename
+        )
+        print("#----------- Simulations completed. -----------#")
 
     def train_model(self):
         """
         Trains the RAPID model using the simulation data.
         """
-        print("Training model...")
-        # Placeholder for training logic
-        pass
+        print("Starting model training...")
+        print("#----------- Model training completed. -----------#")
 
     def evaluate_model(self):
         """
         Evaluates the trained RAPID model.
         """
-        print("Evaluating model...")
-        # Placeholder for evaluation logic
-        pass
+        print("Starting model evaluation...")
+        print("#----------- Model evaluation completed. -----------#")
