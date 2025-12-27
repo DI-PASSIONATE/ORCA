@@ -1,5 +1,5 @@
 from .geometry.base_geometry import BaseGeometry
-from .simulation.simulate import create_palace_model_from_gds
+from .simulation.simulate import create_palace_model_from_gds, run_palace
 
 import multiprocessing
 
@@ -17,7 +17,7 @@ class ORCA:
         self.geometry_instances: list[tuple[BaseGeometry, str]] = []
         self.palace_models: list[tuple[str, str]] = []
 
-    def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000):
+    def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace"):
         """
         Runs the ORCA pipeline, including data generation, simulation, training, and evaluation.
         """
@@ -26,21 +26,20 @@ class ORCA:
         print(f"Running {num_samples} ORCA simulations of {self.geometry.name} with {cpu_cores} CPU cores...")                
         self.generate_gds_data(num_samples)
         self.convert_gds_to_palace()
-        self.run_simulation()
+        self.run_simulation(palace_executable, cpu_cores)
         self.train_model()
         self.evaluate_model()
 
         print("ORCA pipeline finished successfully.")
 
     def print_super_cool_logo_art(self):
-        print("###########################################################")
-        print("░▒▓███████▓▒░ ░▒▓██████▓▒░░▒▓███████▓▒░░▒▓█▓▒░▒▓███████▓▒░")  
-        print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
-        print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
-        print("░▒▓███████▓▒░░▒▓████████▓▒░▒▓███████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
-        print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
-        print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
-        print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░▒▓███████▓▒░") 
+        print("###########################################################")  
+        print(" ██████╗ ██████╗  ██████╗ █████╗ ")
+        print("██╔═══██╗██╔══██╗██╔════╝██╔══██╗")
+        print("██║   ██║██████╔╝██║     ███████║")
+        print("██║   ██║██╔══██╗██║     ██╔══██║")
+        print("╚██████╔╝██║  ██║╚██████╗██║  ██║")
+        print(" ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝")       
         print("###########################################################")
         print("Welcome to ORCA - Open RF Integrated Circuit Automation")
         print("")
@@ -65,32 +64,39 @@ class ORCA:
         """
         print("Starting GDS to Palace conversion...")
         for geo_inst, gds_filename in self.geometry_instances:
-            config_name, palace_folder = create_palace_model_from_gds(
+            output: tuple[str, str, str] = create_palace_model_from_gds(
                 geometry=geo_inst,
                 gds_filename=gds_filename,
                 simconfig_filename=geo_inst.simconfig_filename
             )
-            self.palace_models.append((config_name, palace_folder))
+            self.palace_models.append(output)
         print("#----------- GDS to Palace conversion completed. -----------#")
 
-    def run_simulation(self):
+    def run_simulation(self, palace_executable: str, cpu_cores: int):
         """
         Runs simulations on the generated data.
         """
         print("Starting simulations with palace...")
-        
+        for config_name, sim_path, data_dir in self.palace_models:
+            run_palace(
+                sim_path=sim_path,
+                data_dir=data_dir,
+                config_name=config_name,
+                palace_executable=palace_executable,
+                cpu_cores=cpu_cores
+            )
         print("#----------- Simulations completed. -----------#")
 
     def train_model(self):
         """
         Trains the ORCA model using the simulation data.
         """
-        print("Starting model training...")
+        print("Starting model training... (NOT IMPLEMENTED YET)")
         print("#----------- Model training completed. -----------#")
 
     def evaluate_model(self):
         """
         Evaluates the trained ORCA model.
         """
-        print("Starting model evaluation...")
+        print("Starting model evaluation... (NOT IMPLEMENTED YET)")
         print("#----------- Model evaluation completed. -----------#")

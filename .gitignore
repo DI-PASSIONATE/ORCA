@@ -7,3 +7,5 @@ testing.py
 /**/*.pyd
 /**/*.pyc
 /**/palace_model
+*.msh
+/**/test.py

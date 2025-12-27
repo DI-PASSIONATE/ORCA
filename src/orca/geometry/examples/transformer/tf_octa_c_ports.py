@@ -1,9 +1,20 @@
 from orca import BaseGeometry
 import os
 
-class Transformer(BaseGeometry):
-    def __init__(self, name, stackup_xml, simconfig_filename):
-        super().__init__(name, stackup_xml, simconfig_filename)
+class TransformerOcta(BaseGeometry):
+    """
+    Represents a transformer geometry with octagonal shape and C-ports.
+    """
+
+    def __init__(self):
+        # These files are already included in the repository
+        NAME = "tf_octa_c_ports"
+        STACKUP_XML = os.path.join(os.path.dirname(__file__), "..", "SG13G2_nosub.xml")
+        SIMCONFIG_FILENAME = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
+
+        # Call the base class constructor with the parameters
+        super().__init__(NAME, STACKUP_XML, SIMCONFIG_FILENAME)
+
         self.n_inputs = 0
         self.n_outputs = 4
 

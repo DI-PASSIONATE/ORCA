@@ -1,6 +1,7 @@
 import os
 from orca.geometry.base_geometry import BaseGeometry
 from orca.simulation.read_simconfig import read_simconfig
+from orca.simulation.combine_snp_results import convert_to_touchstone
 from gds2palace import gds_reader, stackup_reader, utilities, simulation_setup
 
 def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simconfig_filename: str) -> tuple[str, str]:
@@ -69,6 +70,7 @@ def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simc
     settings['allpolygons'] = allpolygons
     settings['sim_path'] = sim_path
     settings['model_basename'] = model_basename
+    settings['nogui'] = True  # create files without showing 3D model
 
     # list of ports that are excited (set voltage to zero in port excitation to skip an excitation!)
     excite_ports = simulation_ports.all_active_excitations()
@@ -78,7 +80,29 @@ def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simc
     utilities.create_run_script(settings['sim_path'])
 
     print(f"Palace model created at: {data_dir}")
-    return config_name, data_dir
+    print(f"Sim Path: {sim_path}")
+    return config_name, sim_path, data_dir
 
 
+def run_palace(sim_path: str, data_dir: str, config_name: str, palace_executable: str, cpu_cores: int) -> None:
+    """
+    Runs Palace simulation for the given model.
 
+    Args:
+        data_dir (str): Directory where the Palace model is stored.
+        config_name (str): Name of the Palace configuration to run.
+        palace_executable (str): Path to the Palace executable (e.g. "apptainer exec ~/path/to/palace.sif palace").
+        cpu_cores (int): Number of CPU cores to use for the simulation.
+    """
+    print(f"Running Palace simulation for model: {config_name} in folder: {data_dir} using {cpu_cores} CPU cores...")
+    os.chdir(sim_path)
+    cmd = f"{palace_executable} -np {cpu_cores} {config_name} > palace_log.txt"
+    # execute the command, hide output and save return code
+    ret_code = os.system(cmd)
+    if ret_code != 0:
+        raise RuntimeError(f"Palace simulation for model: {config_name} failed with return code: {ret_code}")
+    
+    print(f"Palace simulation for model: {config_name} completed.")
+    os.chdir("..")
+    print(f"Converting Palace CSV results at {sim_path}/{data_dir} to Touchstone format...")
+    convert_to_touchstone(workdir=f"{sim_path}/{data_dir}")

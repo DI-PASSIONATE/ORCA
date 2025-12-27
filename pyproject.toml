@@ -32,7 +32,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-training = [
+train = [
     "gdsfactory",
     "gds2palace",
 ]
