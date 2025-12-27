@@ -3,9 +3,9 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rapid"
+name = "orca"
 version = "0.0.1"
-description = "RAPID - The RF AI Pipeline for IC Design"
+description = "ORCA - Open RF Circuit Automation"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 authors = [
@@ -44,7 +44,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-dir]
-rapid = "src/rapid"
+orca = "src/orca"
 
 [tool.black]
 line-length = 79

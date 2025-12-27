@@ -1,2 +1,2 @@
-from .rapid import RAPID
+from .orca import ORCA
 from .geometry.base_geometry import BaseGeometry

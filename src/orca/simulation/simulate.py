@@ -1,6 +1,6 @@
 import os
-from rapid.geometry.base_geometry import BaseGeometry
-from rapid.simulation.read_simconfig import read_simconfig
+from orca.geometry.base_geometry import BaseGeometry
+from orca.simulation.read_simconfig import read_simconfig
 from gds2palace import gds_reader, stackup_reader, utilities, simulation_setup
 
 def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simconfig_filename: str) -> tuple[str, str]:

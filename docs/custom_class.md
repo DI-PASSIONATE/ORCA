@@ -5,10 +5,10 @@ If you want to simulate and predict your own geometry, you simply need to create
 - A stackup XML file defining the layers of your geometry.
 - A simulation configuration file defining the simulation parameters for Palace.
 
-Once you have these three files, you can head over to [Running RAPID](/docs/running_rapid.md) to see how to run RAPID with these files.
+Once you have these three files, you can head over to [Running ORCA](/docs/running_orca.md) to see how to run ORCA with these files.
 
 ### Python Class
-The Python class should extend the `rapid.BaseGeometry` class and implement the following methods:
+The Python class should extend the `orca.BaseGeometry` class and implement the following methods:
 
 - `__init__(self, name: str, stackup_xml: str, simconfig_filename: str)`: You can define the number of input and output parameters here. Make sure to call the superclass constructor
 - `create_gds_file(self) -> str`: This method should create the GDS file (e.g. using [gdsfactory](https://gdsfactory.github.io/gdsfactory/)) for your geometry and return the path to the created file.
@@ -17,7 +17,7 @@ The Python class should extend the `rapid.BaseGeometry` class and implement the 
 Example:
 
 ```python
-from rapid import BaseGeometry
+from orca import BaseGeometry
 import os
 
 class Transformer(BaseGeometry):
@@ -38,7 +38,7 @@ class Transformer(BaseGeometry):
 ```
 
 ### Stackup XML File
-There are multiple examples of stackup XML files in the `src/rapid/geometry/examples/` directory. Often these are sufficient to get started. You can also create your own stackup XML file or adjust [one of the examples here](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/tree/main/workflow) to fit your needs.
+There are multiple examples of stackup XML files in the `src/orca/geometry/examples/` directory. Often these are sufficient to get started. You can also create your own stackup XML file or adjust [one of the examples here](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/tree/main/workflow) to fit your needs.
 
 Example:
 
@@ -89,7 +89,7 @@ Example:
 
 ### Simulation Configuration File
 The simulation configuration file (.simcfg) defines how to mesh and run the electromagnetic simulation in Palace. 
-You can either tweak existing .simcfg files from the `src/rapid/geometry/examples/` directory, create your own from scratch,
+You can either tweak existing .simcfg files from the `src/orca/geometry/examples/` directory, create your own from scratch,
 or use the GUI provided by [setupEM](https://github.com/VolkerMuehlhaus/setupEM/tree/main) to create the .simcfg file interactively.
 
 Example:

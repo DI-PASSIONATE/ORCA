@@ -1,4 +1,4 @@
-from rapid import BaseGeometry
+from orca import BaseGeometry
 import os
 
 class Transformer(BaseGeometry):

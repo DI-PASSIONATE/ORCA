@@ -3,9 +3,9 @@ from .simulation.simulate import create_palace_model_from_gds
 
 import multiprocessing
 
-class RAPID:
+class ORCA:
     """
-    This is the main RAPID class. It serves as the entry point for the RAPID framework and runs the entire pipeline, from 
+    This is the main ORCA class. It serves as the entry point for the ORCA framework and runs the entire pipeline, from 
     data generation, simulation, training, to evaluation.
 
     Attributes:
@@ -19,19 +19,18 @@ class RAPID:
 
     def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000):
         """
-        Runs the RAPID pipeline, including data generation, simulation, training, and evaluation.
+        Runs the ORCA pipeline, including data generation, simulation, training, and evaluation.
         """
         self.print_super_cool_logo_art()
 
-        print(f"Running {num_samples} RAPID simulations of {self.geometry.name} with {cpu_cores} CPU cores...")                
-
+        print(f"Running {num_samples} ORCA simulations of {self.geometry.name} with {cpu_cores} CPU cores...")                
         self.generate_gds_data(num_samples)
         self.convert_gds_to_palace()
         self.run_simulation()
         self.train_model()
         self.evaluate_model()
 
-        print("RAPID pipeline finished successfully.")
+        print("ORCA pipeline finished successfully.")
 
     def print_super_cool_logo_art(self):
         print("###########################################################")
@@ -43,7 +42,7 @@ class RAPID:
         print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░")
         print("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░▒▓███████▓▒░") 
         print("###########################################################")
-        print("Welcome to RAPID - RF AI Pipeline for Integrated Circuit Design")
+        print("Welcome to ORCA - Open RF Integrated Circuit Automation")
         print("")
 
     def generate_gds_data(self, num_samples: int):
@@ -84,14 +83,14 @@ class RAPID:
 
     def train_model(self):
         """
-        Trains the RAPID model using the simulation data.
+        Trains the ORCA model using the simulation data.
         """
         print("Starting model training...")
         print("#----------- Model training completed. -----------#")
 
     def evaluate_model(self):
         """
-        Evaluates the trained RAPID model.
+        Evaluates the trained ORCA model.
         """
         print("Starting model evaluation...")
         print("#----------- Model evaluation completed. -----------#")

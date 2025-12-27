@@ -1,2 +1,0 @@
-## Geometry
-This folder contains scripts for generating geometries for RAPID simulations. It provides a base class to allow easy creation and manipulation of different geometric shapes and configurations used in simulations.
