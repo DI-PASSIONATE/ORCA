@@ -3,9 +3,9 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "RAPID"
+name = "rapid"
 version = "0.0.1"
-description = "RF AI Pipeline for Integrated Circuit Design"
+description = "RAPID - The RF AI Pipeline for IC Design"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 authors = [
@@ -26,7 +26,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Topic :: Software Development :: Testing",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "scikit-rf",
 ]
@@ -44,7 +44,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-dir]
-RAPID = "src/RAPID"
+rapid = "src/rapid"
 
 [tool.black]
 line-length = 79

@@ -1,12 +1,12 @@
 import gdsfactory as gf
 
 class BaseGeometry:
-    def __init__(self, name: str, stackup_xml: str, simconfig_filename: str, n_inputs: int, n_outputs: int):
+    def __init__(self, name: str, stackup_xml: str, simconfig_filename: str):
         self._name = name
         self._stackup_xml = stackup_xml
         self._simconfig_filename = simconfig_filename
-        self._n_inputs = n_inputs
-        self._n_outputs = n_outputs
+        self._n_inputs = 0
+        self._n_outputs = 0
         self._input_parameters = None  # To be defined by calling create_geometry
 
     @property
@@ -24,10 +24,18 @@ class BaseGeometry:
     @property
     def n_inputs(self) -> int:
         return self._n_inputs
+    
+    @n_inputs.setter
+    def n_inputs(self, value: int):
+        self._n_inputs = value
 
     @property
     def n_outputs(self) -> int:
         return self._n_outputs
+    
+    @n_outputs.setter
+    def n_outputs(self, value: int):
+        self._n_outputs = value
 
     def create_geometry_instance(self, name: str, input_parameters: list = None) -> 'BaseGeometry':
         """
@@ -40,15 +48,13 @@ class BaseGeometry:
         Returns:
             A new object extending BaseGeometry representing the created geometry.
         """
-        assert len(input_parameters) == self.n_inputs, f"Expected {self.n_inputs} input parameters, got {len(input_parameters)}"
+        assert len(input_parameters) == self.n_inputs if self.n_inputs > 0 else True, f"Expected {self.n_inputs} input parameters, got {len(input_parameters)}"
 
         # Create a new instance of the same class as self
         new_geometry = self.__class__(
             name=name,
             stackup_xml=self.stackup_xml,
-            simconfig_filename=self.simconfig_filename,
-            n_inputs=self.n_inputs,
-            n_outputs=self.n_outputs
+            simconfig_filename=self.simconfig_filename
         )
         return new_geometry
     
