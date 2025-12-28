@@ -8,5 +8,4 @@ testing.py
 /**/*.pyc
 /**/palace_model
 *.msh
-/**/test.py
 build/
