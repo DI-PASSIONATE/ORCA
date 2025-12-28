@@ -4,16 +4,17 @@ import os
 class TransformerOcta(BaseGeometry):
     """
     Represents a transformer geometry with octagonal shape and C-ports.
+    No input parameters are required for this geometry.
     """
 
-    def __init__(self):
-        # These files are already included in the repository
-        NAME = "tf_octa_c_ports"
-        STACKUP_XML = os.path.join(os.path.dirname(__file__), "..", "SG13G2_nosub.xml")
-        SIMCONFIG_FILENAME = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
+    def __init__(self,
+                 name = "tf_octa_c_ports",
+                 stackup_xml: str = os.path.join(os.path.dirname(__file__), "..", "SG13G2_nosub.xml"),
+                 simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
+                ):
 
         # Call the base class constructor with the parameters
-        super().__init__(NAME, STACKUP_XML, SIMCONFIG_FILENAME)
+        super().__init__(name, stackup_xml, simconfig_filename)
 
         self.n_inputs = 0
         self.n_outputs = 4

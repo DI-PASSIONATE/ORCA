@@ -1,0 +1,12 @@
+[submodule "modules/setupEM"]
+	path = modules/setupEM
+	url = https://github.com/VolkerMuehlhaus/setupEM.git
+[submodule "modules/gds2palace_ihp_sg13g2"]
+	path = modules/gds2palace_ihp_sg13g2
+	url = https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2.git
+[submodule "modules/palace"]
+	path = modules/palace
+	url = https://github.com/awslabs/palace
+[submodule "modules/IHP"]
+	path = modules/IHP
+	url = https://github.com/gdsfactory/IHP.git
