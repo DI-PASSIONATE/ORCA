@@ -27,5 +27,5 @@ class TransformerOcta(BaseGeometry):
         # Implement geometry creation logic here
 
         # TODO: Replace with actual geometry creation code
-        return f"{os.path.dirname(__file__)}/REFERENCE.gds"
+        return f"{os.path.dirname(__file__)}/tf_octa_c.gds"
     
