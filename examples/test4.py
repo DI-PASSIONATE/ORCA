@@ -168,14 +168,14 @@ def tf_octa_c(
     create_octa_winding(
         diameter=output_winding_diameter, width=upper_linewidth, gap_size=fs_top, 
         layer=LAYER_TOP, center_x=center_displacement/2.0, center_y=0, 
-        rotation_deg=0, feed_target_x=port_xr - gnd_ring_width / 2
+        rotation_deg=0, feed_target_x=port_xr - gnd_ring_width
     )
 
     # Bot Winding (Rot 180, Gap Left -> connects to port_xl)
     create_octa_winding(
         diameter=input_winding_diameter, width=bottom_linewidth, gap_size=fs_bot, 
         layer=LAYER_BOT, center_x=-center_displacement/2.0, center_y=0, 
-        rotation_deg=180, feed_target_x=port_xl + gnd_ring_width / 2
+        rotation_deg=180, feed_target_x=port_xl + gnd_ring_width
     )
 
     # -------------------------------------------------
@@ -199,76 +199,121 @@ def tf_octa_c(
     # in: (portxl, -fs/2 - wi).
     
     # IP (Bot, Left, Upper)
-    c.add_port(name="ip", center=(port_xl, y_bot_p), width=bottom_linewidth, orientation=180, layer=(201, 0))
+    c.add_port(name="ip", center=(port_xl + gnd_ring_width, y_bot_p), width=bottom_linewidth, orientation=180, layer=(201, 0))
     # IN (Bot, Left, Lower)
-    c.add_port(name="in", center=(port_xl, y_bot_n), width=bottom_linewidth, orientation=180, layer=(202, 0))
+    c.add_port(name="in", center=(port_xl + gnd_ring_width, y_bot_n), width=bottom_linewidth, orientation=180, layer=(202, 0))
     
     # OP (Top, Right, Upper)
-    c.add_port(name="op", center=(port_xr, y_top_p), width=upper_linewidth, orientation=0, layer=(203, 0))
+    c.add_port(name="op", center=(port_xr - gnd_ring_width, y_top_p), width=upper_linewidth, orientation=0, layer=(203, 0))
     # ON (Top, Right, Lower)
-    c.add_port(name="on", center=(port_xr, y_top_n), width=upper_linewidth, orientation=0, layer=(204, 0))
+    c.add_port(name="on", center=(port_xr - gnd_ring_width, y_top_n), width=upper_linewidth, orientation=0, layer=(204, 0))
 
-    # -------------------------------------------------
-    # 5. Center Taps (ici, ico, oci, oco)
-    # -------------------------------------------------
-    # Top Winding (Layer Top)
-    # "Left" edge of Top winding (Back of C-shape)
-    top_back_x = center_displacement/2.0 - output_winding_diameter/2.0 
+    # Visual/meshing markers for ports: small rectangles on port layers so GDS contains geometry for source_layernum 201-204
+    port_len = 2.0  # Length of port marker rectangles
+    
+    def add_port_marker(center, width, layer):
+        rect = gf.components.rectangle(size=(port_len, width), layer=layer)
+        ref = c << rect
+        ref.move((center[0], center[1] - width / 2.0))
 
-    # OCI (Top, goes Left?)
-    if fo_int & 1:
-        c << gf.Path([(port_xl + gnd_ring_width / 2, 0), (top_back_x, 0)]).extrude(width=woc_int, layer=LAYER_TOP)
-        c.add_port(name="oci", center=(port_xl, 0), width=woc_int, orientation=180, layer=(207, 0))
-    else:
-        # Default placeholder port
-        c.add_port(name="oci", center=(top_back_x - upper_linewidth/2.0 , 0), width=0.25, orientation=180, layer=(207, 0))
+    add_port_marker((port_xl + gnd_ring_width, y_bot_p), bottom_linewidth, (201, 0))
+    add_port_marker((port_xl + gnd_ring_width, y_bot_n), bottom_linewidth, (202, 0))
+    add_port_marker((port_xr - gnd_ring_width, y_top_p), upper_linewidth, (203, 0))
+    add_port_marker((port_xr - gnd_ring_width, y_top_n), upper_linewidth, (204, 0))
 
-    # OCO (Top, goes Right)
-    # "Right" edge is the gap side, but if fo=2 (Rev), we might connect right?
-    # Actually, Top Center Tap usually connects to the continuous "back".
-    # Wait, if fo=2 (Rev), Skill draws wire from Back to Right Port?
-    # Yes: `list(list(float(dis)/2-float(do)/2 0) list(portxr 0))`
-    # This crosses the Top winding itself? No, it goes through the center.
-    if fo_int & 2:
-        c << gf.Path([(top_back_x, 0), (port_xr, 0)]).extrude(width=woc_int, layer=LAYER_TOP)
-        c.add_port(name="oco", center=(port_xr, 0), width=woc_int, orientation=0, layer=(208, 0))
-    else:
-        c.add_port(name="oco", center=(top_back_x + upper_linewidth/2.0, 0), width=0.25, orientation=0, layer=(208, 0))
 
-    # Bot Winding (Layer Bot)
-    # "Right" edge of Bot winding (Back of C-shape, since Gap is Left)
-    bot_back_x = -center_displacement/2.0 + input_winding_diameter/2.0
+    c.pprint_ports()
+    # # -------------------------------------------------
+    # # 5. Center Taps (ici, ico, oci, oco)
+    # # -------------------------------------------------
+    # # Top Winding (Layer Top)
+    # # "Left" edge of Top winding (Back of C-shape)
+    # top_back_x = center_displacement/2.0 - output_winding_diameter/2.0 
 
-    # ICO (Bot, goes Right?)
-    if fi_int & 1:
-        c << gf.Path([(bot_back_x, 0), (port_xr - gnd_ring_width / 2, 0)]).extrude(width=wic_int, layer=LAYER_BOT)
-        c.add_port(name="ico", center=(port_xr, 0), width=wic_int, orientation=0, layer=(206, 0))
-    else:
-        c.add_port(name="ico", center=(bot_back_x + bottom_linewidth/2.0, 0), width=0.25, orientation=0, layer=(206, 0))
+    # # OCI (Top, goes Left?)
+    # if fo_int & 1:
+    #     c << gf.Path([(port_xl + gnd_ring_width / 2, 0), (top_back_x, 0)]).extrude(width=woc_int, layer=LAYER_TOP)
+    #     c.add_port(name="oci", center=(port_xl, 0), width=woc_int, orientation=180, layer=(207, 0))
+    # else:
+    #     # Default placeholder port
+    #     c.add_port(name="oci", center=(top_back_x - upper_linewidth/2.0 , 0), width=0.25, orientation=180, layer=(207, 0))
 
-    # ICI (Bot, goes Left?)
-    if fi_int & 2:
-        c << gf.Path([(port_xl, 0), (bot_back_x, 0)]).extrude(width=wic_int, layer=LAYER_BOT)
-        c.add_port(name="ici", center=(port_xl, 0), width=wic_int, orientation=180, layer=(205, 0))
-    else:
-        c.add_port(name="ici", center=(bot_back_x - bottom_linewidth/2.0, 0), width=0.25, orientation=180, layer=(205, 0))
+    # # OCO (Top, goes Right)
+    # # "Right" edge is the gap side, but if fo=2 (Rev), we might connect right?
+    # # Actually, Top Center Tap usually connects to the continuous "back".
+    # # Wait, if fo=2 (Rev), Skill draws wire from Back to Right Port?
+    # # Yes: `list(list(float(dis)/2-float(do)/2 0) list(portxr 0))`
+    # # This crosses the Top winding itself? No, it goes through the center.
+    # if fo_int & 2:
+    #     c << gf.Path([(top_back_x, 0), (port_xr, 0)]).extrude(width=woc_int, layer=LAYER_TOP)
+    #     c.add_port(name="oco", center=(port_xr, 0), width=woc_int, orientation=0, layer=(208, 0))
+    # else:
+    #     c.add_port(name="oco", center=(top_back_x + upper_linewidth/2.0, 0), width=0.25, orientation=0, layer=(208, 0))
+
+    # # Bot Winding (Layer Bot)
+    # # "Right" edge of Bot winding (Back of C-shape, since Gap is Left)
+    # bot_back_x = -center_displacement/2.0 + input_winding_diameter/2.0
+
+    # # ICO (Bot, goes Right?)
+    # if fi_int & 1:
+    #     c << gf.Path([(bot_back_x, 0), (port_xr - gnd_ring_width / 2, 0)]).extrude(width=wic_int, layer=LAYER_BOT)
+    #     c.add_port(name="ico", center=(port_xr, 0), width=wic_int, orientation=0, layer=(206, 0))
+    # else:
+    #     c.add_port(name="ico", center=(bot_back_x + bottom_linewidth/2.0, 0), width=0.25, orientation=0, layer=(206, 0))
+
+    # # ICI (Bot, goes Left?)
+    # if fi_int & 2:
+    #     c << gf.Path([(port_xl, 0), (bot_back_x, 0)]).extrude(width=wic_int, layer=LAYER_BOT)
+    #     c.add_port(name="ici", center=(port_xl, 0), width=wic_int, orientation=180, layer=(205, 0))
+    # else:
+    #     c.add_port(name="ici", center=(bot_back_x - bottom_linewidth/2.0, 0), width=0.25, orientation=180, layer=(205, 0))
 
     # -------------------------------------------------
     # 6. Ground Ring
     # -------------------------------------------------
-    ring_pts = [
-        (0, tf_y), (port_xl, tf_y), (port_xl, -tf_y), 
-        (port_xr, -tf_y), (port_xr, tf_y), (0, tf_y)
-    ]
-    p_ring = gf.Path(ring_pts)
-    c << p_ring.extrude(width=gnd_ring_width, layer=LAYER_RING)
+    # Ground ring as a rectangle frame (boolean difference avoids gdspy tuple mutation issues)
+    inner_xl = port_xl + gnd_ring_width
+    inner_xr = port_xr - gnd_ring_width
+    inner_y = tf_y - gnd_ring_width
+
+    if inner_xr > inner_xl and inner_y > 0:
+        # Build ring from four rectangles to avoid boolean/holes API differences.
+        outer_w = port_xr - port_xl
+        outer_h = 2 * tf_y
+        inner_w = inner_xr - inner_xl
+        inner_h = 2 * inner_y
+
+        # Top bar
+        top = gf.components.rectangle(size=(outer_w, gnd_ring_width), layer=LAYER_RING)
+        top_ref = c << top
+        top_ref.move((port_xl, tf_y - gnd_ring_width))
+
+        # Bottom bar
+        bot = gf.components.rectangle(size=(outer_w, gnd_ring_width), layer=LAYER_RING)
+        bot_ref = c << bot
+        bot_ref.move((port_xl, -tf_y))
+
+        # Left bar
+        left_h = outer_h - 2 * gnd_ring_width
+        if left_h > 0:
+            left = gf.components.rectangle(size=(gnd_ring_width, left_h), layer=LAYER_RING)
+            left_ref = c << left
+            left_ref.move((port_xl, -tf_y + gnd_ring_width))
+
+        # Right bar
+        if left_h > 0:
+            right = gf.components.rectangle(size=(gnd_ring_width, left_h), layer=LAYER_RING)
+            right_ref = c << right
+            right_ref.move((port_xr - gnd_ring_width, -tf_y + gnd_ring_width))
+    else:
+        print("Warning: Ground ring skipped because width exceeds available area.")
     
     return c
 
 if __name__ == "__main__":
     c = tf_octa_c(
-        input_winding_diameter=55.0,
-        output_winding_diameter=55.0,
+        input_winding_diameter=65.0,
+        output_winding_diameter=65.0,
         center_displacement=10.0,
         bottom_linewidth=7.0,
         upper_linewidth=7.0,
@@ -277,13 +322,13 @@ if __name__ == "__main__":
         lower_feed_type=1,
         upper_feed_type=1,
         feedline_spacing=7.0,
-        gnd_upper_spacing=10.0,
-        gnd_lower_spacing=10.0,
-        gnd_side_spacing=15.0,
+        gnd_upper_spacing=20.0,
+        gnd_lower_spacing=20.0,
+        gnd_side_spacing=20.0,
         gnd_ring_width=10.0,
     )
     c.show()
-    c.write_gds("tf_octa_c.gds", with_metadata=False)
+    c.write_gds("src/orca/geometry/examples/transformer/tf_octa_c.gds", with_metadata=False)
                 
 
     # 
