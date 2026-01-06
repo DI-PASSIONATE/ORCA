@@ -42,7 +42,7 @@
         },
         {
             "portnumber": 2,
-            "source_layernum": 204,
+            "source_layernum": 202,
             "target_layername": null,
             "from_layername": "Metal5",
             "to_layername": "TopMetal1",
@@ -52,7 +52,7 @@
         },
         {
             "portnumber": 3,
-            "source_layernum": 202,
+            "source_layernum": 203,
             "target_layername": null,
             "from_layername": "Metal5",
             "to_layername": "TopMetal2",
@@ -62,7 +62,7 @@
         },
         {
             "portnumber": 4,
-            "source_layernum": 203,
+            "source_layernum": 204,
             "target_layername": null,
             "from_layername": "Metal5",
             "to_layername": "TopMetal2",

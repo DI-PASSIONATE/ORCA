@@ -310,25 +310,25 @@ def tf_octa_c(
     
     return c
 
-if __name__ == "__main__":
-    c = tf_octa_c(
-        input_winding_diameter=65.0,
-        output_winding_diameter=65.0,
-        center_displacement=10.0,
-        bottom_linewidth=7.0,
-        upper_linewidth=7.0,
-        bottom_center_tap_width=0.0,
-        upper_center_tap_width=0.0,
-        lower_feed_type=1,
-        upper_feed_type=1,
-        feedline_spacing=7.0,
-        gnd_upper_spacing=20.0,
-        gnd_lower_spacing=20.0,
-        gnd_side_spacing=20.0,
-        gnd_ring_width=10.0,
-    )
-    c.show()
-    c.write_gds("src/orca/geometry/examples/transformer/tf_octa_c.gds", with_metadata=False)
+# if __name__ == "__main__":
+#     c = tf_octa_c(
+#         input_winding_diameter=65.0,
+#         output_winding_diameter=65.0,
+#         center_displacement=10.0,
+#         bottom_linewidth=7.0,
+#         upper_linewidth=7.0,
+#         bottom_center_tap_width=0.0,
+#         upper_center_tap_width=0.0,
+#         lower_feed_type=1,
+#         upper_feed_type=1,
+#         feedline_spacing=7.0,
+#         gnd_upper_spacing=20.0,
+#         gnd_lower_spacing=20.0,
+#         gnd_side_spacing=20.0,
+#         gnd_ring_width=10.0,
+#     )
+#     c.show()
+#     c.write_gds("src/orca/geometry/examples/transformer/tf_octa_c.gds", with_metadata=False)
                 
 
-    # 
+#     # 
