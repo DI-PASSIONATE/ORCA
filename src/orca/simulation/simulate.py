@@ -84,7 +84,7 @@ def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simc
     return config_name, sim_path, data_dir
 
 
-def run_palace(sim_path: str, data_dir: str, config_name: str, palace_executable: str, cpu_cores: int) -> None:
+def run_palace(sim_path: str, data_dir: str, result_dir: str, config_name: str, palace_executable: str, cpu_cores: int) -> None:
     """
     Runs Palace simulation for the given model.
 
@@ -105,4 +105,4 @@ def run_palace(sim_path: str, data_dir: str, config_name: str, palace_executable
     print(f"Palace simulation for model: {config_name} completed.")
     os.chdir("..")
     print(f"Converting Palace CSV results at {sim_path}/{data_dir} to Touchstone format...")
-    convert_to_touchstone(workdir=f"{sim_path}/{data_dir}")
+    convert_to_touchstone(workdir=f"{sim_path}/{data_dir}", output_dir=os.path.join(os.getcwd(), "touchstone_results", config_name))

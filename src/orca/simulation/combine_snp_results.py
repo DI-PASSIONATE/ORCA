@@ -294,7 +294,7 @@ def port_deembedding (snp_filename, port_info_available, port_info_data):
         print('Skipping port de-embedding, not port geometry information available')    
 
 
-def convert_to_touchstone(workdir):
+def convert_to_touchstone(workdir, output_dir):
     found_datafiles = traverse_directories(workdir)
 
     # evaluate the found data files
@@ -399,7 +399,6 @@ def convert_to_touchstone(workdir):
 
         # get directory where port-S.csv file is stored
         data_path = os.path.dirname(found_filename)
-        output_path = data_path
 
         # get name of parent diretory, so that we can use it as filename for output 
         splitpath =  os.path.split(data_path)
@@ -412,7 +411,7 @@ def convert_to_touchstone(workdir):
 
         
         output_filename = parentname + '.s' + str(num_ports) + 'p'   
-        output_filename = os.path.join(output_path, output_filename)
+        output_filename = os.path.join(output_dir, output_filename)
 
 
         output_file = open(output_filename, "w") 
