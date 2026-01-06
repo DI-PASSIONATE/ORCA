@@ -10,3 +10,4 @@ testing.py
 *.msh
 build/
 testing/
+geometries/

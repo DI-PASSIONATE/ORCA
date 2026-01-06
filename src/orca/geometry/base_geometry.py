@@ -9,6 +9,7 @@ class BaseGeometry(ABC):
         self._n_inputs = 0
         self._n_outputs = 0
         self._input_parameters = None
+        self.n_gds_generated = 0
 
     @property
     def name(self) -> str:
@@ -66,6 +67,7 @@ class BaseGeometry(ABC):
             simconfig_filename=self.simconfig_filename
         )
         new_geometry.input_parameters = input_parameters
+        self.n_gds_generated += 1
         return new_geometry
     
     @abstractmethod
@@ -109,10 +111,13 @@ class BaseGeometry(ABC):
         """
 
     @abstractmethod
-    def get_next_input_parameters(self) -> InputParameters:
+    def get_next_input_parameters(self, idx: int) -> InputParameters:
         """
         Generates the next set of input parameters for the geometry.
         This method can be used to iterate through different configurations of the geometry.
+
+        Args:
+            id (int): Unique identifier for the geometry instance. Corresponds to the amount of geometries generated so far.
 
         Returns:
             InputParameters: Next set of input parameters.

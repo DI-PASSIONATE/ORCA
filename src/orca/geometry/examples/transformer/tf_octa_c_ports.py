@@ -27,31 +27,17 @@ class TransformerOcta(BaseGeometry):
 
         self.n_outputs = 4
         self.n_inputs = 14
-        self.input_names = [
-            "input_winding_diameter",
-            "output_winding_diameter",
-            "center_displacement",
-            "bottom_linewidth",
-            "upper_linewidth",
-            "bottom_center_tap_width",
-            "upper_center_tap_width",
-            "lower_feed_type",
-            "upper_feed_type",
-            "feedline_spacing",
-            "gnd_upper_spacing",
-            "gnd_lower_spacing",
-            "gnd_side_spacing",
-            "gnd_ring_width"
-        ]
+
+        self.radius_range = list(range(40, 101, 5))
     
-    def get_next_input_parameters(self) -> InputParameters:
+    def get_next_input_parameters(self, idx) -> InputParameters:
+        print(f"--------------> Using radius {self.radius_range[idx % len(self.radius_range)]} for geometry ID {idx}")
         # For testing purposes, return fixed values
         return InputParameters(
             n_inputs=self.n_inputs,
-            input_names=self.input_names,
             input_values={
-                "input_winding_diameter": 65.0,
-                "output_winding_diameter": 65.0,
+                "input_winding_diameter": self.radius_range[idx % len(self.radius_range)],
+                "output_winding_diameter": self.radius_range[idx % len(self.radius_range)],
                 "center_displacement": 10.0,
                 "bottom_linewidth": 7.0,
                 "upper_linewidth": 7.0,
@@ -74,9 +60,8 @@ class TransformerOcta(BaseGeometry):
             self.name + ".gds"
         )
 
-        print(f"Creating GDS file at: {output_path}")
-
         c = self.tf_octa_c(
+            self.name,
             input_winding_diameter=self.input_parameters.input_values["input_winding_diameter"],
             output_winding_diameter=self.input_parameters.input_values["output_winding_diameter"],
             center_displacement=self.input_parameters.input_values["center_displacement"],
@@ -92,13 +77,13 @@ class TransformerOcta(BaseGeometry):
             gnd_side_spacing=self.input_parameters.input_values["gnd_side_spacing"],
             gnd_ring_width=self.input_parameters.input_values["gnd_ring_width"],
         )
-        c.show()
         c.write_gds(output_path, with_metadata=False)
         return output_path
     
 
     def tf_octa_c(
         self,
+        name: str = "tf_octa_c",
         input_winding_diameter: float = 50.0,
         output_winding_diameter: float = 50.0,
         center_displacement: float = 15.0,
@@ -133,8 +118,7 @@ class TransformerOcta(BaseGeometry):
             rs: Ring spacing at side.
             rw: Ring width.
         """
-        c = gf.Component("tf_octa_c")
-
+        c = gf.Component(name)
         # -------------------------------------------------
         # 1. Variable Calculation & Overlap Check
         # -------------------------------------------------

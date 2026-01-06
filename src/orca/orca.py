@@ -52,7 +52,7 @@ class ORCA:
         print("Starting data generation using gdsfactory...")
         for i in range(num_samples):
             # TODO: Generate input parameters for the geometry
-            input_params = self.geometry.get_next_input_parameters()
+            input_params = self.geometry.get_next_input_parameters(idx=self.geometry.n_gds_generated)
             geo_inst = self.geometry.create_geometry_instance(name=f"{self.geometry.name}_{i}", input_parameters=input_params)
             gds_filename = geo_inst._create_gds_file()
             self.geometry_instances.append((geo_inst, gds_filename))                 
