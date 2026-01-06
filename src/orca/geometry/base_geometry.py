@@ -1,13 +1,14 @@
-import gdsfactory as gf
+from abc import ABC, abstractmethod
+from orca.geometry.input_parameters import InputParameters
 
-class BaseGeometry:
+class BaseGeometry(ABC):
     def __init__(self, name: str, stackup_xml: str, simconfig_filename: str):
         self._name = name
         self._stackup_xml = stackup_xml
         self._simconfig_filename = simconfig_filename
         self._n_inputs = 0
         self._n_outputs = 0
-        self._input_parameters = None  # To be defined by calling create_geometry
+        self._input_parameters = None
 
     @property
     def name(self) -> str:
@@ -24,20 +25,30 @@ class BaseGeometry:
     @property
     def n_inputs(self) -> int:
         return self._n_inputs
-    
-    @n_inputs.setter
-    def n_inputs(self, value: int):
-        self._n_inputs = value
 
     @property
     def n_outputs(self) -> int:
         return self._n_outputs
-    
+
+    @property
+    def input_parameters(self) -> InputParameters|None:
+        return self._input_parameters
+            
+    @n_inputs.setter
+    def n_inputs(self, value: int):
+        self._n_inputs = value
+
     @n_outputs.setter
     def n_outputs(self, value: int):
         self._n_outputs = value
 
-    def create_geometry_instance(self, name: str, input_parameters: list = None) -> 'BaseGeometry':
+    @input_parameters.setter
+    def input_parameters(self, value: InputParameters):
+        if value.n_inputs != self._n_inputs:
+            raise ValueError(f"InputParameters n_inputs ({value.n_inputs}) does not match geometry n_inputs ({self._n_inputs})")  
+        self._input_parameters = value
+
+    def create_geometry_instance(self, name: str, input_parameters: InputParameters) -> 'BaseGeometry':
         """
         Creates a new geometry instance based on the provided input parameters and name.
         This is useful when generating multiple geometry instances for data generation, e.g. 1000 transformers with different parameters.
@@ -48,16 +59,16 @@ class BaseGeometry:
         Returns:
             A new object extending BaseGeometry representing the created geometry.
         """
-        assert len(input_parameters) == self.n_inputs if self.n_inputs > 0 else True, f"Expected {self.n_inputs} input parameters, got {len(input_parameters)}"
-
         # Create a new instance of the same class as self
         new_geometry = self.__class__(
             name=name,
             stackup_xml=self.stackup_xml,
             simconfig_filename=self.simconfig_filename
         )
+        new_geometry.input_parameters = input_parameters
         return new_geometry
     
+    @abstractmethod
     def create_gds_file(self) -> str:
         """
         Creates a GDS file based on the current input parameters.
@@ -67,10 +78,23 @@ class BaseGeometry:
         Returns:
             str: Path to the created GDS file.
         """
-        assert self._input_parameters is not None if self.n_inputs > 0 else True, "Input parameters must be set before creating GDS file."
-        # Implement geometry creation logic here using gdsfactory
-        # This is a placeholder implementation
-    
+
+    def _create_gds_file(self) -> str:
+        """
+        Creates a GDS file based on the current input parameters.
+        Input parameters are a list of values defining the geometry, e.g. width, length, radius etc.
+        and will also be used as inputs for the AI/ML model.
+
+        Returns:
+            str: Path to the created GDS file.
+        """
+        if self.n_inputs > 0 and self._input_parameters is None:
+            raise ValueError("Input parameters must be set before creating GDS file.")
+        
+        print(self.input_parameters)
+        return self.create_gds_file()
+
+    #@abstractmethod
     def simulation_output_to_scalar(self, simulation_output: list) -> int:
         """
         Converts simulation output to a scalar value.
@@ -83,14 +107,13 @@ class BaseGeometry:
         Returns:
             int: Scalar value representing the performance of the geometry.
         """
-        assert len(simulation_output) == self.n_outputs, f"Expected {self.n_outputs} output values, got {len(simulation_output)}"
 
-    def get_next_input_parameters(self) -> list:
+    @abstractmethod
+    def get_next_input_parameters(self) -> InputParameters:
         """
         Generates the next set of input parameters for the geometry.
         This method can be used to iterate through different configurations of the geometry.
 
         Returns:
-            list: Next set of input parameters.
+            InputParameters: Next set of input parameters.
         """
-        raise NotImplementedError("Subclasses must implement get_next_input_parameters method.")

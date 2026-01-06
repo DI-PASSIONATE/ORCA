@@ -1,6 +1,6 @@
 from .geometry.base_geometry import BaseGeometry
 from .simulation.simulate import create_palace_model_from_gds, run_palace
-
+from ihp import PDK
 import multiprocessing
 
 class ORCA:
@@ -15,7 +15,8 @@ class ORCA:
     def __init__(self, geometry: BaseGeometry):
         self.geometry: BaseGeometry = geometry
         self.geometry_instances: list[tuple[BaseGeometry, str]] = []
-        self.palace_models: list[tuple[str, str]] = []
+        self.palace_models: list[tuple[str, str, str]] = []
+        PDK.activate()
 
     def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace"):
         """
@@ -53,7 +54,7 @@ class ORCA:
             # TODO: Generate input parameters for the geometry
             input_params = self.geometry.get_next_input_parameters()
             geo_inst = self.geometry.create_geometry_instance(name=f"{self.geometry.name}_{i}", input_parameters=input_params)
-            gds_filename = geo_inst.create_gds_file()
+            gds_filename = geo_inst._create_gds_file()
             self.geometry_instances.append((geo_inst, gds_filename))                 
             
         print("#----------- Data generation completed. -----------#")

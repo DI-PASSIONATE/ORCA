@@ -4,7 +4,7 @@ from orca.simulation.read_simconfig import read_simconfig
 from orca.simulation.combine_snp_results import convert_to_touchstone
 from gds2palace import gds_reader, stackup_reader, utilities, simulation_setup
 
-def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simconfig_filename: str) -> tuple[str, str]:
+def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simconfig_filename: str) -> tuple[str, str, str]:
     """
     Uses gds2palace to create a Palace model from a GDS file and simulation configuration.
     The simconfig is a json and can either be created manually or by using setupEM GUI and saving the configuration.

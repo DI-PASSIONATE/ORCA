@@ -7,7 +7,7 @@
         "purpose": [
             0
         ],
-        "fstart": 0.0,
+        "fstart": 80.0,
         "fstop": 170.0,
         "refined_cellsize": 2.0,
         "order": 2,
