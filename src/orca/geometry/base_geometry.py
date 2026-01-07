@@ -1,15 +1,30 @@
 from abc import ABC, abstractmethod
-from orca.geometry.input_parameters import InputParameters
+from orca.geometry.input_parameters import InputParameterIterator
+from orca.logger import logger
 
 class BaseGeometry(ABC):
-    def __init__(self, name: str, stackup_xml: str, simconfig_filename: str):
+    def __init__(self, name: str, stackup_xml: str, simconfig_filename: str, params: dict[str, any]|None = None):
+        """
+        Base class for defining geometries in ORCA.
+        Geometries define the physical structure to be simulated, along with their input parameters and how to create GDS files.
+
+        Args:
+            name (str): Name of the geometry. Usually contains an ID or version number to distinguish differently parameterized instances.
+            stackup_xml (str): Path to the stackup XML file defining the layer stackup for the geometry.
+            simconfig_filename (str): Path to the simulation configuration file (.simcfg) used for Palace simulations.
+            params (dict[str, any]|None): Optional dictionary of input parameters for the geometry instance. Used for logging and tracking purposes.
+        """
+
         self._name = name
         self._stackup_xml = stackup_xml
         self._simconfig_filename = simconfig_filename
         self._n_inputs = 0
         self._n_outputs = 0
-        self._input_parameters = None
         self.n_gds_generated = 0
+        self._params = params
+        if params is None: # If no params provided, we assume instance is a GeometryFactory
+            self.input_iterator = iter(self.get_input_parameters())
+            logger.info(f"Created GeometryFactory with input parameter iterator. Values: {self.input_iterator.input_values}")
 
     @property
     def name(self) -> str:
@@ -22,34 +37,12 @@ class BaseGeometry(ABC):
     @property
     def simconfig_filename(self) -> str:
         return self._simconfig_filename
-
+    
     @property
-    def n_inputs(self) -> int:
-        return self._n_inputs
+    def params(self) -> dict[str, any]|None:
+        return self._params
 
-    @property
-    def n_outputs(self) -> int:
-        return self._n_outputs
-
-    @property
-    def input_parameters(self) -> InputParameters|None:
-        return self._input_parameters
-            
-    @n_inputs.setter
-    def n_inputs(self, value: int):
-        self._n_inputs = value
-
-    @n_outputs.setter
-    def n_outputs(self, value: int):
-        self._n_outputs = value
-
-    @input_parameters.setter
-    def input_parameters(self, value: InputParameters):
-        if value.n_inputs != self._n_inputs:
-            raise ValueError(f"InputParameters n_inputs ({value.n_inputs}) does not match geometry n_inputs ({self._n_inputs})")  
-        self._input_parameters = value
-
-    def create_geometry_instance(self, name: str, input_parameters: InputParameters) -> 'BaseGeometry':
+    def create_geometry_instance(self, name: str, params: dict[str, any]) -> 'BaseGeometry':
         """
         Creates a new geometry instance based on the provided input parameters and name.
         This is useful when generating multiple geometry instances for data generation, e.g. 1000 transformers with different parameters.
@@ -64,37 +57,11 @@ class BaseGeometry(ABC):
         new_geometry = self.__class__(
             name=name,
             stackup_xml=self.stackup_xml,
-            simconfig_filename=self.simconfig_filename
+            simconfig_filename=self.simconfig_filename,
+            params=params
         )
-        new_geometry.input_parameters = input_parameters
         self.n_gds_generated += 1
         return new_geometry
-    
-    @abstractmethod
-    def create_gds_file(self) -> str:
-        """
-        Creates a GDS file based on the current input parameters.
-        Input parameters are a list of values defining the geometry, e.g. width, length, radius etc.
-        and will also be used as inputs for the AI/ML model.
-
-        Returns:
-            str: Path to the created GDS file.
-        """
-
-    def _create_gds_file(self) -> str:
-        """
-        Creates a GDS file based on the current input parameters.
-        Input parameters are a list of values defining the geometry, e.g. width, length, radius etc.
-        and will also be used as inputs for the AI/ML model.
-
-        Returns:
-            str: Path to the created GDS file.
-        """
-        if self.n_inputs > 0 and self._input_parameters is None:
-            raise ValueError("Input parameters must be set before creating GDS file.")
-        
-        print(self.input_parameters)
-        return self.create_gds_file()
 
     #@abstractmethod
     def simulation_output_to_scalar(self, simulation_output: list) -> int:
@@ -111,7 +78,7 @@ class BaseGeometry(ABC):
         """
 
     @abstractmethod
-    def get_next_input_parameters(self, idx: int) -> InputParameters:
+    def get_input_parameters(self) -> InputParameterIterator:
         """
         Generates the next set of input parameters for the geometry.
         This method can be used to iterate through different configurations of the geometry.
@@ -121,4 +88,16 @@ class BaseGeometry(ABC):
 
         Returns:
             InputParameters: Next set of input parameters.
+        """
+        
+    @abstractmethod
+    def create_gds_file(self, params: dict[str, any]) -> str:
+        """
+        Creates a GDS file based on the current input parameters.
+        Input parameters are a list of values defining the geometry, e.g. width, length, radius etc.
+        and will also be used as inputs for the AI/ML model.
+
+        Returns:
+            str: Path to the created GDS file.
+            params: dict[str, any]: Dictionary of input parameters used to create the GDS file. Mapping is the same as what get_input_parameters returns.
         """
