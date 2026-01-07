@@ -1,6 +1,18 @@
 ## Running ORCA
 
-If you have followed the installation instructions (see [Setup](/docs/setup.md)), you are ready to run ORCA. Below is a simple example of how to use ORCA with a predefined geometry. You can find this code snippet in the `examples` folder of the ORCA repository.
+If you have followed the installation instructions (see [Setup](/docs/setup.md)), you are ready to run ORCA. There are three ways to run ORCA:
+
+### 1. Graphical User Interface (GUI)
+
+For an interactive experience with real-time progress visualization:
+
+```bash
+orca
+```
+
+### 3. Python API
+
+For direct integration into scripts or custom workflows:
 
 ```python
 from orca import ORCA
@@ -21,4 +33,6 @@ orca_instance = ORCA(geometry)
 orca_instance.run(num_samples=3, cpu_cores=16, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
 ```
 
-This will create 3 differently parameterized instances of the `tf_octa_c_ports` transformer geometry, run electromagnetic simulations using Palace, store the results in Touchstone format. TODO: Train a model using the generated data.
+This will create 3 differently parameterized instances of the `tf_octa_c_ports` transformer geometry, run electromagnetic simulations using Palace, and store the results in Touchstone format.
+
+**Note:** Model training and evaluation are not yet implemented.

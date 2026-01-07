@@ -27,7 +27,7 @@
         "air_around": 200.0,
         "ELMER_MPI_THREADS": 4,
         "model_basename": "tf_octa_c_ports",
-        "fstep": 1.0
+        "fstep": 5.0
     },
     "ports": [
         {

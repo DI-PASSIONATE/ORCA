@@ -1,10 +1,9 @@
 import sys
 import importlib.metadata
-import importlib.util
-import inspect
 import multiprocessing
 import os
 from pathlib import Path
+import torch.nn as nn
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -24,12 +23,13 @@ from PySide6.QtWidgets import (
     QProgressBar
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot
-from PySide6.QtGui import QPalette, QColor, QFont
+from PySide6.QtGui import QFont
 
 from orca.orca import ORCA
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.gui.themes import DarkBlueTheme, DarkGreenTheme, LightTheme
+from orca.utils.class_finder import discover_classes
 
 
 class ORCAWorkerThread(QThread):
@@ -90,6 +90,9 @@ class MainWindow(QWidget):
         
         # Initialize geometry registry
         self.geometry_registry = self.load_geometries()
+        
+        # Initialize model registry
+        self.model_registry = self.load_models()
 
         # Define pipeline steps for progress display
         self.step_order = [
@@ -113,75 +116,36 @@ class MainWindow(QWidget):
             self.setStyleSheet(self.current_theme.get_stylesheet())
     
     def load_geometries(self):
-        """Automatically load available geometry classes from presets folder"""
-        import importlib
-        import inspect
-        from pathlib import Path
-        
-        geometries = {}
-        
-        # Get the presets folder path
+        """Load available geometry classes from presets folder using class_finder"""
         presets_dir = os.path.abspath(
-        os.path.join(
-            os.path.dirname(__file__), 
-            "..", "geometry", "presets"
-        ))
+            os.path.join(
+                os.path.dirname(__file__), 
+                "..", "geometry", "presets"
+            )
+        )
         
-        if not os.path.exists(presets_dir):
-            logger.warning(f"Presets directory not found: {presets_dir}")
-            return geometries
+        return discover_classes(
+            base_class=BaseGeometry,
+            search_dir=presets_dir,
+            module_prefix="orca.geometry.presets",
+            extract_default_params=True
+        )
+    
+    def load_models(self):
+        """Load available model classes from training/models folder using class_finder"""
+        models_dir = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..", "training", "models"
+            )
+        )
         
-        # Iterate through Python files in presets folder
-        presets_path = Path(presets_dir)
-        for py_file in presets_path.glob("*.py"):
-            if py_file.name.startswith("_"):
-                continue
-            
-            try:
-                # Import the module
-                module_name = py_file.stem
-                module = importlib.import_module(f"orca.geometry.presets.{module_name}")
-                
-                # Find classes that inherit from BaseGeometry
-                for name, obj in inspect.getmembers(module):
-                    if (inspect.isclass(obj) and 
-                        issubclass(obj, BaseGeometry) and 
-                        obj is not BaseGeometry):
-                        
-                        # Create an instance to extract default parameters
-                        try:
-                            instance = obj()
-                            
-                            # Extract default parameters from __init__
-                            sig = inspect.signature(obj.__init__)
-                            default_params = {}
-                            for param_name, param in sig.parameters.items():
-                                if param_name in ('self', 'params'):
-                                    continue
-                                if param.default != inspect.Parameter.empty:
-                                    default_params[param_name] = param.default
-                            
-                            # Use a descriptive display name
-                            display_name = f"{name} ({module_name})"
-                            geometries[display_name] = {
-                                "class": obj,
-                                "default_params": default_params,
-                                "module": module_name,
-                                "class_name": name
-                            }
-                            
-                            logger.info(f"Loaded geometry: {display_name}")
-                            
-                        except Exception as e:
-                            logger.warning(f"Could not instantiate {name}: {e}")
-                            
-            except Exception as e:
-                logger.warning(f"Failed to load geometry from {py_file.name}: {e}")
-        
-        if not geometries:
-            logger.warning("No geometries found in presets folder")
-        
-        return geometries
+        return discover_classes(
+            base_class=nn.Module,
+            search_dir=models_dir,
+            module_prefix="orca.training.models",
+            extract_default_params=False
+        )
     
     def init_ui(self):
         """Initialize the user interface"""
@@ -303,23 +267,17 @@ class MainWindow(QWidget):
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout()
         
-        # Geometry Selection Group
-        geometry_group = QGroupBox("Geometry Selection")
-        geometry_layout = QFormLayout()
+        # Geometry Configuration Group
+        geometry_group = QGroupBox("Geometry Configuration")
+        self.params_layout = QFormLayout()
         
         self.geometry_combo = QComboBox()
         self.geometry_combo.addItems(self.geometry_registry.keys())
         self.geometry_combo.currentTextChanged.connect(self.on_geometry_changed)
-        geometry_layout.addRow("Geometry Type:", self.geometry_combo)
+        self.params_layout.addRow("Geometry Type:", self.geometry_combo)
         
-        geometry_group.setLayout(geometry_layout)
+        geometry_group.setLayout(self.params_layout)
         scroll_layout.addWidget(geometry_group)
-        
-        # Geometry Parameters Group (dynamic)
-        self.params_group = QGroupBox("Geometry Parameters")
-        self.params_layout = QFormLayout()
-        self.params_group.setLayout(self.params_layout)
-        scroll_layout.addWidget(self.params_group)
         
         # Simulation Configuration Group
         sim_config_group = QGroupBox("Simulation Configuration")
@@ -354,10 +312,12 @@ class MainWindow(QWidget):
         # Model Training group
         model_group = QGroupBox("Model Training")
         model_layout = QVBoxLayout()
-        available_models = QComboBox()
-        available_models.addItems(["MLP"])
+        
+        self.model_combo = QComboBox()
+        # Will be populated when geometry is selected
+        
         model_layout.addWidget(QLabel("Select Model Architecture:"))
-        model_layout.addWidget(available_models)
+        model_layout.addWidget(self.model_combo)
         model_group.setLayout(model_layout)
         scroll_layout.addWidget(model_group)
         
@@ -418,6 +378,9 @@ class MainWindow(QWidget):
         
         # Initialize with first geometry
         self.on_geometry_changed(self.geometry_combo.currentText())
+        
+        # Populate model dropdown with available models
+        self.update_model_combo()
         self.reset_step_progress()
         
         return tab
@@ -453,14 +416,17 @@ class MainWindow(QWidget):
     
     def on_geometry_changed(self, geometry_name):
         """Handle geometry selection change"""
-        # Clear existing parameter inputs
-        while self.params_layout.rowCount() > 0:
-            self.params_layout.removeRow(0)
+        # Clear existing parameter inputs (but keep the geometry type row)
+        while self.params_layout.rowCount() > 1:
+            self.params_layout.removeRow(1)
         
         # Get selected geometry info
         geometry_info = self.geometry_registry.get(geometry_name)
         if not geometry_info:
             return
+        
+        # Update model combo to show default model for this geometry
+        self.update_model_combo()
         
         # Add parameter inputs based on geometry class
         # For now, we'll add common parameters like stackup_xml and simconfig_filename
@@ -501,6 +467,44 @@ class MainWindow(QWidget):
             self.geometry_name_edit.setText(str(default_name))
         self.geometry_name_edit.setToolTip("Name for the geometry")
         self.params_layout.addRow("Geometry Name:", self.geometry_name_edit)
+    
+    def update_model_combo(self):
+        """Update model combo box with available models and highlight default"""
+        self.model_combo.clear()
+        
+        # Get the selected geometry
+        geometry_name = self.geometry_combo.currentText()
+        geometry_info = self.geometry_registry.get(geometry_name)
+        
+        # Try to get the default model from the geometry
+        default_model_class = None
+        if geometry_info:
+            try:
+                # Instantiate geometry to call create_model()
+                geometry_class = geometry_info["class"]
+                temp_geometry = geometry_class()
+                default_model = temp_geometry.create_model()
+                default_model_class = type(default_model).__name__
+            except Exception as e:
+                logger.warning(f"Could not get default model for {geometry_name}: {e}")
+        
+        # Add all available models
+        model_names = []
+        default_index = 0
+        for i, (display_name, model_info) in enumerate(self.model_registry.items()):
+            class_name = model_info["class_name"]
+            model_names.append(display_name)
+            
+            # Check if this is the default model
+            if default_model_class and class_name == default_model_class:
+                default_index = i
+        
+        if model_names:
+            self.model_combo.addItems(model_names)
+            self.model_combo.setCurrentIndex(default_index)
+        else:
+            self.model_combo.addItem("No models found")
+            logger.warning("No models discovered in training/models folder")
     
     def browse_file(self, line_edit, file_filter):
         """Open file browser dialog"""

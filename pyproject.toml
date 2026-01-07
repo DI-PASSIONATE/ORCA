@@ -29,6 +29,10 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
     "scikit-rf",
+    "numpy",
+    "PySide6",
+    "torch",
+    "pandas",
 ]
 
 [project.optional-dependencies]

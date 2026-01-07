@@ -11,3 +11,6 @@ testing.py
 build/
 testing/
 geometries/
+results/
+*.s4p
+*.gds
