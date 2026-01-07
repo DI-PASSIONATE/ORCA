@@ -4,8 +4,6 @@ If you have followed the installation instructions (see [Setup](/docs/setup.md))
 
 ```python
 from orca import ORCA
-import skrf as rf
-import matplotlib.pyplot as plt
 
 ### Example of using a custom geometry
 # geometry = MyCustomGeometry( # Python class that inherits from BaseGeometry
@@ -20,12 +18,7 @@ geometry = TransformerOcta()
 
 orca_instance = ORCA(geometry)
 
-orca_instance.run(num_samples=1, cpu_cores=12)
-
-# Load and plot the results
-ntwk = rf.Network("/home/david/Documents/git/ORCA/palace_model/tf_octa_c_ports_0_data/output/tf_octa_c_ports_0/tf_octa_c_ports_0.s4p")
-ntwk.plot_s_db()
-plt.show()
+orca_instance.run(num_samples=3, cpu_cores=16, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
 ```
 
 This will create 3 differently parameterized instances of the `tf_octa_c_ports` transformer geometry, run electromagnetic simulations using Palace, store the results in Touchstone format. TODO: Train a model using the generated data.
