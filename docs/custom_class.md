@@ -12,7 +12,7 @@ The Python class should extend the `orca.BaseGeometry` class and implement the f
 
 - `__init__(self, name: str, stackup_xml: str, simconfig_filename: str)`: You can define the number of input and output parameters here. Make sure to call the superclass constructor
 - `create_gds_file(self) -> str`: This method should create the GDS file (e.g. using [gdsfactory](https://gdsfactory.github.io/gdsfactory/)) for your geometry and return the path to the created file.
-- `get_input_parameters(self) -> InputParameterIterator`: This method should return the next set of input parameters for parameterizing the geometry.
+- `get_input_parameters(self) -> InputParameterIterator`: This method should return an InputParameterIterator specifying input parameters, their ranges and the picking strategy that should be used.
 
 Example:
 
