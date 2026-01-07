@@ -22,14 +22,14 @@ def _convert_gds_worker(geo_inst, gds_filename, simconfig_filename):
         Tuple of (geo_inst, gds_filename, output, params) or (geo_inst, gds_filename, error, None) on failure
     """
     try:
-        output = create_palace_model_from_gds(
+        config_name, sim_path, data_dir = create_palace_model_from_gds(
             geometry=geo_inst,
             gds_filename=gds_filename,
             simconfig_filename=simconfig_filename
         )
-        return (output, geo_inst.params)
+        return config_name, sim_path, data_dir, geo_inst.params
     except Exception as e:
-        return (e, None)
+        return e, None, None, None
 
 
 class ORCA:
@@ -44,7 +44,7 @@ class ORCA:
     def __init__(self, geometry: BaseGeometry):
         self.geometry: BaseGeometry = geometry
         self.geometry_instances: list[tuple[BaseGeometry, str]] = []
-        self.palace_models: list[tuple[str, str, str]] = []
+        self.palace_models: list[tuple[str, str, str, dict]] = []
         self.working_geometries = pd.DataFrame(columns=["name"] + list(geometry.get_input_parameters().input_values.keys()))
         self.process_pool_executor = ProcessPoolExecutor(max_workers=multiprocessing.cpu_count())
         PDK.activate()
@@ -108,35 +108,37 @@ class ORCA:
                     geo_inst,
                     gds_filename,
                     geo_inst.simconfig_filename
-                ): geo_inst
+                ): (geo_inst, gds_filename)
                 for geo_inst, gds_filename in self.geometry_instances
             }
             
             # Process results as they complete
             for future in as_completed(futures):
-                geo_inst = futures[future]
+                geo_inst, gds_filename = futures[future]
                 try:
                     result = future.result()
-                    output, params = result
+                    config_name, sim_path, data_dir, params = result
                     
                     # Check if the result was an error
-                    if isinstance(output, Exception):
-                        logger.error(f"## ERROR ## Conversion of GDS to Palace model failed for {geo_inst.name} with error: {output}")
+                    if isinstance(config_name, Exception):
+                        logger.error(f"## ERROR ## Conversion of GDS to Palace model failed for {geo_inst.name} with error: {config_name}")
                         continue
                     
-                    # If conversion was successful, append to palace_models
-                    self.palace_models.append(output)
-                    
-                    # Append to working_geometries DataFrame
+                    # Save parameters
                     row = {"name": geo_inst.name}
                     row.update(params if params is not None else {})
                     self.working_geometries = pd.concat(
                         [self.working_geometries, pd.DataFrame([row])],
                         ignore_index=True
                     )
+
+                    # If conversion was successful, append to palace_models
+                    self.palace_models.append((config_name, sim_path, data_dir, row))
+                    
                     
                 except Exception as e:
-                    logger.error(f"## ERROR ## Failed to process result for {geo_inst.name}: {e}")
+                    logger.warning(f"## ERROR ## Failed to process result for {geo_inst.name}: {e}")
+                    os.remove(gds_filename)
                     continue
         
         # Save the working geometries to CSV after all conversions are complete
@@ -149,15 +151,23 @@ class ORCA:
         Runs simulations on the generated data.
         """
         logger.info("Starting simulations with palace...")
-        for config_name, sim_path, data_dir in self.palace_models:
-            run_palace(
-                sim_path=sim_path,
-                data_dir=data_dir,
-                result_dir=self.geometry.name,
-                config_name=config_name,
-                palace_executable=palace_executable,
-                cpu_cores=cpu_cores
-            )
+        working_geoms = pd.DataFrame(self.working_geometries)
+        save_path = os.path.join(os.getcwd(), "results", "params.csv")
+        for config_name, sim_path, data_dir, row in self.palace_models:
+            try:
+                run_palace(
+                    sim_path=sim_path,
+                    data_dir=data_dir,
+                    result_dir=os.path.join(os.getcwd(), "results", self.geometry.name),
+                    config_name=config_name,
+                    palace_executable=palace_executable,
+                    cpu_cores=cpu_cores
+                )
+                working_geoms.update(row)
+                working_geoms.to_csv(save_path, index=False)
+            except Exception as e:
+                logger.warning(f"## ERROR ## Simulation failed for {config_name} with error: {e}")
+                continue
         logger.info("#----------- Simulations completed. -----------#")
 
     def train_model(self):

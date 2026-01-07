@@ -1,4 +1,5 @@
 import os
+from orca.logger import logger
 from orca.geometry.base_geometry import BaseGeometry
 from orca.simulation.read_simconfig import read_simconfig
 from orca.simulation.combine_snp_results import convert_to_touchstone
@@ -79,8 +80,6 @@ def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simc
     # for convenience, write run script to model directory
     utilities.create_run_script(settings['sim_path'])
 
-    print(f"Palace model created at: {data_dir}")
-    print(f"Sim Path: {sim_path}")
     return config_name, sim_path, data_dir
 
 
@@ -94,15 +93,14 @@ def run_palace(sim_path: str, data_dir: str, result_dir: str, config_name: str, 
         palace_executable (str): Path to the Palace executable (e.g. "apptainer exec ~/path/to/palace.sif palace").
         cpu_cores (int): Number of CPU cores to use for the simulation.
     """
-    print(f"Running Palace simulation for model: {config_name} in folder: {data_dir} using {cpu_cores} CPU cores...")
+    logger.info(f"Running Palace simulation for model: {config_name} in folder: {data_dir} using {cpu_cores} CPU cores...")
     os.chdir(sim_path)
-    cmd = f"{palace_executable} -np {cpu_cores} {config_name} > palace_log.txt"
+    cmd = f"{palace_executable} -np {cpu_cores} {config_name}"
     # execute the command, hide output and save return code
     ret_code = os.system(cmd)
     if ret_code != 0:
         raise RuntimeError(f"Palace simulation for model: {config_name} failed with return code: {ret_code}")
     
-    print(f"Palace simulation for model: {config_name} completed.")
-    os.chdir("..")
-    print(f"Converting Palace CSV results at {sim_path}/{data_dir} to Touchstone format...")
-    convert_to_touchstone(workdir=f"{sim_path}/{data_dir}", output_dir=os.path.join(os.getcwd(), "touchstone_results", config_name))
+    logger.info(f"Palace simulation for model: {config_name} completed.")
+    logger.debug(f"Converting Palace CSV results at {sim_path}/{data_dir} to Touchstone format...")
+    convert_to_touchstone(workdir=data_dir, output_dir=result_dir)

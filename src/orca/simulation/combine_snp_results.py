@@ -12,6 +12,7 @@
 import os,re, json, math
 import skrf as rf
 import numpy as np
+from orca import logger
 
 
 def todb(x):
@@ -409,10 +410,12 @@ def convert_to_touchstone(workdir, output_dir):
         if parentname == 'mesh' and modelname_from_portinfo != '':
             parentname = modelname_from_portinfo
 
-        
+
         output_filename = parentname + '.s' + str(num_ports) + 'p'   
         output_filename = os.path.join(output_dir, output_filename)
 
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
         output_file = open(output_filename, "w") 
         # write Touchstone header line
@@ -428,8 +431,8 @@ def convert_to_touchstone(workdir, output_dir):
         print('Created combined S-parameter file for ', num_ports, 'ports, filename: ', output_filename)
 
         if not port_info_available:
-            print('NOTE: Port impedance not listed in Palace file, assuming 50 Ohm!')
-            print('      If required, you can change that value in Touchstone file header!\n')
+            logger.warning('NOTE: Port impedance not listed in Palace file, assuming 50 Ohm!')
+            logger.warning('      If required, you can change that value in Touchstone file header!\n')
 
         # try DC extrapolation
         dc_extrapolated_filename = extrapolate_to_DC(output_filename)
