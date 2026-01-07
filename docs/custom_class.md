@@ -12,29 +12,52 @@ The Python class should extend the `orca.BaseGeometry` class and implement the f
 
 - `__init__(self, name: str, stackup_xml: str, simconfig_filename: str)`: You can define the number of input and output parameters here. Make sure to call the superclass constructor
 - `create_gds_file(self) -> str`: This method should create the GDS file (e.g. using [gdsfactory](https://gdsfactory.github.io/gdsfactory/)) for your geometry and return the path to the created file.
-- `get_next_input_parameters(self) -> dict`: This method should return the next set of input parameters for parameterizing the geometry. If there are no input parameters, you can return `None`.
+- `get_input_parameters(self) -> InputParameterIterator`: This method should return the next set of input parameters for parameterizing the geometry.
 
 Example:
 
 ```python
 from orca import BaseGeometry
-import os
+from orca.geometry.input_parameters import InputParameterIterator
+from ihp import PDK
 
-class Transformer(BaseGeometry):
-    def __init__(self, name, stackup_xml, simconfig_filename):
-        super().__init__(name, stackup_xml, simconfig_filename)
-        self.n_inputs = 0
-        self.n_outputs = 4
 
-    def create_gds_file(self):
-        super().create_gds_file()
-        # Implement geometry creation logic here
+class TransformerOcta(BaseGeometry):
+    """
+    Represents a transformer geometry with octagonal shape and C-ports.
+    No input parameters are required for this geometry.
+    """
 
-        # TODO: Replace with actual geometry creation code
-        return f"{os.path.dirname(__file__)}/REFERENCE.gds"
+    def __init__(self,
+                 name = "tf_octa_c_ports",
+                 stackup_xml: str = os.path.join(os.path.dirname(__file__), "..", "SG13G2_nosub.xml"),
+                 simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg"),
+                 params = None
+                ):
+
+        # Call the base class constructor with the parameters
+        super().__init__(name, stackup_xml, simconfig_filename, params)
     
-    def get_next_input_parameters(self):
-        return None
+    def get_input_parameters(self) -> InputParameterIterator:
+        return InputParameterIterator(
+            picking_strategy="grid",
+            input_winding_diameter = range(60, 101, 10), # 20, 101, 5
+            output_winding_diameter = range(60, 101, 10), # 20, 101, 5
+            center_displacement = range(0, 21, 10), # 0, 21, 1
+            bottom_linewidth = range(5, 9, 3), # 2, 9, 1
+            upper_linewidth = range(5, 9, 3), # 2, 9, 1
+        )
+
+    def create_gds_file(self, params: dict[str, any]) -> str:
+        output_path = os.path.join(
+            os.getcwd(),
+            "geometries",
+            self.name + ".gds"
+        )
+
+        # create component here
+        c.write_gds(output_path, with_metadata=False)
+        return output_path
 ```
 
 ### Stackup XML File
