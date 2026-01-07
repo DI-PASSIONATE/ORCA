@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.logger import logger
+import torch.nn as nn
 
 class BaseGeometry(ABC):
     def __init__(self, name: str, stackup_xml: str, simconfig_filename: str, params: dict[str, any]|None = None):
@@ -88,6 +89,16 @@ class BaseGeometry(ABC):
 
         Returns:
             InputParameters: Next set of input parameters.
+        """
+
+    @abstractmethod
+    def create_model(self) -> nn.Module:
+        """
+        Creates and returns a neural network model suitable for this geometry.
+        The model architecture should be defined based on the specific input and output requirements of the geometry.
+
+        Returns:
+            nn.Module: The neural network model.
         """
         
     @abstractmethod

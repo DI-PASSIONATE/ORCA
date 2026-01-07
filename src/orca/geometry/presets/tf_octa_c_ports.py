@@ -1,11 +1,12 @@
 import gdsfactory as gf
 import numpy as np
 import os
+import torch.nn as nn
 
 from orca import BaseGeometry
 from orca.geometry.input_parameters import InputParameterIterator
 from ihp import PDK
-
+from orca.training.models.mlp import OrcaMLP
 
 class TransformerOcta(BaseGeometry):
     """
@@ -26,12 +27,15 @@ class TransformerOcta(BaseGeometry):
     def get_input_parameters(self) -> InputParameterIterator:
         return InputParameterIterator(
             picking_strategy="grid",
-            input_winding_diameter = range(60, 101, 10), # 20, 101, 5
-            output_winding_diameter = range(60, 101, 10), # 20, 101, 5
+            input_winding_diameter = range(40, 101, 10), # 20, 101, 5
+            output_winding_diameter = range(40, 101, 10), # 20, 101, 5
             center_displacement = range(0, 21, 10), # 0, 21, 1
             bottom_linewidth = range(5, 9, 3), # 2, 9, 1
             upper_linewidth = range(5, 9, 3), # 2, 9, 1
         )
+    
+    def create_model(self) -> nn.Module:
+        return OrcaMLP(input_size=6, hidden_sizes=[64, 64], output_size=8)  # Example output size; adjust as needed
 
     def create_gds_file(self, params: dict[str, any]) -> str:
         output_path = os.path.join(

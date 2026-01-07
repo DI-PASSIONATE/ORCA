@@ -36,7 +36,12 @@ class InputParameterIterator:
             self._iterator = product(*(input_values[name] for name in self.input_names))
         else:
             raise ValueError(f"Unsupported picking strategy: {self.picking_strategy}. Supported strategies are 'grid'.")
-        
+
+    def __len__(self):
+        """
+        THIS RETURNS THE AMOUNT OF INPUT PARAMETERS, NOT THE AMOUNT OF GEOMETRIES THAT CAN BE GENERATED!
+        """
+        return len(self.input_values)        
 
     def __iter__(self):
         self.n_geometries_created = 0

@@ -4,8 +4,12 @@ from ihp import PDK
 import multiprocessing
 import pandas as pd
 import os
+import torch
 
 from orca.logger import logger
+from orca.training.train import train_model
+from orca.training.dataset import OrcaDataset
+from orca.training.models.mlp import OrcaMLP
 from orca.geometry.base_geometry import BaseGeometry
 from orca.simulation.simulate import create_palace_model_from_gds, run_palace
 
@@ -72,11 +76,14 @@ class ORCA:
         self.generate_gds_data(num_samples)
         self.convert_gds_to_palace()
         self.run_simulation(palace_executable, cpu_cores)
-        self.train_model()
+
+        dataset = OrcaDataset(data_dir=os.path.join(os.getcwd(), "results", self.geometry.name))
+
+        self.train(dataset, cwd=os.getcwd(), epochs=50)
         self.evaluate_model()
 
         logger.info("ORCA pipeline finished successfully.")
-        self._emit_progress("Complete", num_samples, num_samples, "ORCA pipeline completed successfully!")
+        self._emit_progress("Complete", num_samples, num_samples, f"Successfully trained ORCA model of {self.geometry.name} with {n_samples} samples.")
 
     def print_super_cool_logo_art(self):
         logger.info("###########################################################")  
@@ -234,12 +241,24 @@ class ORCA:
         self._emit_progress("Palace Simulation", total_sims, total_sims, 
                           f"Simulations complete: {completed} successful, {failed} failed")
 
-    def train_model(self):
+    def train(self, dataset, cwd: str = os.getcwd(), epochs: int = 50):
         """
         Trains the ORCA model using the simulation data.
         """
-        logger.warning("Starting model training... (NOT IMPLEMENTED YET)")
-        self._emit_progress("Model Training", 0, 1, "Model training not yet implemented")
+        logger.info(f"Starting model training with {len(dataset)} samples...")
+        self._emit_progress("Model Training", 0, 1, f"{len(dataset)} samples loaded for training.")
+
+        model = self.geometry.create_model()
+
+        weights = train_model(dataset, model=model, epochs=epochs, batch_size=32, learning_rate=1e-3, progress_callback=self._emit_progress)
+        
+        model_save_dir = os.path.join(cwd, "models", self.geometry.name)
+
+        if not os.path.exists(model_save_dir):
+            os.makedirs(model_save_dir)
+
+        torch.save(weights.state_dict(), os.path.join(model_save_dir, f"{self.geometry.name}.pth"))
+        self._emit_progress("Model Training", 1, 1, "Model training completed successfully.")
         logger.info("#----------- Model training completed. -----------#")
 
     def evaluate_model(self):
