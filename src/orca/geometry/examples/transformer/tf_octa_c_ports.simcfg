@@ -7,7 +7,7 @@
         "purpose": [
             0
         ],
-        "fstart": 0.0,
+        "fstart": 110.0,
         "fstop": 170.0,
         "refined_cellsize": 2.0,
         "order": 2,
@@ -35,7 +35,7 @@
             "source_layernum": 201,
             "target_layername": null,
             "from_layername": "Metal5",
-            "to_layername": "TopMetal1",
+            "to_layername": "TopMetal2",
             "direction": "Z",
             "port_Z0": 50.0,
             "voltage": 1.0
@@ -45,7 +45,7 @@
             "source_layernum": 202,
             "target_layername": null,
             "from_layername": "Metal5",
-            "to_layername": "TopMetal1",
+            "to_layername": "TopMetal2",
             "direction": "Z",
             "port_Z0": 50.0,
             "voltage": 1.0
@@ -55,7 +55,7 @@
             "source_layernum": 203,
             "target_layername": null,
             "from_layername": "Metal5",
-            "to_layername": "TopMetal2",
+            "to_layername": "TopMetal1",
             "direction": "Z",
             "port_Z0": 50.0,
             "voltage": 1.0
@@ -65,7 +65,7 @@
             "source_layernum": 204,
             "target_layername": null,
             "from_layername": "Metal5",
-            "to_layername": "TopMetal2",
+            "to_layername": "TopMetal1",
             "direction": "Z",
             "port_Z0": 50.0,
             "voltage": 1.0

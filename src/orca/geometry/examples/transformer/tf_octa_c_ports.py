@@ -6,9 +6,6 @@ from orca import BaseGeometry
 from orca.geometry.input_parameters import InputParameterIterator
 from ihp import PDK
 
-LAYER_BOT = PDK.layers.TopMetal1drawing
-LAYER_TOP = PDK.layers.TopMetal2drawing
-LAYER_RING = PDK.layers.Metal5drawing
 
 class TransformerOcta(BaseGeometry):
     """
@@ -101,6 +98,10 @@ class TransformerOcta(BaseGeometry):
             rs: Ring spacing at side.
             rw: Ring width.
         """
+        LAYER_BOT = PDK.layers.TopMetal1drawing
+        LAYER_TOP = PDK.layers.TopMetal2drawing
+        LAYER_RING = PDK.layers.Metal5drawing
+
         c = gf.Component(name)
         # -------------------------------------------------
         # 1. Variable Calculation & Overlap Check
