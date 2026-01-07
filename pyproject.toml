@@ -37,6 +37,9 @@ train = [
     "gds2palace",
 ]
 
+[project.scripts]
+orca = "orca.gui.main_gui:main"
+
 [tool.setuptools]
 include-package-data = true
 
