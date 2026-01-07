@@ -15,7 +15,7 @@ class TransformerOcta(BaseGeometry):
 
     def __init__(self,
                  name = "tf_octa_c_ports",
-                 stackup_xml: str = os.path.join(os.path.dirname(__file__), "..", "SG13G2_nosub.xml"),
+                 stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml"),
                  simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg"),
                  params = None
                 ):

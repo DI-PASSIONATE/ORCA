@@ -47,18 +47,27 @@ class ORCA:
         self.palace_models: list[tuple[str, str, str, dict]] = []
         self.working_geometries = pd.DataFrame(columns=["name"] + list(geometry.get_input_parameters().input_values.keys()))
         self.process_pool_executor = ProcessPoolExecutor(max_workers=multiprocessing.cpu_count())
+        self.progress_callback = None
         PDK.activate()
 
-    def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace"):
+    def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace", progress_callback=None):
         """
         Runs the ORCA pipeline, including data generation, simulation, training, and evaluation.
+        
+        Args:
+            cpu_cores: Number of CPU cores to use
+            num_samples: Number of geometry samples to generate
+            palace_executable: Command to execute Palace
+            progress_callback: Optional callback function(step, current, total, message) for progress updates
         """
+        self.progress_callback = progress_callback
         self.print_super_cool_logo_art()
 
         if cpu_cores < 1:
             raise ValueError("cpu_cores must be at least 1.")
 
         logger.info(f"Running {num_samples} ORCA simulations of {self.geometry.name} with {cpu_cores} CPU cores...")         
+        self._emit_progress("Initializing", 0, num_samples, "Starting ORCA pipeline...")
 
         self.generate_gds_data(num_samples)
         self.convert_gds_to_palace()
@@ -67,6 +76,7 @@ class ORCA:
         self.evaluate_model()
 
         logger.info("ORCA pipeline finished successfully.")
+        self._emit_progress("Complete", num_samples, num_samples, "ORCA pipeline completed successfully!")
 
     def print_super_cool_logo_art(self):
         logger.info("###########################################################")  
@@ -85,20 +95,32 @@ class ORCA:
         Generates data based on the defined geometry.
         """
         logger.info("Starting data generation using gdsfactory...")
+        self._emit_progress("GDS Generation", 0, num_samples, "Starting GDS generation...")
+        
         for i, input_params in enumerate(self.geometry.input_iterator):
             if i >= num_samples:
                 break
             geo_inst = self.geometry.create_geometry_instance(name=f"{self.geometry.name}_{i}", params=input_params)
             gds_filename = geo_inst.create_gds_file(params=input_params)
-            self.geometry_instances.append((geo_inst, gds_filename))                 
+            self.geometry_instances.append((geo_inst, gds_filename))
+            
+            # Progress update every sample or every 10% for large batches
+            if i % max(1, num_samples // 10) == 0 or i == num_samples - 1:
+                self._emit_progress("GDS Generation", i + 1, num_samples, f"Generated {i + 1}/{num_samples} GDS files...")
             
         logger.info("#----------- Data generation completed. -----------#")
+        self._emit_progress("GDS Generation", num_samples, num_samples, f"Generated {num_samples} GDS files successfully")
 
     def convert_gds_to_palace(self):
         """
         Converts GDS files to Palace models in parallel.
         """
-        logger.info("Starting GDS to Palace conversion...")
+        total_gds = len(self.geometry_instances)
+        logger.info(f"Starting GDS to Palace conversion for {total_gds} files...")
+        self._emit_progress("Palace Conversion", 0, total_gds, "Starting GDS to Palace conversion...")
+        
+        completed = 0
+        failed = 0
         
         with self.process_pool_executor as executor:
             # Submit all conversion tasks
@@ -122,6 +144,10 @@ class ORCA:
                     # Check if the result was an error
                     if isinstance(config_name, Exception):
                         logger.error(f"## ERROR ## Conversion of GDS to Palace model failed for {geo_inst.name} with error: {config_name}")
+                        failed += 1
+                        completed += 1
+                        self._emit_progress("Palace Conversion", completed, total_gds, 
+                                          f"Converting GDS to Palace ({completed}/{total_gds}, {failed} failed)...")
                         continue
                     
                     # Save parameters
@@ -134,47 +160,86 @@ class ORCA:
 
                     # If conversion was successful, append to palace_models
                     self.palace_models.append((config_name, sim_path, data_dir, row))
+                    completed += 1
                     
+                    # Update progress
+                    self._emit_progress("Palace Conversion", completed, total_gds, 
+                                      f"Converting GDS to Palace ({completed}/{total_gds}, {failed} failed)...")
                     
                 except Exception as e:
                     logger.warning(f"## ERROR ## Failed to process result for {geo_inst.name}: {e}")
                     os.remove(gds_filename)
+                    failed += 1
+                    completed += 1
+                    self._emit_progress("Palace Conversion", completed, total_gds, 
+                                      f"Converting GDS to Palace ({completed}/{total_gds}, {failed} failed)...")
                     continue
         
         # Save the working geometries to CSV after all conversions are complete
         save_path = os.path.join(os.getcwd(), "geometries", "parameters.csv")
         self.working_geometries.to_csv(save_path, index=False)
-        logger.info("#----------- GDS to Palace conversion completed. -----------#")
+        
+        successful = len(self.palace_models)
+        logger.info(f"#----------- GDS to Palace conversion completed. {successful} successful, {failed} failed -----------#")
+        self._emit_progress("Palace Conversion", total_gds, total_gds, 
+                          f"Conversion complete: {successful} successful, {failed} failed")
 
     def run_simulation(self, palace_executable: str, cpu_cores: int):
         """
         Runs simulations on the generated data.
         """
-        logger.info("Starting simulations with palace...")
+        total_sims = len(self.palace_models)
+        logger.info(f"Starting simulations with palace for {total_sims} models...")
+        self._emit_progress("Palace Simulation", 0, total_sims, "Starting Palace simulations...")
+        
         working_geoms = pd.DataFrame(self.working_geometries)
-        save_path = os.path.join(os.getcwd(), "results", "params.csv")
-        for config_name, sim_path, data_dir, row in self.palace_models:
+        cwd = os.getcwd()
+        save_path = os.path.join(cwd, "results", "params.csv")
+        
+        completed = 0
+        failed = 0
+
+        
+        for i, (config_name, sim_path, data_dir, row) in enumerate(self.palace_models):
             try:
+                self._emit_progress("Palace Simulation", i, total_sims, 
+                                  f"Running simulation {i + 1}/{total_sims} ({config_name})...")
+                
                 run_palace(
                     sim_path=sim_path,
                     data_dir=data_dir,
-                    result_dir=os.path.join(os.getcwd(), "results", self.geometry.name),
+                    result_dir=os.path.join(cwd, "results", self.geometry.name),
                     config_name=config_name,
                     palace_executable=palace_executable,
                     cpu_cores=cpu_cores
                 )
-                working_geoms.update(row)
+                # Update the matching row by name
+                if "name" in row:
+                    mask = working_geoms["name"] == row["name"]
+                    for key, value in row.items():
+                        working_geoms.loc[mask, key] = value
                 working_geoms.to_csv(save_path, index=False)
+                completed += 1
+                
+                self._emit_progress("Palace Simulation", i + 1, total_sims, 
+                                  f"Completed simulation {i + 1}/{total_sims} ({failed} failed)")
             except Exception as e:
                 logger.warning(f"## ERROR ## Simulation failed for {config_name} with error: {e}")
+                failed += 1
+                self._emit_progress("Palace Simulation", i + 1, total_sims, 
+                                  f"Simulation failed for {config_name} ({failed} total failures)")
                 continue
-        logger.info("#----------- Simulations completed. -----------#")
+        
+        logger.info(f"#----------- Simulations completed. {completed} successful, {failed} failed -----------#")
+        self._emit_progress("Palace Simulation", total_sims, total_sims, 
+                          f"Simulations complete: {completed} successful, {failed} failed")
 
     def train_model(self):
         """
         Trains the ORCA model using the simulation data.
         """
         logger.warning("Starting model training... (NOT IMPLEMENTED YET)")
+        self._emit_progress("Model Training", 0, 1, "Model training not yet implemented")
         logger.info("#----------- Model training completed. -----------#")
 
     def evaluate_model(self):
@@ -182,4 +247,21 @@ class ORCA:
         Evaluates the trained ORCA model.
         """
         logger.warning("Starting model evaluation... (NOT IMPLEMENTED YET)")
+        self._emit_progress("Model Evaluation", 0, 1, "Model evaluation not yet implemented")
         logger.info("#----------- Model evaluation completed. -----------#")
+    
+    def _emit_progress(self, step: str, current: int, total: int, message: str):
+        """
+        Emit progress update through callback if available.
+        
+        Args:
+            step: Name of the current step (e.g., "GDS Generation")
+            current: Current progress count
+            total: Total items to process
+            message: Detailed message about current progress
+        """
+        if self.progress_callback:
+            try:
+                self.progress_callback(step, current, total, message)
+            except Exception as e:
+                logger.warning(f"Progress callback failed: {e}")
