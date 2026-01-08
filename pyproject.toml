@@ -31,17 +31,18 @@ dependencies = [
     "scikit-rf",
     "numpy",
     "PySide6",
-    "torch",
     "pandas",
+    "onnxruntime",
 ]
 
 [project.optional-dependencies]
 train = [
     "gdsfactory",
     "gds2palace",
-]
-inference = [
-    "onnxruntime",
+    "onnx",
+    "onnxscript",
+    "torch",
+    "torchvision",
 ]
 
 [project.scripts]
