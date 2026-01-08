@@ -123,3 +123,17 @@ class BaseGeometry(ABC):
             str: Path to the created GDS file.
             params: dict[str, any]: Dictionary of input parameters used to create the GDS file. Mapping is the same as what get_input_parameters returns.
         """
+
+    def postprocess_outputs(self, *outputs: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        """
+        Postprocess the outputs of the ONNX model after inference.
+        This method can be overridden by subclasses to apply any necessary transformations
+        to the raw outputs produced by the ONNX model.
+
+        Args:
+            *outputs (torch.Tensor): Raw output tensors from the ONNX model.
+
+        Returns:
+            tuple[torch.Tensor, ...]: Postprocessed output tensors.
+        """
+        return outputs

@@ -250,16 +250,24 @@ class ORCA:
         trained_model = train_model(dataset, model=model, epochs=epochs, batch_size=32, learning_rate=1e-3, progress_callback=self._emit_progress)
         
         model_save_dir = os.path.join(cwd, "models", self.geometry.name)
+        model_save_path = os.path.join(model_save_dir, f"{self.geometry.name}.onnx")
 
-        if not os.path.exists(model_save_dir):
+        if not os.path.exists(model_save_dir): # Create model directory if it doesn't exist
             os.makedirs(model_save_dir)
+        elif os.path.exists(model_save_path): # Check if model already exists under this path -> rename old model
+            import time
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            archived_model_path = model_save_path.replace(".onnx", f"_{timestamp}.onnx")
+            os.rename(model_save_path, archived_model_path)
+            logger.info(f"Existing model found. Archived previous model to {archived_model_path}")
 
+        # Export to ONNX with multiple inputs/outputs using ONNXWrapper
         torch.onnx.export(
             ONNXWrapper(trained_model),
             tuple(torch.randn(1, 1) for _ in dataset.input_param_names),
             input_names=dataset.input_param_names,
             output_names=dataset.output_param_names,
-            f=os.path.join(model_save_dir, "model.onnx"),
+            f=model_save_path,
             external_data=False,
             dynamo=True
         )
