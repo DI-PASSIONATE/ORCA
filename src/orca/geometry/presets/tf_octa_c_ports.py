@@ -2,10 +2,12 @@ import gdsfactory as gf
 import numpy as np
 import os
 import torch.nn as nn
+import torch
 
 from orca import BaseGeometry
 from orca.geometry.input_parameters import InputParameterIterator
 from ihp import PDK
+from orca.training.datasets.geo_to_s_param import GeoToSParamDataset
 from orca.training.models.mlp import OrcaMLP
 
 class TransformerOcta(BaseGeometry):
@@ -36,6 +38,9 @@ class TransformerOcta(BaseGeometry):
     
     def create_model(self) -> nn.Module:
         return OrcaMLP(input_dim=6, hidden_sizes=[64, 64], output_dim=8)  # Example output size; adjust as needed
+
+    def get_dataset(self) -> torch.utils.data.Dataset:
+        return GeoToSParamDataset(data_dir=os.path.join(os.getcwd(), "results", self.name))
 
     def create_gds_file(self, params: dict[str, any]) -> str:
         output_path = os.path.join(

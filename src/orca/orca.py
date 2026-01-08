@@ -53,7 +53,7 @@ class ORCA:
         self.progress_callback = None
         PDK.activate()
 
-    def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace", progress_callback=None):
+    def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000, epochs=50, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace", progress_callback=None):
         """
         Runs the ORCA pipeline, including data generation, simulation, training, and evaluation.
         
@@ -75,14 +75,11 @@ class ORCA:
         self.generate_gds_data(num_samples)
         self.convert_gds_to_palace()
         self.run_simulation(palace_executable, cpu_cores)
-
-        dataset = GeoToSParamDataset(data_dir=os.path.join(os.getcwd(), "results", self.geometry.name))
-
-        self.train(dataset, cwd=os.getcwd(), epochs=50)
+        self.train(self.geometry.get_dataset(), cwd=os.getcwd(), epochs=epochs)
         self.evaluate_model()
 
         logger.info("ORCA pipeline finished successfully.")
-        self._emit_progress("Complete", num_samples, num_samples, f"Successfully trained ORCA model of {self.geometry.name} with {len(dataset)} samples.")
+        self._emit_progress("Complete", num_samples, num_samples, f"Successfully trained model of {self.geometry.name}.")
 
     def print_super_cool_logo_art(self):
         logger.info("###########################################################")  
