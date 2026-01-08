@@ -26,11 +26,12 @@ class GeoToSParamDataset(Dataset):
         self.input_param_names.remove('name')  # Remove 'name' column
 
         self.output_param_names = [
-            'S11_real', 'S11_imag',
-            'S21_real', 'S21_imag',
-            'S31_real', 'S31_imag',
-            'S41_real', 'S41_imag',
+            f"S{i+1}{j+1}_{part}"
+            for i in range(4)
+            for j in range(4)
+            for part in ("real", "imag")
         ]
+
 
         for idx, row in self.params_df.iterrows():
             geometry_name = row['name'] # = name.s4p
@@ -67,13 +68,8 @@ class GeoToSParamDataset(Dataset):
             f = freq[i]
             sij = s[i]
 
-            # Predict S11, S21, S31, S41 (Re/Im)
-            y = np.array([
-                np.real(sij[0, 0]), np.imag(sij[0, 0]),
-                np.real(sij[1, 0]), np.imag(sij[1, 0]),
-                np.real(sij[2, 0]), np.imag(sij[2, 0]),
-                np.real(sij[3, 0]), np.imag(sij[3, 0]),
-            ], dtype=np.float32)
+            # Predict ALL S-parameters for 4-port network
+            y = np.stack((sij.real, sij.imag), axis=-1).reshape(-1).astype(np.float32)
 
             # Input = geometry + frequency
             x = np.hstack([geometry_params, f])

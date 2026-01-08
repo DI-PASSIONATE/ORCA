@@ -3,6 +3,8 @@ import numpy as np
 import os
 import torch.nn as nn
 import torch
+import skrf as rf
+import matplotlib.pyplot as plt
 
 from orca import BaseGeometry
 from orca.geometry.input_parameters import InputParameterIterator
@@ -37,7 +39,7 @@ class TransformerOcta(BaseGeometry):
         )
     
     def create_model(self) -> nn.Module:
-        return OrcaMLP(input_dim=6, hidden_sizes=[64, 64], output_dim=8)  # Example output size; adjust as needed
+        return OrcaMLP(input_dim=6, hidden_sizes=[64, 64], output_dim=32)  # Example output size; adjust as needed
 
     def get_dataset(self) -> torch.utils.data.Dataset:
         return GeoToSParamDataset(data_dir=os.path.join(os.getcwd(), "results", self.name))
@@ -68,7 +70,64 @@ class TransformerOcta(BaseGeometry):
         )
         c.write_gds(output_path, with_metadata=False)
         return output_path
-    
+
+
+    def postprocess_outputs(self, output, f=[120], filename="output.sNp"):
+        """
+        Converts model outputs (Re/Im) into a .sNp Touchstone file format.
+        Plots the S-parameters for visualization.
+
+        Parameters
+        ----------
+        output : dict
+            Dictionary containing S-parameters split into real and imaginary parts.
+            Example keys: 'S11_real', 'S11_imag', ..., 'SNN_real', 'SNN_imag'.
+            Each value is a 1D array of length equal to len(f).
+        f : array-like
+            1D array of frequencies corresponding to the S-parameters.
+        filename : str, optional
+            Name of the Touchstone file to save, default "output.sNp".
+        """
+
+            
+        from itertools import product
+        N = int(np.sqrt(len(output) // 2))  # number of ports
+        nb_f = len(f)
+
+        # Check frequency length
+        if nb_f < 1:
+            raise ValueError("Frequency array must have at least one element.")
+
+        # Automatically generate output parameter names
+        self.output_param_names = [
+            f"S{i}{j}_{part}"
+            for i, j, part in product(range(1, N+1), range(1, N+1), ("real", "imag"))
+        ]
+
+        # Initialize S-matrix of shape (nb_f, N, N)
+        S = np.zeros((nb_f, N, N), dtype=np.complex64)
+
+        # Fill S-matrix
+        for i in range(N):
+            for j in range(N):
+                real = np.array(output[f"S{i+1}{j+1}_real"], dtype=np.float32)
+                imag = np.array(output[f"S{i+1}{j+1}_imag"], dtype=np.float32)
+                if real.shape[0] != nb_f or imag.shape[0] != nb_f:
+                    raise ValueError(f"S{i+1}{j+1} length mismatch with frequency array.")
+                S[:, i, j] = real + 1j * imag  # note: frequency as first dimension
+
+        # Create skrf Network object
+        ntwk = rf.Network(frequency=f, s=S, f_unit='GHz')
+        # skrf expects (N, N, nb_f) so we transpose here
+
+        # Write Touchstone
+        ntwk.write_touchstone(filename)
+        print(f"Touchstone file saved as {filename}")
+
+        # Plot S-parameters
+        ntwk.plot_s_db()
+        plt.show()
+       
 
     def tf_octa_c(
         self,
