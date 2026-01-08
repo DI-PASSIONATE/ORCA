@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
 	QScrollArea,
 	QGroupBox,
 	QFormLayout,
-	QComboBox,
 	QSpinBox,
 	QLineEdit,
 	QPushButton,
@@ -19,8 +18,8 @@ from PySide6.QtWidgets import (
 	QProgressBar,
 	QFileDialog,
 	QMessageBox,
+	QComboBox
 )
-from PySide6.QtGui import QFont
 
 from orca.orca import ORCA
 from orca.geometry.base_geometry import BaseGeometry
@@ -72,12 +71,13 @@ class SimulationWorkerThread(QThread):
 class SimulationTrainingTab(QWidget):
 	"""Standalone simulation and training tab widget."""
 
-	def __init__(self, parent: QWidget | None = None):
+	def __init__(self, geometry_registry: dict | None = None, parent: QWidget | None = None):
 		super().__init__(parent)
 		
 		# Load registries
-		self.geometry_registry = self._load_geometries()
+		self.geometry_registry = geometry_registry or self._load_geometries()
 		self.model_registry = self._load_models()
+		self.current_geometry_name = next(iter(self.geometry_registry), "")
 		
 		# Define pipeline steps for progress display
 		self.step_order = [
@@ -92,6 +92,9 @@ class SimulationTrainingTab(QWidget):
 		
 		# Build the UI
 		self._build_ui()
+		
+		if self.current_geometry_name:
+			self.on_geometry_changed(self.current_geometry_name)
 	
 	def _load_geometries(self):
 		"""Load available geometry classes from presets folder."""
@@ -128,10 +131,9 @@ class SimulationTrainingTab(QWidget):
 
 		geometry_group = QGroupBox("Geometry Configuration")
 		self.params_layout = QFormLayout()
-		self.geometry_combo = QComboBox()
-		self.geometry_combo.addItems(list(self.geometry_registry.keys()))
-		self.geometry_combo.currentTextChanged.connect(self.on_geometry_changed)
-		self.params_layout.addRow("Geometry Type:", self.geometry_combo)
+		self.geometry_display = QLabel(self.current_geometry_name or "Select geometry in main window")
+		self.geometry_display.setStyleSheet("font-weight: bold;")
+		self.params_layout.addRow("Geometry Type:", self.geometry_display)
 		geometry_group.setLayout(self.params_layout)
 		scroll_layout.addWidget(geometry_group)
 
@@ -219,12 +221,13 @@ class SimulationTrainingTab(QWidget):
 
 		self.setLayout(layout)
 
-		self.on_geometry_changed(self.geometry_combo.currentText())
 		self.update_model_combo()
 		self.reset_step_progress()
 
 	def on_geometry_changed(self, geometry_name):
-		"""Handle geometry selection change"""
+		"""Handle geometry selection change from main window."""
+		self.current_geometry_name = geometry_name
+		self.geometry_display.setText(geometry_name or "Select geometry in main window")
 		while self.params_layout.rowCount() > 1:
 			self.params_layout.removeRow(1)
 		
@@ -232,7 +235,7 @@ class SimulationTrainingTab(QWidget):
 		if not geometry_info:
 			return
 		
-		self.update_model_combo()
+		self.update_model_combo(geometry_name)
 		
 		self.stackup_xml_edit = QLineEdit()
 		default_stackup = geometry_info.get("default_params", {}).get("stackup_xml")
@@ -266,11 +269,11 @@ class SimulationTrainingTab(QWidget):
 			self.geometry_name_edit.setText(str(default_name))
 		self.params_layout.addRow("Geometry Name:", self.geometry_name_edit)
 
-	def update_model_combo(self):
+	def update_model_combo(self, geometry_name: str | None = None):
 		"""Update model combo box with available models."""
 		self.model_combo.clear()
 		
-		geometry_name = self.geometry_combo.currentText()
+		geometry_name = geometry_name or self.current_geometry_name
 		geometry_info = self.geometry_registry.get(geometry_name)
 		
 		default_model_class = None
@@ -360,9 +363,13 @@ class SimulationTrainingTab(QWidget):
 		count_label.setText(f"{current}/{total}" if total > 0 else "–/–")
 		count_label.setStyleSheet(f"color: {color}; font-family: monospace;")
 
+	def set_geometry(self, geometry_name: str):
+		"""Receive geometry selection from main window."""
+		self.on_geometry_changed(geometry_name)
+
 	def run_orca_simulation(self):
 		"""Run ORCA simulation in background thread"""
-		geometry_name = self.geometry_combo.currentText()
+		geometry_name = self.current_geometry_name
 		geometry_info = self.geometry_registry.get(geometry_name)
 		
 		if not geometry_info:
@@ -485,6 +492,6 @@ class SimulationTrainingTab(QWidget):
 			QMessageBox.critical(self, "Error", message)
 
 
-def create_simulation_tab(parent: QWidget | None = None) -> SimulationTrainingTab:
+def create_simulation_tab(parent: QWidget | None = None, geometry_registry: dict | None = None) -> SimulationTrainingTab:
 	"""Factory retained for backward compatibility."""
-	return SimulationTrainingTab(parent)
+	return SimulationTrainingTab(geometry_registry=geometry_registry, parent=parent)

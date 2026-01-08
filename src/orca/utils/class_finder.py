@@ -77,7 +77,7 @@ def discover_classes(
                             class_info["default_params"] = default_params
                         
                         # Use a descriptive display name
-                        display_name = f"{name} ({module_name})"
+                        display_name = module_name
                         classes[display_name] = class_info
                         
                         logger.info(f"Discovered {base_class.__name__} subclass: {display_name}")

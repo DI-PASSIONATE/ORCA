@@ -2,7 +2,7 @@ testing.py
 /**/*.egg-info
 /**/.venv
 /**/*.pytest_cache
-/**/.pycache
+/**/__pycache__
 /**/*.pyo
 /**/*.pyd
 /**/*.pyc

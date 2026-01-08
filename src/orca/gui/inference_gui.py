@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QProgressBar
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot
-from PySide6.QtGui import QFont
 
 from orca.inference import InferenceEngine
 from orca.logger import logger
@@ -39,6 +38,7 @@ class InferenceTab(QWidget):
         self.inference_engine = None
         self.inference_worker = None
         self.inference_input_widgets = {}
+        self.active_geometry = None
         self._build_ui()
         self._refresh_checkpoints()
 
@@ -119,7 +119,7 @@ class InferenceTab(QWidget):
         
         self.setLayout(layout)
 
-    def _refresh_checkpoints(self):
+    def _refresh_checkpoints(self, preferred_checkpoint: str | None = None):
         """Refresh list of available checkpoints."""
         try:
             checkpoint_dir = Path(__file__).parent.parent / "checkpoints"
@@ -131,9 +131,11 @@ class InferenceTab(QWidget):
 
             if checkpoints:
                 self.checkpoint_combo.addItems(checkpoints)
-                index = self.checkpoint_combo.findText(current_selection)
-                if index >= 0:
-                    self.checkpoint_combo.setCurrentIndex(index)
+                target = preferred_checkpoint or self.active_geometry or current_selection
+                if target:
+                    index = self.checkpoint_combo.findText(target)
+                    if index >= 0:
+                        self.checkpoint_combo.setCurrentIndex(index)
             else:
                 self.checkpoint_combo.addItem("No checkpoints found")
                 self.model_info_label.setText(
@@ -145,6 +147,11 @@ class InferenceTab(QWidget):
             logger.error(f"Error refreshing checkpoints: {e}")
             self.model_info_label.setText(f"Error loading checkpoints: {str(e)}")
             self.infer_button.setEnabled(False)
+
+    def set_active_geometry(self, geometry_name: str):
+        """Update active geometry and prefer matching checkpoint."""
+        self.active_geometry = geometry_name
+        self._refresh_checkpoints(preferred_checkpoint=geometry_name+".onnx")
 
     def _on_checkpoint_selected(self):
         """Handle checkpoint selection change."""
