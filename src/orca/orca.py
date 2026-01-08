@@ -4,7 +4,6 @@ from ihp import PDK
 import multiprocessing
 import pandas as pd
 import os
-import torch
 
 from orca.logger import logger
 from orca.training.train import train_model
@@ -245,6 +244,7 @@ class ORCA:
         """
         Trains the ORCA model using the simulation data.
         """
+        import torch
         logger.info(f"Starting model training with {len(dataset)} samples...")
         self._emit_progress("Model Training", 0, 1, f"{len(dataset)} samples loaded for training.")
 
