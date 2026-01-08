@@ -28,7 +28,9 @@ from PySide6.QtGui import QFont
 from orca.orca import ORCA
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
-from orca.gui.themes import DarkBlueTheme, DarkGreenTheme, LightTheme
+from orca.gui.themes import SageTheme, LightTheme
+from orca.gui.simulate_train_gui import create_simulation_tab
+from orca.gui.inference_gui import create_inference_tab
 from orca.utils.class_finder import discover_classes
 
 
@@ -62,9 +64,9 @@ class ORCAWorkerThread(QThread):
                 progress_callback=self.on_progress_update
             )
             
-            self.finished.emit(True, "ORCA simulation completed successfully!")
+            self.finished.emit(True, "ORCA training completed successfully!")
         except Exception as e:
-            self.finished.emit(False, f"Error during simulation: {str(e)}")
+            self.finished.emit(False, f"Error during simulation/training: {str(e)}")
     
     def on_progress_update(self, step, current, total, message):
         """Callback for ORCA progress updates"""
@@ -81,12 +83,24 @@ class MainWindow(QWidget):
         
         # Initialize available themes
         self.themes = {
-            "Dark Blue": DarkBlueTheme(),
-            "Dark Green": DarkGreenTheme(),
-            "Light": LightTheme(),
+            "Blue": LightTheme(),
+            "Sage": SageTheme(),
         }
+        # Predeclare UI elements for type checkers
+        self.geometry_combo = None
+        self.params_layout = None
+        self.model_combo = None
+        self.num_samples_spin = None
+        self.cpu_cores_spin = None
+        self.palace_exec_edit = None
+        self.stackup_xml_edit = None
+        self.simconfig_edit = None
+        self.geometry_name_edit = None
+        self.run_button = None
+        self.progress_bar = None
+        self.step_label = None
         # Apply theme
-        self.set_theme("Dark Blue")
+        self.set_theme("Blue")
         
         # Initialize geometry registry
         self.geometry_registry = self.load_geometries()
@@ -156,20 +170,20 @@ class MainWindow(QWidget):
         
         # Header with logo text
         header = QLabel("ORCA - Open RF Circuit Automation")
-        header.setAlignment(Qt.AlignCenter)
+        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         font = QFont()
         font.setPointSize(18)
         font.setBold(True)
         header.setFont(font)
-        header.setStyleSheet("color: #4CAF50; padding: 10px;")
+        header.setStyleSheet("color: #EBF4DD; padding: 10px;")
         top_bar.addWidget(header, 1)
         
         # Theme selector
         theme_layout = QHBoxLayout()
         theme_label = QLabel("Theme:")
-        theme_label.setStyleSheet("font-weight: bold; padding-right: 5px;")
+        theme_label.setStyleSheet("font-weight: bold; padding-right: 5px; color: #EBF4DD;")
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(self.themes.keys())
+        self.theme_combo.addItems(list(self.themes.keys()))
         self.theme_combo.currentTextChanged.connect(self.set_theme)
         self.theme_combo.setMaximumWidth(150)
         theme_layout.addWidget(theme_label)
@@ -182,11 +196,11 @@ class MainWindow(QWidget):
         self.tabs = QTabWidget()
         
         # Mode 1: Simulation & Training
-        self.simulation_tab = self.create_simulation_tab()
+        self.simulation_tab = create_simulation_tab(self)
         self.tabs.addTab(self.simulation_tab, "Simulation + Training")
         
         # Mode 2: Inference & Prediction (placeholder)
-        self.inference_tab = self.create_inference_tab()
+        self.inference_tab = create_inference_tab(self)
         self.tabs.addTab(self.inference_tab, "Inference + Prediction")
         
         main_layout.addWidget(self.tabs)
@@ -238,13 +252,13 @@ class MainWindow(QWidget):
 
         if state == "done":
             icon_label.setText("✓")
-            color = "#9AA0A6"
+            color = "#8FDBFF"  # sage
         elif state == "active":
             icon_label.setText("▶")
-            color = "#2A82DA"
+            color = "#FF9532"  # deep sage
         else:  # todo
             icon_label.setText("•")
-            color = "#6B7078"
+            color = "#7D8087"
 
         icon_label.setStyleSheet(f"color: {color}; font-weight: bold; padding-right: 4px;")
         text_label.setText(label)
@@ -255,164 +269,6 @@ class MainWindow(QWidget):
         else:
             count_label.setText("–/–")
         count_label.setStyleSheet(f"color: {color}; font-family: monospace;")
-    
-    def create_simulation_tab(self):
-        """Create the simulation and training tab"""
-        tab = QWidget()
-        layout = QVBoxLayout()
-        
-        # Scroll area for the form
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout()
-        
-        # Geometry Configuration Group
-        geometry_group = QGroupBox("Geometry Configuration")
-        self.params_layout = QFormLayout()
-        
-        self.geometry_combo = QComboBox()
-        self.geometry_combo.addItems(self.geometry_registry.keys())
-        self.geometry_combo.currentTextChanged.connect(self.on_geometry_changed)
-        self.params_layout.addRow("Geometry Type:", self.geometry_combo)
-        
-        geometry_group.setLayout(self.params_layout)
-        scroll_layout.addWidget(geometry_group)
-        
-        # Simulation Configuration Group
-        sim_config_group = QGroupBox("Simulation Configuration")
-        sim_config_layout = QFormLayout()
-        
-        self.num_samples_spin = QSpinBox()
-        self.num_samples_spin.setMinimum(1)
-        self.num_samples_spin.setMaximum(10000000)
-        self.num_samples_spin.setValue(5)
-        self.num_samples_spin.setToolTip("Number of geometry samples to generate and simulate")
-        sim_config_layout.addRow("Number of Samples:", self.num_samples_spin)
-        
-        self.cpu_cores_spin = QSpinBox()
-        self.cpu_cores_spin.setMinimum(1)
-        self.cpu_cores_spin.setMaximum(multiprocessing.cpu_count())
-        self.cpu_cores_spin.setValue(min(16, multiprocessing.cpu_count()))
-        self.cpu_cores_spin.setToolTip(f"CPU cores to use (max: {multiprocessing.cpu_count()})")
-        sim_config_layout.addRow("CPU Cores:", self.cpu_cores_spin)
-        
-        self.palace_exec_edit = QLineEdit()
-        self.palace_exec_edit.setText("apptainer exec ~/Documents/git/palace/palace.sif palace")
-        self.palace_exec_edit.setToolTip("Palace executable command")
-        sim_config_layout.addRow("Palace Executable:", self.palace_exec_edit)
-        
-        sim_config_group.setLayout(sim_config_layout)
-        scroll_layout.addWidget(sim_config_group)
-        
-        scroll_content.setLayout(scroll_layout)
-        scroll.setWidget(scroll_content)
-        layout.addWidget(scroll)
-
-        # Model Training group
-        model_group = QGroupBox("Model Training")
-        model_layout = QVBoxLayout()
-        
-        self.model_combo = QComboBox()
-        # Will be populated when geometry is selected
-        
-        model_layout.addWidget(QLabel("Select Model Architecture:"))
-        model_layout.addWidget(self.model_combo)
-        model_group.setLayout(model_layout)
-        scroll_layout.addWidget(model_group)
-        
-        # Progress section
-        progress_group = QGroupBox("Progress")
-        progress_layout = QVBoxLayout()
-
-        # Status label
-        self.step_label = QLabel("Ready to run simulation")
-        self.step_label.setStyleSheet("""
-            font-size: 14px;
-            font-weight: bold;
-            color: #4CAF50;
-            padding: 5px;
-        """)
-        self.step_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        progress_layout.addWidget(self.step_label)
-
-        # Pipeline steps list
-        steps_container = QVBoxLayout()
-        self.step_items = {}
-        for key, label in self.step_order:
-            row = QHBoxLayout()
-            icon = QLabel("•")
-            icon.setFixedWidth(16)
-            text = QLabel(label)
-            count = QLabel("–/–")
-            count.setFixedWidth(70)
-            count.setAlignment(Qt.AlignRight)
-            row.addWidget(icon)
-            row.addWidget(text)
-            row.addStretch(1)
-            row.addWidget(count)
-            steps_container.addLayout(row)
-            self.step_items[key] = {"icon": icon, "text": text, "count": count}
-
-        progress_layout.addLayout(steps_container)
-
-        # Progress bar with percentage (current step)
-        progress_bar_layout = QHBoxLayout()
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setTextVisible(True)
-        self.progress_bar.setFormat("%p% (%v/%m)")
-        progress_bar_layout.addWidget(self.progress_bar)
-        progress_layout.addLayout(progress_bar_layout)
-
-        progress_group.setLayout(progress_layout)
-        layout.addWidget(progress_group)
-        
-        # Run button
-        self.run_button = QPushButton("Run ORCA Simulation")
-        self.run_button.clicked.connect(self.run_orca_simulation)
-        self.run_button.setMinimumHeight(40)
-        layout.addWidget(self.run_button)
-        
-        tab.setLayout(layout)
-        
-        # Initialize with first geometry
-        self.on_geometry_changed(self.geometry_combo.currentText())
-        
-        # Populate model dropdown with available models
-        self.update_model_combo()
-        self.reset_step_progress()
-        
-        return tab
-    
-    def create_inference_tab(self):
-        """Create the inference and prediction tab (placeholder)"""
-        tab = QWidget()
-        layout = QVBoxLayout()
-        
-        # Placeholder content
-        placeholder_group = QGroupBox("Inference Mode")
-        placeholder_layout = QVBoxLayout()
-        
-        placeholder_label = QLabel(
-            "Inference & Prediction Mode\n\n"
-            "This feature is under development and will allow you to:\n\n"
-            "• Load trained models\n"
-            "• Predict RFIC geometries based on desired specifications\n"
-            "• Visualize predicted vs. actual performance\n"
-            "• Export optimized geometries\n\n"
-            "Stay tuned for updates!"
-        )
-        placeholder_label.setWordWrap(True)
-        placeholder_label.setAlignment(Qt.AlignCenter)
-        placeholder_label.setStyleSheet("font-size: 14px; padding: 40px;")
-        
-        placeholder_layout.addWidget(placeholder_label)
-        placeholder_group.setLayout(placeholder_layout)
-        layout.addWidget(placeholder_group)
-        
-        tab.setLayout(layout)
-        return tab
     
     def on_geometry_changed(self, geometry_name):
         """Handle geometry selection change"""
@@ -556,7 +412,7 @@ class MainWindow(QWidget):
         self.step_label.setStyleSheet("""
             font-size: 14px;
             font-weight: bold;
-            color: #2A82DA;
+            color: #5A7863;
             padding: 5px;
         """)
         self.reset_step_progress()
@@ -632,9 +488,9 @@ class MainWindow(QWidget):
         self.progress_bar.setVisible(True)
 
         # Color headline based on state
-        color = "#2A82DA"
+        color = "#5A7863"  # deep sage for active/default
         if self.step_state.get(step, {}).get("state") == "done":
-            color = "#4CAF50"
+            color = "#90AB8B"  # sage for success
         if "failed" in message.lower() or "error" in message.lower():
             color = "#FF5252"
         self.step_label.setStyleSheet(f"""
@@ -659,7 +515,7 @@ class MainWindow(QWidget):
             self.step_label.setStyleSheet("""
                 font-size: 14px;
                 font-weight: bold;
-                color: #4CAF50;
+                color: #90AB8B;
                 padding: 5px;
             """)
             QMessageBox.information(self, "Success", message)

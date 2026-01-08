@@ -83,7 +83,7 @@ class ORCA:
         self.evaluate_model()
 
         logger.info("ORCA pipeline finished successfully.")
-        self._emit_progress("Complete", num_samples, num_samples, f"Successfully trained ORCA model of {self.geometry.name} with {n_samples} samples.")
+        self._emit_progress("Complete", num_samples, num_samples, f"Successfully trained ORCA model of {self.geometry.name} with {len(dataset)} samples.")
 
     def print_super_cool_logo_art(self):
         logger.info("###########################################################")  
@@ -241,7 +241,7 @@ class ORCA:
         self._emit_progress("Palace Simulation", total_sims, total_sims, 
                           f"Simulations complete: {completed} successful, {failed} failed")
 
-    def train(self, dataset, cwd: str = os.getcwd(), epochs: int = 50):
+    def train(self, dataset, cwd: str = os.getcwd(), epochs: int = 30):
         """
         Trains the ORCA model using the simulation data.
         """
@@ -257,7 +257,13 @@ class ORCA:
         if not os.path.exists(model_save_dir):
             os.makedirs(model_save_dir)
 
-        torch.save(weights.state_dict(), os.path.join(model_save_dir, f"{self.geometry.name}.pth"))
+        torch.onnx.export(
+            weights,
+            (torch.randn(1, len(self.geometry.input_iterator)+1),),
+            input_names=self.geometry.input_iterator.input_names+["freq"],
+            f=os.path.join(model_save_dir, "model.onnx"),
+            dynamo=True
+        )
         self._emit_progress("Model Training", 1, 1, "Model training completed successfully.")
         logger.info("#----------- Model training completed. -----------#")
 

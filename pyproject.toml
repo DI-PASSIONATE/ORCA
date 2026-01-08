@@ -40,6 +40,9 @@ train = [
     "gdsfactory",
     "gds2palace",
 ]
+inference = [
+    "onnxruntime",
+]
 
 [project.scripts]
 orca = "orca.gui.main_gui:main"
