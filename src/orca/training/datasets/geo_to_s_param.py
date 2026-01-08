@@ -7,7 +7,7 @@ import torch
 
 from orca.logger import logger
 
-class OrcaDataset(Dataset):
+class GeoToSParamDataset(Dataset):
     """
     The ORCA Dataset loads all .snp files from a specified directory and generates
     a training sample for each frequency point in the S-parameter data. Each sample consists
@@ -21,6 +21,16 @@ class OrcaDataset(Dataset):
 
         # Load parameters from CSV
         self.params_df = pd.read_csv(os.path.join(data_dir, "params.csv"))
+
+        self.input_param_names = list(self.params_df.columns) + ['frequency [100GHz]']
+        self.input_param_names.remove('name')  # Remove 'name' column
+
+        self.output_param_names = [
+            'S11_real', 'S11_imag',
+            'S21_real', 'S21_imag',
+            'S31_real', 'S31_imag',
+            'S41_real', 'S41_imag',
+        ]
 
         for idx, row in self.params_df.iterrows():
             geometry_name = row['name'] # = name.s4p
@@ -49,7 +59,6 @@ class OrcaDataset(Dataset):
         freq = net.f
 
         # Scale frequency to multiple of 100 GHz
-        print(freq)
         freq = freq / 1e11  # Now in units of 100 GHz
 
         s = net.s

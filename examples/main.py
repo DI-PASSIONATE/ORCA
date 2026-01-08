@@ -16,7 +16,7 @@ geometry = TransformerOcta()
 
 orca_instance = ORCA(geometry)
 
-orca_instance.run(num_samples=3, cpu_cores=16, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
+orca_instance.run(num_samples=0, cpu_cores=16, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
 
 # # Load and plot the results
 # ntwk = rf.Network("/home/david/Documents/git/ORCA/palace_model/tf_octa_c_ports_0_data/output/tf_octa_c_ports_0/tf_octa_c_ports_0.s4p")

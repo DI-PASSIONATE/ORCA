@@ -8,8 +8,8 @@ import torch
 
 from orca.logger import logger
 from orca.training.train import train_model
-from orca.training.dataset import OrcaDataset
-from orca.training.models.mlp import OrcaMLP
+from orca.training.datasets.geo_to_s_param import GeoToSParamDataset
+from orca.training.onnx_wrapper import ONNXWrapper
 from orca.geometry.base_geometry import BaseGeometry
 from orca.simulation.simulate import create_palace_model_from_gds, run_palace
 
@@ -77,7 +77,7 @@ class ORCA:
         self.convert_gds_to_palace()
         self.run_simulation(palace_executable, cpu_cores)
 
-        dataset = OrcaDataset(data_dir=os.path.join(os.getcwd(), "results", self.geometry.name))
+        dataset = GeoToSParamDataset(data_dir=os.path.join(os.getcwd(), "results", self.geometry.name))
 
         self.train(dataset, cwd=os.getcwd(), epochs=50)
         self.evaluate_model()
@@ -250,7 +250,7 @@ class ORCA:
 
         model = self.geometry.create_model()
 
-        weights = train_model(dataset, model=model, epochs=epochs, batch_size=32, learning_rate=1e-3, progress_callback=self._emit_progress)
+        trained_model = train_model(dataset, model=model, epochs=epochs, batch_size=32, learning_rate=1e-3, progress_callback=self._emit_progress)
         
         model_save_dir = os.path.join(cwd, "models", self.geometry.name)
 
@@ -258,10 +258,12 @@ class ORCA:
             os.makedirs(model_save_dir)
 
         torch.onnx.export(
-            weights,
-            (torch.randn(1, len(self.geometry.input_iterator)+1),),
-            input_names=self.geometry.input_iterator.input_names+["freq"],
+            ONNXWrapper(trained_model),
+            tuple(torch.randn(1, 1) for _ in dataset.input_param_names),
+            input_names=dataset.input_param_names,
+            output_names=dataset.output_param_names,
             f=os.path.join(model_save_dir, "model.onnx"),
+            external_data=False,
             dynamo=True
         )
         self._emit_progress("Model Training", 1, 1, "Model training completed successfully.")

@@ -1,7 +1,6 @@
 import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-import time
 
 def train_model(dataset, model: nn.Module, epochs=10, batch_size=32, learning_rate=1e-3, progress_callback=None) -> nn.Module:
     """
@@ -32,7 +31,6 @@ def train_model(dataset, model: nn.Module, epochs=10, batch_size=32, learning_ra
         progress_callback("Model Training", 0, epochs, "Starting model training...")
 
     for epoch in range(epochs):
-        time.sleep(0.1)  # Simulate time-consuming training
         total_loss = 0.0
         for inputs, targets in dataloader:
             optimizer.zero_grad()

@@ -35,7 +35,7 @@ class TransformerOcta(BaseGeometry):
         )
     
     def create_model(self) -> nn.Module:
-        return OrcaMLP(input_size=6, hidden_sizes=[64, 64], output_size=8)  # Example output size; adjust as needed
+        return OrcaMLP(input_dim=6, hidden_sizes=[64, 64], output_dim=8)  # Example output size; adjust as needed
 
     def create_gds_file(self, params: dict[str, any]) -> str:
         output_path = os.path.join(
