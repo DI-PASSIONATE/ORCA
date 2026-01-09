@@ -46,13 +46,12 @@ class SimulationWorkerThread(QThread):
 			self.progress.emit("Initializing", 0, 0, "Initializing geometry...")
 			
 			# Create geometry instance
-			geometry = self.geometry_class(**self.geometry_params)
+			geometry = self.geometry_class(self.num_samples, **self.geometry_params)
 			
 			orca_instance = ORCA(geometry)
 			
 			# Run with progress callback
 			orca_instance.run(
-				num_samples=self.num_samples,
 				cpu_cores=self.cpu_cores,
 				epochs=self.epochs,
 				palace_executable=self.palace_executable,

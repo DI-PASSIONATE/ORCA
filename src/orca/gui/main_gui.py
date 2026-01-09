@@ -116,7 +116,7 @@ class MainWindow(QWidget):
 		self.tabs.addTab(self.simulation_tab, "Simulation + Training")
 		
 		# Mode 2: Inference & Prediction
-		self.inference_tab = InferenceTab(self)
+		self.inference_tab = InferenceTab(self.geometry_registry, self)
 		self.tabs.addTab(self.inference_tab, "Inference + Prediction")
 		
 		main_layout.addWidget(self.tabs)
