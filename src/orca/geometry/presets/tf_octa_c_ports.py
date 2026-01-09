@@ -19,30 +19,37 @@ class TransformerOcta(BaseGeometry):
     """
 
     def __init__(self,
+                 n_samples: int = 100,
                  name = "tf_octa_c_ports",
                  stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml"),
                  simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg"),
                  params = None
                 ):
-
         # Call the base class constructor with the parameters
-        super().__init__(name, stackup_xml, simconfig_filename, params)
+        super().__init__(n_samples, name, stackup_xml, simconfig_filename, params)
     
     def get_input_parameters(self) -> InputParameterIterator:
         return InputParameterIterator(
             picking_strategy="grid",
-            input_winding_diameter = range(40, 101, 10), # 20, 101, 5
-            output_winding_diameter = range(40, 101, 10), # 20, 101, 5
+            n_samples=self.n_samples,
+            input_winding_diameter = range(20, 101, 10), # 20, 101, 5
+            output_winding_diameter = range(20, 101, 10), # 20, 101, 5
             center_displacement = range(0, 21, 10), # 0, 21, 1
-            bottom_linewidth = range(5, 9, 3), # 2, 9, 1
-            upper_linewidth = range(5, 9, 3), # 2, 9, 1
+            bottom_linewidth = range(2, 11, 3), # 2, 9, 1
+            upper_linewidth = range(2, 11, 3), # 2, 9, 1
         )
     
     def create_model(self) -> nn.Module:
-        return OrcaMLP(input_dim=6, hidden_sizes=[64, 64], output_dim=32)  # Example output size; adjust as needed
+        return OrcaMLP(
+            input_dim=6, 
+            hidden_sizes=[128, 128], 
+            output_dim=32,
+            input_mins=[min(param_list ) for param_list in self.get_input_parameters().input_values.values()] + [1e9], # frequency min 1 GHz
+            input_maxs=[max(param_list ) for param_list in self.get_input_parameters().input_values.values()] + [200e9], # frequency max 200 GHz
+        )
 
     def get_dataset(self) -> torch.utils.data.Dataset:
-        return GeoToSParamDataset(data_dir=os.path.join(os.getcwd(), "results", self.name))
+        return GeoToSParamDataset(data_dir=os.path.join(os.getcwd(), "results", self.name), geometry=self)
 
     def create_gds_file(self, params: dict[str, any]) -> str:
         output_path = os.path.join(
@@ -71,8 +78,7 @@ class TransformerOcta(BaseGeometry):
         c.write_gds(output_path, with_metadata=False)
         return output_path
 
-
-    def postprocess_outputs(self, output, f=[120], filename="output.sNp"):
+    def postprocess_outputs(self, output, frequency_points=[120]):
         """
         Converts model outputs (Re/Im) into a .sNp Touchstone file format.
         Plots the S-parameters for visualization.
@@ -92,7 +98,9 @@ class TransformerOcta(BaseGeometry):
             
         from itertools import product
         N = int(np.sqrt(len(output) // 2))  # number of ports
-        nb_f = len(f)
+        filename = f"{self.name}.s{N}p"
+
+        nb_f = len(frequency_points)
 
         # Check frequency length
         if nb_f < 1:
@@ -117,7 +125,7 @@ class TransformerOcta(BaseGeometry):
                 S[:, i, j] = real + 1j * imag  # note: frequency as first dimension
 
         # Create skrf Network object
-        ntwk = rf.Network(frequency=f, s=S, f_unit='GHz')
+        ntwk = rf.Network(frequency=frequency_points, s=S, f_unit='GHz')
         # skrf expects (N, N, nb_f) so we transpose here
 
         # Write Touchstone
@@ -127,7 +135,13 @@ class TransformerOcta(BaseGeometry):
         # Plot S-parameters
         ntwk.plot_s_db()
         plt.show()
-       
+
+        # Return as a dictionary with _real and _imag merged
+        merged_output = {}
+        for i in range(N):
+            for j in range(N):
+                merged_output[f"S{i+1}{j+1}"] = S[:, i, j]
+        return merged_output
 
     def tf_octa_c(
         self,
