@@ -2,6 +2,8 @@ import threading
 from itertools import product
 import numpy as np
 
+from orca import MIN_FREQUENCY, MAX_FREQUENCY
+
 class InputParameterIterator:
     """
     Class for keeping track of geometry input parameters.
@@ -60,6 +62,18 @@ class InputParameterIterator:
             except StopIteration:
                 raise
 
+    def get_min_max_values(self, add_frequency_dim=False) -> tuple[list[float], list[float]]:
+        """
+        Returns the minimum and maximum values for each input parameter.
+        Useful for normalization purposes.
+        Returns:
+            tuple: A tuple containing two lists - (min_values, max_values).
+        """
+        return (
+            [min(param_list ) for param_list in self.input_values.values()] + ([MIN_FREQUENCY] if add_frequency_dim else []),
+            [max(param_list ) for param_list in self.input_values.values()] + ([MAX_FREQUENCY] if add_frequency_dim else [])
+        )
+    
     def step_grid(self):
         """
         Generator that yields all combinations of input parameters using step grid strategy.

@@ -1,27 +1,22 @@
-from torch.utils.data import Dataset
 import pandas as pd
 import skrf as rf
 import os
 import numpy as np
 import torch
 
+from orca.training.datasets.base_dataset import BaseDataset, GeometrySample
+from orca.training.normalize import StandardNormalizer
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 
-FMIN = 1e9  # 1 GHz
-FMAX = 2e11  # 200 GHz
-
-class GeoToSParamDataset(Dataset):
+class GeoToSParamDataset(BaseDataset):
     """
     The ORCA Dataset loads all .snp files from a specified directory and generates
     a training sample for each frequency point in the S-parameter data. Each sample consists
     of input parameters and corresponding S-parameter values.
     """
-    def __init__(self, data_dir: str, geometry: BaseGeometry):
-        self.data_dir = data_dir
-        self.geometry = geometry
-        
-        self.samples: list[tuple] = []
+    def __init__(self, data_dir: str, geometry: BaseGeometry, frequency_as_input: bool = True):
+        super(GeoToSParamDataset, self).__init__(data_dir, geometry, frequency_as_input)
 
         # Load parameters from CSV
         self.params_df = pd.read_csv(os.path.join(data_dir, "params.csv"))
@@ -46,27 +41,12 @@ class GeoToSParamDataset(Dataset):
 
             geometry_params = np.array(row.drop('name'), dtype=np.float32)
             samples = self.load_samples(f"{geometry_name}.s4p", geometry_params)
-            self.samples.extend(samples)
 
-        self.output_means, self.output_stds = self.get_output_means_stds()
+            self.samples.extend(GeometrySample(geometry_name, samples))
 
-    def get_output_means_stds(self) -> tuple[list[float], list[float]]:
-        """Calculate means and standard deviations of output parameters for normalization."""
-        all_outputs = np.array([y for _, y in self.samples], dtype=np.float32)
-        means = np.mean(all_outputs, axis=0)
-        stds = np.std(all_outputs, axis=0)
-        return means, stds
-
-    def __len__(self):
-        return len(self.samples)
-    
-    def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
-        x, y = self.samples[idx]
-
-        # Normalize output (input is normalized in the model itself, to embed it into the exported ONNX model)
-        # Output is denormalized in the ONNX wrapper class after inference
-        y = (y - self.output_means) / self.output_stds
-        return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
+        
+        output_means, output_stds = self.get_output_means_stds()
+        self.output_normalizer = StandardNormalizer(output_means, output_stds)
 
     def load_samples(self, filename: str, geometry_params: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
         """Load S-parameter data from a Touchstone file."""

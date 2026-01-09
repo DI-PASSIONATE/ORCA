@@ -74,14 +74,15 @@ class ORCA:
         logger.info(f"Running {num_samples} ORCA simulations of {self.geometry.name} with {cpu_cores} CPU cores...")         
         self._emit_progress("Initializing", 0, num_samples, "Starting ORCA pipeline...")
 
-
         cwd = os.getcwd()
-        save_path = os.path.join(cwd, "results")
+        save_path = os.path.join(cwd, "results", self.geometry.name)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
 
         self.generate_gds_data(num_samples)
         self.convert_gds_to_palace()
         self.run_simulation(save_path, palace_executable, cpu_cores)
-        self.train(self.geometry.get_dataset(), cwd=os.getcwd(), epochs=epochs)
+        self.train(self.geometry.get_dataset(), cwd=cwd, epochs=epochs)
         self.evaluate_model()
 
         logger.info("ORCA pipeline finished successfully.")
@@ -185,7 +186,7 @@ class ORCA:
                     continue
         
         # Save the working geometries to CSV after all conversions are complete
-        save_path = os.path.join(os.getcwd(), "geometries", "parameters.csv")
+        save_path = os.path.join(os.getcwd(), "geometries", "params.csv")
         self.working_geometries.to_csv(save_path, index=False)
         
         successful = len(self.palace_models)
@@ -267,7 +268,7 @@ class ORCA:
 
         # Export to ONNX with multiple inputs/outputs using ONNXWrapper
         torch.onnx.export(
-            ONNXWrapper(trained_model, dataset.output_means, dataset.output_stds),
+            ONNXWrapper(trained_model, output_denormalizer=dataset.output_normalizer),
             tuple(torch.randn(1, 1) for _ in dataset.input_param_names),
             input_names=dataset.input_param_names,
             output_names=dataset.output_param_names,

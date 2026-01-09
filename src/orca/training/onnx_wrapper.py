@@ -1,4 +1,5 @@
 import torch
+from orca.training.normalize import Normalizer
 
 class ONNXWrapper(torch.nn.Module):
     """
@@ -14,22 +15,24 @@ class ONNXWrapper(torch.nn.Module):
         A torch.nn.Module that can be passed to torch.onnx.export.
     """
 
-    def __init__(self, model, output_means: list[float], output_stds: list[float]):
+    def __init__(self, model, output_denormalizer: Normalizer):
         super().__init__()
         self.model = model
-        # We register means and stds as buffers to ensure they are part of the model state
-        self.register_buffer("output_means", torch.tensor(output_means, dtype=torch.float32))
-        self.register_buffer("output_stds", torch.tensor(output_stds, dtype=torch.float32))
+        self.output_denormalizer = output_denormalizer
 
     def forward(self, *x: torch.Tensor) -> tuple[torch.Tensor, ...]:
         # Convert input tuple to single tensor
         input_tensor = torch.cat(x, dim=1)
 
+        # Normalizing the input is done in the *model* already.
+        # This is done to be able to calculate additional features based on unnormalized input parameters.
+
         # Perform inference
         output = self.model(input_tensor)
 
         # De-normalize output
-        output = output * self.output_stds + self.output_means
+        if self.output_denormalizer is not None:
+            output = self.output_denormalizer.denormalize(output)
 
         # Convert output tensor to tuple of tensors
         return torch.unbind(output, dim=1)

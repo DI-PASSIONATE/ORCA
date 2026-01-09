@@ -6,11 +6,13 @@ import torch
 import skrf as rf
 import matplotlib.pyplot as plt
 
-from orca import BaseGeometry
+from orca import BaseGeometry, MIN_FREQUENCY, MAX_FREQUENCY
 from orca.geometry.input_parameters import InputParameterIterator
 from ihp import PDK
 from orca.training.datasets.geo_to_s_param import GeoToSParamDataset
 from orca.training.models.mlp import OrcaMLP
+from orca.training.normalize import MinMaxNormalizer
+from orca.training.feature_transform import FeatureTransformPipeline, RatioFeature
 
 class TransformerOcta(BaseGeometry):
     """
@@ -18,13 +20,14 @@ class TransformerOcta(BaseGeometry):
     No input parameters are required for this geometry.
     """
 
-    def __init__(self,
-                 n_samples: int = 100,
-                 name = "tf_octa_c_ports",
-                 stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml"),
-                 simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg"),
-                 params = None
-                ):
+    def __init__(
+            self,
+            n_samples: int = 100,
+            name = "tf_octa_c_ports",
+            stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml"),
+            simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg"),
+            params = None
+        ):
         # Call the base class constructor with the parameters
         super().__init__(n_samples, name, stackup_xml, simconfig_filename, params)
     
@@ -40,16 +43,22 @@ class TransformerOcta(BaseGeometry):
         )
     
     def create_model(self) -> nn.Module:
+        input_mins, input_maxs = self.get_input_parameters().get_min_max_values(add_frequency_dim=True)
+        features = FeatureTransformPipeline(
+            RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
+            RatioFeature(i=3, j=4),  # bottom_linewidth / upper_linewidth
+            RatioFeature(i=5, j=0),  # frequency / input_winding_diameter
+        )
         return OrcaMLP(
-            input_dim=6, 
+            input_dim=5+1+3,  # 5 original params + 1 frequency + 3 ratio features
             hidden_sizes=[128, 128], 
             output_dim=32,
-            input_mins=[min(param_list ) for param_list in self.get_input_parameters().input_values.values()] + [1e9], # frequency min 1 GHz
-            input_maxs=[max(param_list ) for param_list in self.get_input_parameters().input_values.values()] + [200e9], # frequency max 200 GHz
+            features=features,
+            normalizer=MinMaxNormalizer(input_mins, input_maxs, features=features)
         )
 
-    def get_dataset(self) -> torch.utils.data.Dataset:
-        return GeoToSParamDataset(data_dir=os.path.join(os.getcwd(), "results", self.name), geometry=self)
+    def get_dataset(self, base_dir=os.path.join(os.getcwd(), "results")) -> torch.utils.data.Dataset:
+        return GeoToSParamDataset(data_dir=os.path.join(base_dir, self.name), geometry=self)
 
     def create_gds_file(self, params: dict[str, any]) -> str:
         output_path = os.path.join(

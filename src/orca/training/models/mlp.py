@@ -1,9 +1,11 @@
 import torch
 from typing_extensions import Self
 import torch.nn as nn
+from orca.training.normalize import Normalizer
+from orca.training.feature_transform import FeatureTransformPipeline
 
 class OrcaMLP(nn.Module):
-    def __init__(self, input_dim, hidden_sizes, output_dim, input_mins, input_maxs):
+    def __init__(self, input_dim: int, hidden_sizes: list[int], output_dim: int, normalizer: Normalizer, features: FeatureTransformPipeline | None = None):
         """
         Simple Multi-Layer Perceptron (MLP) model for regression tasks.
         Args:
@@ -17,9 +19,8 @@ class OrcaMLP(nn.Module):
         layers = []
         in_size = input_dim
 
-        self.register_buffer("input_mins", torch.tensor(input_mins, dtype=torch.float32))
-        self.register_buffer("input_maxs", torch.tensor(input_maxs, dtype=torch.float32))
-
+        self.normalizer = normalizer
+        self.features = features
         for h_size in hidden_sizes:
             layers.append(nn.Linear(in_size, h_size))
             layers.append(nn.SiLU())
@@ -27,12 +28,14 @@ class OrcaMLP(nn.Module):
         layers.append(nn.Linear(in_size, output_dim))
         self.model = nn.Sequential(*layers)
 
-    def normalize_minmax(self, x: torch.Tensor) -> torch.Tensor:
-        return (x - self.input_mins) / (self.input_maxs - self.input_mins)
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Generate additional features if any
+        if self.features is not None:
+            x = self.features(x)
+
         # Training data was normalized, so inference data must be normalized too
-        x = self.normalize_minmax(x)
+        if self.normalizer is not None:
+            x = self.normalizer(x)
 
         # Training output was normalized too, but normalization is handled in the dataset class
         # and de-normalization is handled in the ONNX wrapper class.
