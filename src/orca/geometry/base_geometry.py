@@ -3,9 +3,10 @@ from orca.geometry.input_parameters import InputParameterIterator
 from orca.logger import logger
 import torch.nn as nn
 import torch
+import numpy as np
 
 class BaseGeometry(ABC):
-    def __init__(self, name: str, stackup_xml: str, simconfig_filename: str, params: dict[str, any]|None = None):
+    def __init__(self, n_samples: int, name: str, stackup_xml: str, simconfig_filename: str, params: dict[str, any]|None = None):
         """
         Base class for defining geometries in ORCA.
         Geometries define the physical structure to be simulated, along with their input parameters and how to create GDS files.
@@ -18,12 +19,14 @@ class BaseGeometry(ABC):
         """
 
         self._name = name
+        self._n_samples = n_samples
         self._stackup_xml = stackup_xml
         self._simconfig_filename = simconfig_filename
         self._n_inputs = 0
         self._n_outputs = 0
         self.n_gds_generated = 0
         self._params = params
+
         if params is None: # If no params provided, we assume instance is a GeometryFactory
             self.input_iterator = iter(self.get_input_parameters())
             logger.info(f"Created GeometryFactory with input parameter iterator. Values: {self.input_iterator.input_values}")
@@ -43,6 +46,10 @@ class BaseGeometry(ABC):
     @property
     def params(self) -> dict[str, any]|None:
         return self._params
+    
+    @property
+    def n_samples(self) -> int:
+        return self._n_samples
 
     def create_geometry_instance(self, name: str, params: dict[str, any]) -> 'BaseGeometry':
         """
@@ -57,6 +64,7 @@ class BaseGeometry(ABC):
         """
         # Create a new instance of the same class as self
         new_geometry = self.__class__(
+            n_samples=1,
             name=name,
             stackup_xml=self.stackup_xml,
             simconfig_filename=self.simconfig_filename,
@@ -124,16 +132,16 @@ class BaseGeometry(ABC):
             params: dict[str, any]: Dictionary of input parameters used to create the GDS file. Mapping is the same as what get_input_parameters returns.
         """
 
-    def postprocess_outputs(self, *outputs: torch.Tensor) -> tuple[torch.Tensor, ...]:
+    def postprocess_outputs(self, output: dict[str, list], frequency_points: list|np.ndarray) -> dict[str, list]:
         """
         Postprocess the outputs of the ONNX model after inference.
         This method can be overridden by subclasses to apply any necessary transformations
         to the raw outputs produced by the ONNX model.
 
         Args:
-            *outputs (torch.Tensor): Raw output tensors from the ONNX model.
-
+            output (dict[str, list]): Dictionary of raw outputs from the ONNX model (key: output name, value: list of outputs)
+            frequency_points (list|np.ndarray): Frequency points corresponding to each value in the output lists, if applicable.
         Returns:
-            tuple[torch.Tensor, ...]: Postprocessed output tensors.
+            dict[str, any]: Postprocessed outputs. Default implementation returns the outputs unchanged.
         """
-        return outputs
+        return output

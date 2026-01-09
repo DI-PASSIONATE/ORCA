@@ -12,15 +12,22 @@ import matplotlib.pyplot as plt
 
 # Use predefined geometry from examples
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
-geometry = TransformerOcta()
+geometry = TransformerOcta(n_samples=0)
 
 orca_instance = ORCA(geometry)
 
-orca_instance.run(num_samples=0, cpu_cores=16, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
+#orca_instance.run(cpu_cores=16, epochs=100, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
 
 # # Load and plot the results
-# ntwk = rf.Network("/home/david/Documents/git/ORCA/palace_model/tf_octa_c_ports_0_data/output/tf_octa_c_ports_0/tf_octa_c_ports_0.s4p")
+ntwk = rf.Network("/home/david/Documents/git/ORCA/results/tf_octa_c_ports/tf_octa_c_ports_27.s4p")
+ntwk.plot_s_db()
+print(ntwk.s[10])
 
+plt.figure()
+ntwk2 = rf.Network("/home/david/Documents/git/ORCA/tf_octa_c_ports.s4p")
+ntwk2.plot_s_db()
+print(ntwk2.s[10])
+plt.show()
 # plt.figure()
 # plt.subplot(2, 1, 1)
 # plt.title("S-parameters that should be minimized")

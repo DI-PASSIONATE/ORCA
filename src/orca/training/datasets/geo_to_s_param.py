@@ -5,7 +5,11 @@ import os
 import numpy as np
 import torch
 
+from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
+
+FMIN = 1e9  # 1 GHz
+FMAX = 2e11  # 200 GHz
 
 class GeoToSParamDataset(Dataset):
     """
@@ -13,10 +17,10 @@ class GeoToSParamDataset(Dataset):
     a training sample for each frequency point in the S-parameter data. Each sample consists
     of input parameters and corresponding S-parameter values.
     """
-
-
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, geometry: BaseGeometry):
         self.data_dir = data_dir
+        self.geometry = geometry
+        
         self.samples: list[tuple] = []
 
         # Load parameters from CSV
@@ -32,7 +36,6 @@ class GeoToSParamDataset(Dataset):
             for part in ("real", "imag")
         ]
 
-
         for idx, row in self.params_df.iterrows():
             geometry_name = row['name'] # = name.s4p
             s4p_path = f"{data_dir}/{geometry_name}.s4p"
@@ -45,23 +48,33 @@ class GeoToSParamDataset(Dataset):
             samples = self.load_samples(f"{geometry_name}.s4p", geometry_params)
             self.samples.extend(samples)
 
+        self.output_means, self.output_stds = self.get_output_means_stds()
+
+    def get_output_means_stds(self) -> tuple[list[float], list[float]]:
+        """Calculate means and standard deviations of output parameters for normalization."""
+        all_outputs = np.array([y for _, y in self.samples], dtype=np.float32)
+        means = np.mean(all_outputs, axis=0)
+        stds = np.std(all_outputs, axis=0)
+        return means, stds
+
     def __len__(self):
         return len(self.samples)
     
     def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
         x, y = self.samples[idx]
+
+        # Normalize output (input is normalized in the model itself, to embed it into the exported ONNX model)
+        # Output is denormalized in the ONNX wrapper class after inference
+        y = (y - self.output_means) / self.output_stds
         return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
 
     def load_samples(self, filename: str, geometry_params: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
         """Load S-parameter data from a Touchstone file."""
         samples = []
         sparam_path = f"{self.data_dir}/{filename}"
+        
         net = rf.Network(sparam_path)
         freq = net.f
-
-        # Scale frequency to multiple of 100 GHz
-        freq = freq / 1e11  # Now in units of 100 GHz
-
         s = net.s
 
         for i in range(len(freq)):
@@ -72,7 +85,7 @@ class GeoToSParamDataset(Dataset):
             y = np.stack((sij.real, sij.imag), axis=-1).reshape(-1).astype(np.float32)
 
             # Input = geometry + frequency
-            x = np.hstack([geometry_params, f])
+            x = np.hstack((geometry_params, f)).astype(np.float32)
 
             samples.append((x, y))
 

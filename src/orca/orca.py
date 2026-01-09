@@ -53,7 +53,7 @@ class ORCA:
         self.progress_callback = None
         PDK.activate()
 
-    def run(self, cpu_cores: int = multiprocessing.cpu_count(), num_samples: int = 1000, epochs=50, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace", progress_callback=None):
+    def run(self, cpu_cores: int = multiprocessing.cpu_count(), epochs=50, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace", progress_callback=None):
         """
         Runs the ORCA pipeline, including data generation, simulation, training, and evaluation.
         
@@ -68,13 +68,19 @@ class ORCA:
 
         if cpu_cores < 1:
             raise ValueError("cpu_cores must be at least 1.")
+        
+        num_samples = self.geometry.n_samples
 
         logger.info(f"Running {num_samples} ORCA simulations of {self.geometry.name} with {cpu_cores} CPU cores...")         
         self._emit_progress("Initializing", 0, num_samples, "Starting ORCA pipeline...")
 
+
+        cwd = os.getcwd()
+        save_path = os.path.join(cwd, "results")
+
         self.generate_gds_data(num_samples)
         self.convert_gds_to_palace()
-        self.run_simulation(palace_executable, cpu_cores)
+        self.run_simulation(save_path, palace_executable, cpu_cores)
         self.train(self.geometry.get_dataset(), cwd=os.getcwd(), epochs=epochs)
         self.evaluate_model()
 
@@ -187,7 +193,7 @@ class ORCA:
         self._emit_progress("Palace Conversion", total_gds, total_gds, 
                           f"Conversion complete: {successful} successful, {failed} failed")
 
-    def run_simulation(self, palace_executable: str, cpu_cores: int):
+    def run_simulation(self, save_path, palace_executable: str, cpu_cores: int):
         """
         Runs simulations on the generated data.
         """
@@ -196,8 +202,6 @@ class ORCA:
         self._emit_progress("Palace Simulation", 0, total_sims, "Starting Palace simulations...")
         
         working_geoms = pd.DataFrame(self.working_geometries)
-        cwd = os.getcwd()
-        save_path = os.path.join(cwd, "results", "params.csv")
         
         completed = 0
         failed = 0
@@ -211,7 +215,7 @@ class ORCA:
                 run_palace(
                     sim_path=sim_path,
                     data_dir=data_dir,
-                    result_dir=os.path.join(cwd, "results", self.geometry.name),
+                    result_dir=save_path,
                     config_name=config_name,
                     palace_executable=palace_executable,
                     cpu_cores=cpu_cores
@@ -221,7 +225,7 @@ class ORCA:
                     mask = working_geoms["name"] == row["name"]
                     for key, value in row.items():
                         working_geoms.loc[mask, key] = value
-                working_geoms.to_csv(save_path, index=False)
+                working_geoms.to_csv(os.path.join(save_path, "parameters.csv"), index=False)
                 completed += 1
                 
                 self._emit_progress("Palace Simulation", i + 1, total_sims, 
@@ -263,7 +267,7 @@ class ORCA:
 
         # Export to ONNX with multiple inputs/outputs using ONNXWrapper
         torch.onnx.export(
-            ONNXWrapper(trained_model),
+            ONNXWrapper(trained_model, dataset.output_means, dataset.output_stds),
             tuple(torch.randn(1, 1) for _ in dataset.input_param_names),
             input_names=dataset.input_param_names,
             output_names=dataset.output_param_names,
@@ -271,6 +275,7 @@ class ORCA:
             external_data=False,
             dynamo=True
         )
+
         self._emit_progress("Model Training", 1, 1, "Model training completed successfully.")
         logger.info("#----------- Model training completed. -----------#")
 
