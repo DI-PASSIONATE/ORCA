@@ -2,7 +2,12 @@ from orca import ORCA
 import skrf as rf
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
+import pandas as pd
+import os
 
+torch.manual_seed(11)
+np.random.seed(11)
 ### Example of using a custom geometry
 # geometry = MyCustomGeometry( # Python class that inherits from BaseGeometry
 #     name = "my_geometry",
@@ -10,23 +15,24 @@ import matplotlib.pyplot as plt
 #     simconfig_filename = "/path/to/simconfig.simcfg" # Simulation configuration file generated manually or with setupEM
 # )
 
+
 # Use predefined geometry from examples
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 geometry = TransformerOcta(n_samples=0)
 
 orca_instance = ORCA(geometry)
 
-orca_instance.run(cpu_cores=16, epochs=150, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
+orca_instance.run(cpu_cores=16, epochs=200, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
 
 # # Load and plot the results
-ntwk = rf.Network("/home/david/Documents/git/ORCA/results/tf_octa_c_ports/tf_octa_c_ports_27.s4p")
+ntwk = rf.Network("/home/david/Documents/git/ORCA/results/tf_octa_c_ports/tf_octa_c_ports_117.s4p")
 ntwk.plot_s_db()
-print("Ground truth network S-parameters at position 10:")
-print(ntwk.s[10])
+#print("Ground truth network S-parameters at position 10:")
+#print(ntwk.s[10])
 
 plt.figure()
 ntwk2 = rf.Network("/home/david/Documents/git/ORCA/tf_octa_c_ports.s4p")
-print("Predicted network S-parameters at position 10:")
+#print("Predicted network S-parameters at position 10:")
 ntwk2.plot_s_db()
-print(ntwk2.s[10])
-plt.show()
+#print(ntwk2.s[10])
+# plt.show()

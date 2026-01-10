@@ -6,10 +6,12 @@ import pandas as pd
 import os
 
 from orca.logger import logger
-from orca.training.train import train_model
+from orca.training.train import train_model, test_model
+import torch.nn as nn
 from orca.training.datasets.geo_to_s_param import GeoToSParamDataset
 from orca.training.onnx_wrapper import ONNXWrapper
 from orca.geometry.base_geometry import BaseGeometry
+from orca.training.datasets.base_dataset import BaseDataset
 from orca.simulation.simulate import create_palace_model_from_gds, run_palace
 
 def _convert_gds_worker(geo_inst, gds_filename, simconfig_filename):
@@ -82,8 +84,8 @@ class ORCA:
         self.generate_gds_data(num_samples)
         self.convert_gds_to_palace()
         self.run_simulation(save_path, palace_executable, cpu_cores)
-        self.train(self.geometry.get_dataset(), cwd=cwd, epochs=epochs)
-        self.evaluate_model()
+        model = self.train(self.geometry.get_dataset(), cwd=cwd, epochs=epochs)
+        self.evaluate_model(self.geometry.get_dataset(), model = model)
 
         logger.info("ORCA pipeline finished successfully.")
         self._emit_progress("Complete", num_samples, num_samples, f"Successfully trained model of {self.geometry.name}.")
@@ -226,7 +228,7 @@ class ORCA:
                     mask = working_geoms["name"] == row["name"]
                     for key, value in row.items():
                         working_geoms.loc[mask, key] = value
-                working_geoms.to_csv(os.path.join(save_path, "parameters.csv"), index=False)
+                working_geoms.to_csv(os.path.join(save_path, "params.csv"), index=False)
                 completed += 1
                 
                 self._emit_progress("Palace Simulation", i + 1, total_sims, 
@@ -242,7 +244,7 @@ class ORCA:
         self._emit_progress("Palace Simulation", total_sims, total_sims, 
                           f"Simulations complete: {completed} successful, {failed} failed")
 
-    def train(self, dataset, cwd: str = os.getcwd(), epochs: int = 30):
+    def train(self, dataset: BaseDataset, cwd: str = os.getcwd(), epochs: int = 30):
         """
         Trains the ORCA model using the simulation data.
         """
@@ -269,7 +271,7 @@ class ORCA:
         # Export to ONNX with multiple inputs/outputs using ONNXWrapper
         torch.onnx.export(
             ONNXWrapper(trained_model, output_denormalizer=dataset.output_normalizer),
-            tuple(torch.randn(1, 1) for _ in dataset.input_param_names),
+            tuple(torch.randn(1, 1, device=dataset.device) for _ in dataset.input_param_names),
             input_names=dataset.input_param_names,
             output_names=dataset.output_param_names,
             f=model_save_path,
@@ -279,13 +281,17 @@ class ORCA:
 
         self._emit_progress("Model Training", 1, 1, "Model training completed successfully.")
         logger.info("#----------- Model training completed. -----------#")
+        return trained_model
 
-    def evaluate_model(self):
+    def evaluate_model(self, dataset: BaseDataset, model: nn.Module):
         """
         Evaluates the trained ORCA model.
         """
-        logger.warning("Starting model evaluation... (NOT IMPLEMENTED YET)")
+        logger.warning("Starting model evaluation...")
         self._emit_progress("Model Evaluation", 0, 1, "Model evaluation not yet implemented")
+        test_loss = test_model(dataset, model=model, batch_size=32)
+        logger.info(f"Model evaluation completed. Test Loss: {test_loss:.4f}")
+        self._emit_progress("Model Evaluation", 1, 1, f"Model evaluation completed. Test Loss: {test_loss:.4f}")
         logger.info("#----------- Model evaluation completed. -----------#")
     
     def _emit_progress(self, step: str, current: int, total: int, message: str):

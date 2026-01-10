@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 
+    
 class Feature(nn.Module, ABC):
     """
     Abstract base class for feature transformation modules.
@@ -33,6 +34,13 @@ class Feature(nn.Module, ABC):
         Returns:
             tuple: (min_value, max_value) of the transformed feature.
         """
+
+    @abstractmethod
+    def __len__(self) -> int:
+        """
+        Returns the number of new features added by this transform.
+        """
+        pass
     
 class RatioFeature(Feature):
     """
@@ -62,6 +70,114 @@ class RatioFeature(Feature):
         ]
         return min(possible_values), max(possible_values)
     
+    def __len__(self) -> int:
+        return 1
+
+    
+class ChebyshevFeature(Feature):
+    """
+    A feature transform that computes Chebyshev polynomial features of specified degree
+    for a given input parameter.
+    """
+    def __init__(self, i: int, degree: int, min_freq: float = 1e9, max_freq: float = 200e9):
+        super(ChebyshevFeature, self).__init__()
+        self.index = i
+        self.min_freq = min_freq
+        self.max_freq = max_freq
+        self.degree = degree
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Normalize the input parameter to the range [-1, 1]
+        x_input = x[:, self.index] # One parameter over entire batch
+        x_normalized = 2 * (x_input - self.min_freq) / (self.max_freq - self.min_freq) - 1
+        T = [torch.ones_like(x_normalized)]
+        if self.degree >= 1:
+            T.append(x_normalized)
+        for n in range(2, self.degree + 1):
+            Tn = 2 * x_normalized * T[n - 1] - T[n - 2]
+            T.append(Tn)
+        # Convert to (batch_size, degree) shape
+        new_features = torch.stack(T[1:], dim=1)
+        # Return old + new features
+        if len(new_features.shape) == 1:
+            new_features = new_features.unsqueeze(1)
+        elif len(x.shape) == 1:
+            x = x.unsqueeze(1)
+        res = torch.cat([x, new_features], dim=1)
+        return res
+    
+    def calculate_min_max(self, input_mins: list[float], input_maxs: list[float]) -> tuple[float, float]:
+        # Chebyshev polynomials oscillate between -1 and 1
+        return -1.0, 1.0
+    
+    def __len__(self) -> int:
+        return self.degree
+    
+class LogFeature(Feature):
+    """
+    A feature transform that computes the logarithm of a specified input parameter.
+    """
+    def __init__(self, i: int):
+        super(LogFeature, self).__init__()
+        self.index = i
+        self.eps = 1e-8  # Small constant to avoid log(0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        log_feature = torch.log(x[:, self.index] + self.eps)
+        # Return old + new features
+        res = torch.cat([x, log_feature.unsqueeze(1)], dim=1)
+        return res
+    
+    def calculate_min_max(self, input_mins: list[float], input_maxs: list[float]) -> tuple[float, float]:
+        min_val = np.log(input_mins[self.index] + self.eps)
+        max_val = np.log(input_maxs[self.index] + self.eps)
+        return min_val, max_val
+    
+    def __len__(self) -> int:
+        return 1
+    
+class SinFeature(Feature):
+    """
+    A feature transform that computes the sine of a specified input parameter.
+    """
+    def __init__(self, i: int):
+        super(SinFeature, self).__init__()
+        self.index = i
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        sin_feature = torch.sin(x[:, self.index])
+        # Return old + new features
+        res = torch.cat([x, sin_feature.unsqueeze(1)], dim=1)
+        return res
+    
+    def calculate_min_max(self, input_mins: list[float], input_maxs: list[float]) -> tuple[float, float]:
+        # Sine function oscillates between -1 and 1
+        return -1.0, 1.0
+    
+    def __len__(self) -> int:
+        return 1
+    
+class CosFeature(Feature):
+    """
+    A feature transform that computes the cosine of a specified input parameter.
+    """
+    def __init__(self, i: int):
+        super(CosFeature, self).__init__()
+        self.index = i
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        cos_feature = torch.cos(x[:, self.index])
+        # Return old + new features
+        res = torch.cat([x, cos_feature.unsqueeze(1)], dim=1)
+        return res
+    
+    def calculate_min_max(self, input_mins: list[float], input_maxs: list[float]) -> tuple[float, float]:
+        # Cosine function oscillates between -1 and 1
+        return -1.0, 1.0
+    
+    def __len__(self) -> int:
+        return 1
+
 class FeatureTransformPipeline(nn.Module):
     """
     A pipeline to apply multiple feature transforms sequentially.
@@ -73,11 +189,20 @@ class FeatureTransformPipeline(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for transform in self.transforms:
             x = transform(x)
+
         return x
     
     def transform_min_max(self, input_mins: list[float], input_maxs: list[float]) -> tuple[list[float], list[float]]:
         for transform in self.transforms:
             min_val, max_val = transform.calculate_min_max(input_mins, input_maxs)
-            input_mins.append(min_val)
-            input_maxs.append(max_val)
+            for _ in range(len(transform)):
+                input_mins.append(min_val)
+                input_maxs.append(max_val)
         return input_mins, input_maxs
+    
+    def __len__(self) -> int:
+        # Return total number of new features added by all transforms
+        total_new_features = 0
+        for transform in self.transforms:
+            total_new_features += len(transform)
+        return total_new_features

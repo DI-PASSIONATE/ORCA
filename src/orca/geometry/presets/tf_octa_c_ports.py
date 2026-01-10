@@ -12,7 +12,7 @@ from ihp import PDK
 from orca.training.datasets.geo_to_s_param import GeoToSParamDataset
 from orca.training.models.mlp import OrcaMLP
 from orca.training.normalize import MinMaxNormalizer
-from orca.training.feature_transform import FeatureTransformPipeline, RatioFeature
+from orca.training.feature_transform import *
 
 class TransformerOcta(BaseGeometry):
     """
@@ -48,17 +48,18 @@ class TransformerOcta(BaseGeometry):
             RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
             RatioFeature(i=3, j=4),  # bottom_linewidth / upper_linewidth
             RatioFeature(i=5, j=0),  # frequency / input_winding_diameter
+            ChebyshevFeature(i=5, degree=3),  # Chebyshev features of frequency,
         )
         return OrcaMLP(
-            input_dim=5+1+3,  # 5 original params + 1 frequency + 3 ratio features
-            hidden_sizes=[128, 128], 
+            input_dim=5+1+len(features),  # 5 original params + 1 frequency + 3 ratio features
+            hidden_sizes=[128, 256, 256, 128],
             output_dim=32,
             features=features,
             normalizer=MinMaxNormalizer(input_mins, input_maxs, features=features)
         )
 
     def get_dataset(self, base_dir=os.path.join(os.getcwd(), "results")) -> torch.utils.data.Dataset:
-        return GeoToSParamDataset(data_dir=os.path.join(base_dir, self.name), geometry=self)
+        return GeoToSParamDataset(data_dir=os.path.join(base_dir, self.name), geometry=self, split="train")
 
     def create_gds_file(self, params: dict[str, any]) -> str:
         output_path = os.path.join(

@@ -69,7 +69,7 @@ class StandardNormalizer(Normalizer):
     """
     A normalizer that applies standard score normalization to input parameters.
     """
-    def __init__(self, input_means: list[float], input_stds: list[float]):
+    def __init__(self, samples: list[tuple[np.ndarray, np.ndarray]]):
         """
         Applies component-wise standard score normalization to the input tensor.
         Args:
@@ -77,10 +77,17 @@ class StandardNormalizer(Normalizer):
             input_stds (list[float]): Standard deviation values for each input parameter.
         """
         super(StandardNormalizer, self).__init__()
+        input_means, input_stds = self.get_output_means_stds(samples)
+        self.register_buffer("input_means", torch.tensor(input_means, dtype=torch.float32, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")))
+        self.register_buffer("input_stds", torch.tensor(input_stds, dtype=torch.float32, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")))
 
-        self.register_buffer("input_means", torch.tensor(input_means, dtype=torch.float32))
-        self.register_buffer("input_stds", torch.tensor(input_stds, dtype=torch.float32))
-
+    def get_output_means_stds(self, samples) -> tuple[list[float], list[float]]:
+        """Calculate means and standard deviations of output parameters for normalization."""
+        all_outputs = np.array([y for _, y in samples], dtype=np.float32)
+        means = np.mean(all_outputs, axis=0)
+        stds = np.std(all_outputs, axis=0)
+        return means, stds
+    
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return (x - self.input_means) / self.input_stds
 

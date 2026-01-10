@@ -4,7 +4,7 @@ import os
 import numpy as np
 import torch
 
-from orca.training.datasets.base_dataset import BaseDataset, GeometrySample
+from orca.training.datasets.base_dataset import BaseDataset
 from orca.training.normalize import StandardNormalizer
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
@@ -15,13 +15,13 @@ class GeoToSParamDataset(BaseDataset):
     a training sample for each frequency point in the S-parameter data. Each sample consists
     of input parameters and corresponding S-parameter values.
     """
-    def __init__(self, data_dir: str, geometry: BaseGeometry, frequency_as_input: bool = True):
-        super(GeoToSParamDataset, self).__init__(data_dir, geometry, frequency_as_input)
+    def __init__(self, data_dir: str, geometry: BaseGeometry, split: str = "all", frequency_as_input: bool = True):
+        super(GeoToSParamDataset, self).__init__(data_dir, geometry, split, frequency_as_input)
 
         # Load parameters from CSV
         self.params_df = pd.read_csv(os.path.join(data_dir, "params.csv"))
 
-        self.input_param_names = list(self.params_df.columns) + ['frequency [100GHz]']
+        self.input_param_names = list(self.params_df.columns) + ['frequency (GHz)']
         self.input_param_names.remove('name')  # Remove 'name' column
 
         self.output_param_names = [
@@ -30,7 +30,7 @@ class GeoToSParamDataset(BaseDataset):
             for j in range(4)
             for part in ("real", "imag")
         ]
-
+    
         for idx, row in self.params_df.iterrows():
             geometry_name = row['name'] # = name.s4p
             s4p_path = f"{data_dir}/{geometry_name}.s4p"
@@ -42,11 +42,15 @@ class GeoToSParamDataset(BaseDataset):
             geometry_params = np.array(row.drop('name'), dtype=np.float32)
             samples = self.load_samples(f"{geometry_name}.s4p", geometry_params)
 
-            self.samples.extend(GeometrySample(geometry_name, samples))
+            rand_num = self.random.rand()
+            if \
+            (self.split == "all") or \
+            (self.split == "train" and rand_num < 0.7) or \
+            (self.split == "val" and 0.7 <= rand_num < 0.85) or \
+            (self.split == "test" and rand_num >= 0.85):
+                self.samples.extend(samples)
 
-        
-        output_means, output_stds = self.get_output_means_stds()
-        self.output_normalizer = StandardNormalizer(output_means, output_stds)
+        self.output_normalizer = StandardNormalizer(self.samples)
 
     def load_samples(self, filename: str, geometry_params: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
         """Load S-parameter data from a Touchstone file."""

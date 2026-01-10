@@ -1,12 +1,14 @@
 import torch.nn as nn
 import torch
 import numpy as np
+from dataclasses import dataclass
 
 from orca.geometry.base_geometry import BaseGeometry
 from orca.training.normalize import Normalizer, StandardNormalizer
 
+
 class BaseDataset(torch.utils.data.Dataset):
-    def __init__(self,  data_dir: str, geometry: BaseGeometry, frequency_as_input: bool = False):
+    def __init__(self,  data_dir: str, geometry: BaseGeometry, split: str = "all", frequency_as_input: bool = False):
         """
         Defines the base dataset class for ORCA training datasets.
         This class should be extended by specific dataset implementations.
@@ -21,22 +23,52 @@ class BaseDataset(torch.utils.data.Dataset):
 
         self.data_dir = data_dir
         self.geometry = geometry
+        self.split = split
         self.frequency_as_input = frequency_as_input
-        self.samples: list[tuple] = [] # List of (input_params, output_params) tuples
+        self.samples: list[tuple[np.ndarray, np.ndarray]] = []  # List of (input_params, output_params) tuples
         self.output_normalizer: Normalizer | None = None
+        self.random = np.random.RandomState(seed=11)  # Ensure same behavior for all instances
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    def get_output_means_stds(self) -> tuple[list[float], list[float]]:
-        """Calculate means and standard deviations of output parameters for normalization."""
-        all_outputs = np.array([y for _, y in self.samples], dtype=np.float32)
-        means = np.mean(all_outputs, axis=0)
-        stds = np.std(all_outputs, axis=0)
-        return means, stds
+    def get_train_split(self) -> 'BaseDataset':
+        """
+        Returns a dataset instance for the training split.
+        """
+        return self.__class__(
+            data_dir=self.data_dir,
+            geometry=self.geometry,
+            split="train",
+            frequency_as_input=self.frequency_as_input
+        )
+    
+    def get_val_split(self) -> 'BaseDataset':
+        """
+        Returns a dataset instance for the validation split.
+        """
+        return self.__class__(
+            data_dir=self.data_dir,
+            geometry=self.geometry,
+            split="val",
+            frequency_as_input=self.frequency_as_input
+        )
+    
+    def get_test_split(self) -> 'BaseDataset':
+        """
+        Returns a dataset instance for the test split.
+        """
+        return self.__class__(
+            data_dir=self.data_dir,
+            geometry=self.geometry,
+            split="test",
+            frequency_as_input=self.frequency_as_input
+        )
+
     
     def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
         x, y = self.samples[idx]
 
         # Convert to tensors
-        x, y = torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
+        x, y = torch.tensor(x, dtype=torch.float32, device=self.device), torch.tensor(y, dtype=torch.float32, device=self.device)
 
         # Normalize output (input is normalized in the model itself, to embed it into the exported ONNX model)
         # Output is denormalized in the ONNX wrapper class after inference

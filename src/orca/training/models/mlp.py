@@ -23,7 +23,7 @@ class OrcaMLP(nn.Module):
         self.features = features
         for h_size in hidden_sizes:
             layers.append(nn.Linear(in_size, h_size))
-            layers.append(nn.SiLU())
+            layers.append(nn.Sigmoid())
             in_size = h_size
         layers.append(nn.Linear(in_size, output_dim))
         self.model = nn.Sequential(*layers)
