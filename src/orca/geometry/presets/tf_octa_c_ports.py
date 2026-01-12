@@ -6,7 +6,7 @@ import torch
 import skrf as rf
 import matplotlib.pyplot as plt
 
-from orca import BaseGeometry, MIN_FREQUENCY, MAX_FREQUENCY
+from orca import BaseGeometry
 from orca.geometry.input_parameters import InputParameterIterator
 from ihp import PDK
 from orca.training.datasets.geo_to_s_param import GeoToSParamDataset
@@ -79,12 +79,13 @@ class TransformerOcta(BaseGeometry):
             upper_center_tap_width=0,
             lower_feed_type=1,
             upper_feed_type=1,
-            feedline_spacing=8,
+            feedline_spacing=max(params["bottom_linewidth"], params["upper_linewidth"]),
             gnd_upper_spacing=20,
             gnd_lower_spacing=20,
             gnd_side_spacing=20,
             gnd_ring_width=10,
         )
+        c.show()
         c.write_gds(output_path, with_metadata=False)
         return output_path
 
@@ -206,21 +207,11 @@ class TransformerOcta(BaseGeometry):
         # --- Safety Check: Octagon Opening Width ---
         # Top Winding Gap is on the RIGHT.
         # Bot Center Tap (if fi_int & 1) goes RIGHT. It crosses Top Gap.
-        fs_top = feedline_spacing
-        if fi_int & 1:
-            min_gap = wic_int + 2.0  # Width of crossing tap + 2um safety
-            if fs_top < min_gap:
-                print(f"Warning: Top Gap (fs={feedline_spacing}) expanded to {min_gap}um to fit Bot Center Tap.")
-                fs_top = min_gap
+        fs_top = max(feedline_spacing, wic_int)
 
         # Bot Winding Gap is on the LEFT.
         # Top Center Tap (if fo_int & 2) goes LEFT. It crosses Bot Gap.
-        fs_bot = feedline_spacing
-        if fo_int & 1:
-            min_gap = woc_int + 2.0  # Width of crossing tap + 2um safety
-            if fs_bot < min_gap:
-                print(f"Warning: Bot Gap (fs={feedline_spacing}) expanded to {min_gap}um to fit Top Center Tap.")
-                fs_bot = min_gap
+        fs_bot = max(feedline_spacing, woc_int)
 
         # Geometry Limits
         tf_y = max(output_winding_diameter, input_winding_diameter) / 2.0 + gnd_side_spacing
@@ -234,6 +225,19 @@ class TransformerOcta(BaseGeometry):
         top_left_x = (center_displacement / 2.0) - (output_winding_diameter / 2.0)
         bot_left_x = (-center_displacement / 2.0) - (input_winding_diameter / 2.0)
         port_xl = min(top_left_x, bot_left_x) - gnd_lower_spacing
+
+
+
+        # Check if linewidth is too large for winding diameter
+        if bottom_linewidth > input_winding_diameter / 3.0:
+            raise ValueError("bottom_linewidth is too large for input_winding_diameter.")
+        elif upper_linewidth > output_winding_diameter / 3.0:
+            raise ValueError("upper_linewidth is too large for output_winding_diameter.")
+        # Check if center tap width is too large for winding diameter of the other winding
+        if wic_int > output_winding_diameter / 3.0:
+            raise ValueError("bottom_center_tap_width is too large for output_winding_diameter.")
+        elif woc_int > input_winding_diameter / 3.0:
+            raise ValueError("upper_center_tap_width is too large for input_winding_diameter.")
 
         # -------------------------------------------------
         # 2. Helper: Winding Generator
@@ -437,3 +441,16 @@ class TransformerOcta(BaseGeometry):
             raise ValueError("Ground ring dimensions are invalid due to port spacing. Adjust parameters.")
         
         return c
+    
+if __name__ == "__main__":
+    # Test the geometry creation
+    geometry = TransformerOcta(n_samples=10)
+    params = {
+        "input_winding_diameter": 20,
+        "output_winding_diameter": 80,
+        "center_displacement": 0,
+        "bottom_linewidth": 4,
+        "upper_linewidth": 9,
+    }
+    output_path = geometry.create_gds_file(params)
+    print(f"GDS file created at: {output_path}")
