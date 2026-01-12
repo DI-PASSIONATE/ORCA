@@ -33,6 +33,7 @@ dependencies = [
     "PySide6",
     "pandas",
     "onnxruntime",
+    "colorlog",
 ]
 
 [project.optional-dependencies]
