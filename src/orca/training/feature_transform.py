@@ -117,20 +117,21 @@ class LogFeature(Feature):
     """
     A feature transform that computes the logarithm of a specified input parameter.
     """
-    def __init__(self, i: int):
+    def __init__(self, i: int, scale: float = 1.0):
         super(LogFeature, self).__init__()
         self.index = i
+        self.scale = scale
         self.eps = 1e-8  # Small constant to avoid log(0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        log_feature = torch.log(x[:, self.index] + self.eps)
+        log_feature = torch.log(x[:, self.index] / self.scale + self.eps)
         # Return old + new features
         res = torch.cat([x, log_feature.unsqueeze(1)], dim=1)
         return res
     
     def calculate_min_max(self, input_mins: list[float], input_maxs: list[float]) -> tuple[float, float]:
-        min_val = np.log(input_mins[self.index] + self.eps)
-        max_val = np.log(input_maxs[self.index] + self.eps)
+        min_val = np.log(input_mins[self.index] / self.scale + self.eps)
+        max_val = np.log(input_maxs[self.index] / self.scale + self.eps)
         return min_val, max_val
     
     def __len__(self) -> int:

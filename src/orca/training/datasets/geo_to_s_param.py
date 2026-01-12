@@ -2,7 +2,6 @@ import pandas as pd
 import skrf as rf
 import os
 import numpy as np
-import torch
 
 from orca.training.datasets.base_dataset import BaseDataset
 from orca.training.normalize import StandardNormalizer
@@ -15,8 +14,8 @@ class GeoToSParamDataset(BaseDataset):
     a training sample for each frequency point in the S-parameter data. Each sample consists
     of input parameters and corresponding S-parameter values.
     """
-    def __init__(self, data_dir: str, geometry: BaseGeometry, split: str = "all", frequency_as_input: bool = True):
-        super(GeoToSParamDataset, self).__init__(data_dir, geometry, split, frequency_as_input)
+    def __init__(self, data_dir: str, geometry: BaseGeometry, split: str = "all"):
+        super(GeoToSParamDataset, self).__init__(data_dir, geometry, split, True)
 
         # Load parameters from CSV
         self.params_df = pd.read_csv(os.path.join(data_dir, "params.csv"))

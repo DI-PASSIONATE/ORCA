@@ -9,10 +9,13 @@
 # updated 13-Nov-2025 Mue: added simple de-embedding of parasitic port inductance (flat ribbon calculation)
 # updated 26-Nov-2025 Mue: also read Elmer FEM files 
 
-import os,re, json, math
+import os
+import re
+import json
+import math
 import skrf as rf
 import numpy as np
-from orca import logger
+from orca.logger import logger
 
 
 def todb(x):

@@ -1,8 +1,8 @@
 import copy
 import torch
 import torch.nn as nn
-from torch.optim import Adam
-from torch.utils.data import DataLoader, random_split
+from torch.optim import AdamW
+from torch.utils.data import DataLoader
 
 N = 16  # Number of complex S-parameters (e.g., 16 for 4-port network)
 
@@ -28,7 +28,7 @@ def train_model(
     val_loader = DataLoader(dataset.get_val_split(), batch_size=batch_size, shuffle=False)
 
     criterion = complex_mse
-    optimizer = Adam(model.parameters(), lr=learning_rate)
+    optimizer = AdamW(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, factor=0.5, patience=10
     )

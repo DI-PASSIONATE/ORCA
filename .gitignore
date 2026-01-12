@@ -17,3 +17,4 @@ results/
 *.pth
 *.onnx
 *.onnx.data
+*cache

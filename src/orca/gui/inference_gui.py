@@ -1,10 +1,8 @@
-import os
 import numpy as np
 from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QPushButton, QComboBox,
-    QLineEdit, QFormLayout, QHBoxLayout, QMessageBox, QSpinBox,
-    QTableWidget, QTableWidgetItem, QScrollArea, QDoubleSpinBox,
+    QFormLayout, QHBoxLayout, QMessageBox, QTableWidget, QTableWidgetItem, QScrollArea, QDoubleSpinBox,
     QProgressBar
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot

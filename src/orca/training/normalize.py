@@ -3,7 +3,7 @@ import torch.nn as nn
 from abc import ABC, abstractmethod
 import numpy as np
 
-from orca.training.feature_transform import FeatureTransformPipeline, RatioFeature
+from orca.training.feature_transform import FeatureTransformPipeline
 
 class Normalizer(nn.Module, ABC):
     """

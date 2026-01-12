@@ -1,5 +1,4 @@
 import torch
-from typing_extensions import Self
 import torch.nn as nn
 from orca.training.normalize import Normalizer
 from orca.training.feature_transform import FeatureTransformPipeline

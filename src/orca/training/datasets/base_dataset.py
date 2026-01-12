@@ -1,10 +1,8 @@
-import torch.nn as nn
 import torch
 import numpy as np
-from dataclasses import dataclass
 
 from orca.geometry.base_geometry import BaseGeometry
-from orca.training.normalize import Normalizer, StandardNormalizer
+from orca.training.normalize import Normalizer
 
 
 class BaseDataset(torch.utils.data.Dataset):

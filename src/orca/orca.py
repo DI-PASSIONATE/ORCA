@@ -8,7 +8,6 @@ import os
 from orca.logger import logger
 from orca.training.train import train_model, test_model
 import torch.nn as nn
-from orca.training.datasets.geo_to_s_param import GeoToSParamDataset
 from orca.training.onnx_wrapper import ONNXWrapper
 from orca.geometry.base_geometry import BaseGeometry
 from orca.training.datasets.base_dataset import BaseDataset

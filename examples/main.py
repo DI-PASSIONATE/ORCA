@@ -3,8 +3,6 @@ import skrf as rf
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-import pandas as pd
-import os
 
 torch.manual_seed(11)
 np.random.seed(11)
