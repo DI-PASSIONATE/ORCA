@@ -9,6 +9,7 @@
         ],
         "fstart": 1.0,
         "fstop": 200.0,
+        "fstep": 1.0,
         "refined_cellsize": 3.0,
         "order": 2,
         "cells_per_wavelength": 20.0,
@@ -25,9 +26,8 @@
         ],
         "margin": 100.0,
         "air_around": 50.0,
-        "ELMER_MPI_THREADS": 4,
-        "model_basename": "tf_octa_c_ports",
-        "fstep": 10.0
+        "ELMER_MPI_THREADS": 8,
+        "model_basename": "tf_octa_c_ports"
     },
     "ports": [
         {

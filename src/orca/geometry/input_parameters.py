@@ -37,6 +37,8 @@ class InputParameterIterator:
             self._iterator = self.step_grid()
         elif self.picking_strategy == "uniform_grid" or self.picking_strategy == "grid":
             self._iterator = self.uniform_grid()
+        elif self.picking_strategy == "random":
+            self._iterator = self.random_sampling()
         else:
             raise ValueError(f"Unsupported picking strategy: {self.picking_strategy}. Supported strategies are 'grid'.")
 
@@ -52,7 +54,6 @@ class InputParameterIterator:
     
     def __next__(self) -> dict[str, any]:
         with self._lock: # Ensure thread-safe access
-            print("Getting next set of input parameters...")
             self.n_geometries_created += 1 # May be used for logging or tracking
             try:
                 params = next(self._iterator) # Raises StopIteration when exhausted, which is propagated to this iterator
@@ -106,3 +107,17 @@ class InputParameterIterator:
 
         return result
         
+    def random_sampling(self):
+        """
+        Generator that yields random combinations of input parameters.
+        This method randomly samples each parameter's range for the specified number of samples.
+        Given a dict of {"name": range(start, end)}, it randomly picks values from each range
+        and returns a dict of {"name": value} for each sample.
+        """
+        for _ in range(self.n_samples):
+            sampled_params = []
+            for name in self.input_names:
+                values = self.input_values[name]
+                sampled_value = np.random.choice(values)
+                sampled_params.append(sampled_value)
+            yield sampled_params

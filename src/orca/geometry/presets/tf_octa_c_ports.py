@@ -33,7 +33,7 @@ class TransformerOcta(BaseGeometry):
     
     def get_input_parameters(self) -> InputParameterIterator:
         return InputParameterIterator(
-            picking_strategy="grid",
+            picking_strategy="random",
             n_samples=self.n_samples,
             input_winding_diameter = range(20, 101, 10), # 20, 101, 5
             output_winding_diameter = range(20, 101, 10), # 20, 101, 5
@@ -67,6 +67,9 @@ class TransformerOcta(BaseGeometry):
             "geometries",
             self.name + ".gds"
         )
+
+        if not os.path.exists(os.path.dirname(output_path)):
+            os.makedirs(os.path.dirname(output_path))
 
         c = self.tf_octa_c(
             self.name,

@@ -111,9 +111,13 @@ class ORCA:
         for i, input_params in enumerate(self.geometry.input_iterator):
             if i >= num_samples:
                 break
-            geo_inst = self.geometry.create_geometry_instance(name=f"{self.geometry.name}_{i}", params=input_params)
-            gds_filename = geo_inst.create_gds_file(params=input_params)
-            self.geometry_instances.append((geo_inst, gds_filename))
+            try:
+                geo_inst = self.geometry.create_geometry_instance(name=f"{self.geometry.name}_{i}", params=input_params)
+                gds_filename = geo_inst.create_gds_file(params=input_params)
+                self.geometry_instances.append((geo_inst, gds_filename))
+            except Exception as e:
+                logger.error(f"Error generating GDS for sample {i}: {e}")
+                continue
             
             # Progress update every sample or every 10% for large batches
             if i % max(1, num_samples // 10) == 0 or i == num_samples - 1:
