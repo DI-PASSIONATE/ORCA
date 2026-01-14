@@ -1,5 +1,5 @@
 #!/bin/bash
-FILE_ID="1-QoEGEOU5gQSxPpI01TXFuDV_iLTcM37"
+FILE_ID="107KmjOKDNGoQkdY6sOE86LKXAfOFnQjD"
 OUTPUT_FILE="src/orca/checkpoints/tf_octa_c_ports.pth"
 
 # Using curl with Google Drive URL format
