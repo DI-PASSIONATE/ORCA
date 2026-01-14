@@ -31,11 +31,11 @@ class TransformerOcta(BaseGeometry):
         return InputParameterIterator(
             picking_strategy="random",
             n_samples=self.n_samples,
-            input_winding_diameter = range(20, 101, 10), # 20, 101, 5
-            output_winding_diameter = range(20, 101, 10), # 20, 101, 5
-            center_displacement = range(0, 21, 10), # 0, 21, 1
-            bottom_linewidth = range(2, 11, 3), # 2, 9, 1
-            upper_linewidth = range(2, 11, 3), # 2, 9, 1
+            input_winding_diameter = range(20, 101, 1), # 20, 101, 5
+            output_winding_diameter = range(20, 101, 1), # 20, 101, 5
+            center_displacement = range(0, 21, 1), # 0, 21, 1
+            bottom_linewidth = range(2, 11, 1), # 2, 9, 1
+            upper_linewidth = range(2, 11, 1), # 2, 9, 1
         )
     
     def create_model(self):
