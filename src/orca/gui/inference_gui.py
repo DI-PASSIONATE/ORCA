@@ -255,8 +255,6 @@ class InferenceTab(QWidget):
                 spinbox.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
                 spinbox.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-                print(input_name)
-
                 self.inference_input_widgets[input_name] = {
                     'widget': spinbox,
                     'type': 'scalar',
@@ -430,9 +428,7 @@ class InferenceTab(QWidget):
             # Apply postprocessing if geometry is available
             if self.active_geometry_class:
                 try:
-                    print("Postprocessing outputs using geometry class" + str(self.active_geometry_class))
                     geometry = self.active_geometry_class()
-                    print(results)
                     
                     # Pass frequency array if available
                     if frequency_array.size > 0:
