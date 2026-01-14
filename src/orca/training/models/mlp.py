@@ -1,44 +1,69 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from orca.training.normalize import Normalizer
 from orca.training.feature_transform import FeatureTransformPipeline
 
+
 class OrcaMLP(nn.Module):
-    def __init__(self, input_dim: int, hidden_sizes: list[int], output_dim: int, normalizer: Normalizer, features: FeatureTransformPipeline | None = None):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_sizes: list[int],
+        output_dim: int,
+        normalizer: Normalizer,
+        features: FeatureTransformPipeline | None = None,
+        output_shape: tuple[int, ...] | None = None,
+    ):
         """
         Simple Multi-Layer Perceptron (MLP) model for regression tasks.
+
         Args:
-            input_dim (int): Amount of input parameters.
-            hidden_sizes (list of int): List containing the sizes of hidden layers. The amount of hidden layers is determined by the length of this list.
-            output_dim (int): Amount of output parameters.
-            input_mins (list of float): Minimum values for each input parameter for normalization.
-            input_maxs (list of float): Maximum values for each input parameter for normalization.
+            input_dim (int): Number of input parameters.
+            hidden_sizes (list[int]): Sizes of hidden layers.
+            output_dim (int): Total number of output parameters (flattened).
+            normalizer (Normalizer): Input normalizer.
+            features (FeatureTransformPipeline | None): Optional feature pipeline.
+            output_shape (tuple[int, ...] | None):
+                If provided, reshape output to (B, *output_shape).
+                Otherwise, return flat output (B, output_dim).
         """
-        super(OrcaMLP, self).__init__()
-        layers = []
-        in_size = input_dim
+        super().__init__()
+
+        # Check if output_shape is even possible
+        if output_shape is not None and np.prod(output_shape) != output_dim:
+            raise ValueError(
+                f"output_shape {output_shape} does not match output_dim={output_dim}"
+            )
 
         self.normalizer = normalizer
         self.features = features
+        self.output_shape = output_shape
+
+        layers = []
+        in_size = input_dim
         for h_size in hidden_sizes:
             layers.append(nn.Linear(in_size, h_size))
-            layers.append(nn.SiLU())
+            layers.append(nn.GELU())
             in_size = h_size
         layers.append(nn.Linear(in_size, output_dim))
+
         self.model = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Generate additional features if any
+        # Feature expansion
         if self.features is not None:
             x = self.features(x)
 
-        # Training data was normalized, so inference data must be normalized too
+        # Input normalization
         if self.normalizer is not None:
             x = self.normalizer(x)
 
-        # Training output was normalized too, but normalization is handled in the dataset class
-        # and de-normalization is handled in the ONNX wrapper class.
-        # This is so that training and loss function are always done on normalized data,
-        # while for inference we can de-normalize after getting the output from the model 
-        # and also export this denormalization to ONNX.
-        return self.model(x)
+        # Forward pass
+        y = self.model(x)
+
+        # Optional output reshaping
+        if self.output_shape is not None:
+            y = y.view(y.shape[0], *self.output_shape)
+
+        return y

@@ -8,22 +8,21 @@ from orca.training.normalize import StandardNormalizer
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 
-class GeoToSParamDataset(BaseDataset):
+class GeoToSParamDatasetSingleFrequency(BaseDataset):
     """
     The ORCA Dataset loads all .snp files from a specified directory and generates
     a training sample for each frequency point in the S-parameter data. Each sample consists
     of input parameters and corresponding S-parameter values.
     """
     def __init__(self, data_dir: str, geometry: BaseGeometry, split: str = "all"):
-        super(GeoToSParamDataset, self).__init__(data_dir, geometry, split, True)
+        super(GeoToSParamDatasetSingleFrequency, self).__init__(data_dir, geometry, split, True)
 
         # Load parameters from CSV
         self.params_df = pd.read_csv(os.path.join(data_dir, "params.csv"))
 
-        self.input_param_names = list(self.params_df.columns)
+        self.input_param_names = list(self.params_df.columns) + ['frequency (GHz)']
         self.input_param_names.remove('name')  # Remove 'name' column
 
-        # Initialize output parameter names
         self.output_param_names = [
             f"S{i+1}{j+1}_{part}"
             for i in range(4)
@@ -40,7 +39,7 @@ class GeoToSParamDataset(BaseDataset):
                 continue
 
             geometry_params = np.array(row.drop('name'), dtype=np.float32)
-            sample = self.load_samples(f"{geometry_name}.s4p", geometry_params)
+            samples = self.load_samples(f"{geometry_name}.s4p", geometry_params)
 
             rand_num = self.random.rand()
             if \
@@ -48,31 +47,29 @@ class GeoToSParamDataset(BaseDataset):
             (self.split == "train" and rand_num < 0.7) or \
             (self.split == "val" and 0.7 <= rand_num < 0.85) or \
             (self.split == "test" and rand_num >= 0.85):
-                self.samples.append(sample)
+                self.samples.extend(samples)
 
         self.output_normalizer = StandardNormalizer(self.samples)
 
-    def load_samples(self, filename: str, geometry_params: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Load S-parameter data from a Touchstone file and return a single sample with all frequencies."""
+    def load_samples(self, filename: str, geometry_params: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
+        """Load S-parameter data from a Touchstone file."""
+        samples = []
         sparam_path = f"{self.data_dir}/{filename}"
         
         net = rf.Network(sparam_path)
         freq = net.f
         s = net.s
 
-        # Stack all S-parameters across all frequencies
-        # Shape: (n_freq, 4, 4) -> (32, n_freq)
-        all_sparam_data = []
         for i in range(len(freq)):
+            f = freq[i]
             sij = s[i]
-            # Real and imaginary parts stacked: (4, 4, 2) -> (32,)
-            y_freq = np.stack((sij.real, sij.imag), axis=-1).reshape(-1)
-            all_sparam_data.append(y_freq)
-        
-        # Stack across frequencies to get shape (32, n_freq)
-        y = np.column_stack(all_sparam_data).astype(np.float32)
 
-        # Input is only geometry parameters (no frequency)
-        x = geometry_params.astype(np.float32)
+            # Predict ALL S-parameters for 4-port network
+            y = np.stack((sij.real, sij.imag), axis=-1).reshape(-1).astype(np.float32)
 
-        return (x, y)
+            # Input = geometry + frequency
+            x = np.hstack((geometry_params, f)).astype(np.float32)
+
+            samples.append((x, y))
+
+        return samples

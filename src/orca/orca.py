@@ -292,6 +292,7 @@ class ORCA:
         """
         Evaluates the trained ORCA model.
         """
+        from orca.training.train import test_model
         logger.warning("Starting model evaluation...")
         self._emit_progress("Model Evaluation", 0, 1, "Model evaluation not yet implemented")
         test_loss = test_model(dataset, model=model, batch_size=32)

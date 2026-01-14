@@ -1,3 +1,4 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.logger import logger
@@ -109,7 +110,7 @@ class BaseGeometry(ABC):
         """
 
     @abstractmethod
-    def get_dataset(self):
+    def get_dataset(self) -> nn.Dataset:
         """
         Returns a dataset object suitable for training the model associated with this geometry.
         The dataset should provide input-output pairs relevant to the geometry's simulation tasks.
