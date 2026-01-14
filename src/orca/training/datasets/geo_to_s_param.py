@@ -32,7 +32,7 @@ class GeoToSParamDataset(BaseDataset):
     
         for idx, row in self.params_df.iterrows():
             geometry_name = row['name'] # = name.s4p
-            s4p_path = f"{data_dir}/{geometry_name}.s4p"
+            s4p_path = f"{data_dir}/{geometry_name}_deembedded.s4p"
 
             if not os.path.exists(s4p_path):
                 logger.error(f"S-parameter file not found: {s4p_path}")

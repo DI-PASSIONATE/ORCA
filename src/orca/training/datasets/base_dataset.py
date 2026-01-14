@@ -36,7 +36,6 @@ class BaseDataset(torch.utils.data.Dataset):
             data_dir=self.data_dir,
             geometry=self.geometry,
             split="train",
-            frequency_as_input=self.frequency_as_input
         )
     
     def get_val_split(self) -> 'BaseDataset':
@@ -46,8 +45,7 @@ class BaseDataset(torch.utils.data.Dataset):
         return self.__class__(
             data_dir=self.data_dir,
             geometry=self.geometry,
-            split="val",
-            frequency_as_input=self.frequency_as_input
+            split="val"
         )
     
     def get_test_split(self) -> 'BaseDataset':
@@ -57,8 +55,7 @@ class BaseDataset(torch.utils.data.Dataset):
         return self.__class__(
             data_dir=self.data_dir,
             geometry=self.geometry,
-            split="test",
-            frequency_as_input=self.frequency_as_input
+            split="test"
         )
 
     
