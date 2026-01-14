@@ -2,10 +2,8 @@ from orca import ORCA
 import skrf as rf
 import numpy as np
 import matplotlib.pyplot as plt
-import torch
 from orca.utils.postprocessing import *
 
-torch.manual_seed(11)
 np.random.seed(11)
 ### Example of using a custom geometry
 # geometry = MyCustomGeometry( # Python class that inherits from BaseGeometry

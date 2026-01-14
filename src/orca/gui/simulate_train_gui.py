@@ -1,6 +1,5 @@
 import os
 import multiprocessing
-import torch.nn as nn
 
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
@@ -107,6 +106,11 @@ class SimulationTrainingTab(QWidget):
 		)
 	
 	def _load_models(self):
+		try:
+			import torch.nn as nn
+		except ImportError:
+			logger.error("PyTorch is not installed. Model loading will be skipped.")
+			return {}
 		"""Load available model classes from training/models folder."""
 		models_dir = os.path.abspath(
 			os.path.join(os.path.dirname(__file__), "..", "training", "models")

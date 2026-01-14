@@ -73,6 +73,8 @@ def plot_diff_s_params_and_k(ntwk: rf.Network):
     ntwk.plot_s_db(m=0, n=0, ax=ax1, label='Return Loss ($S_{d1d1}$)')
     ntwk.plot_s_db(m=3, n=0, ax=ax1, label='Mode Conversion ($S_{c2d1}$)')
 
+    
+
     # Secondary Y-Axis (k)
     ax2 = ax1.twinx()
     ax2.set_ylabel('Coupling Factor ($k$)', color='red')

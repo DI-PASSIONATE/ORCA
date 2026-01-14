@@ -1,8 +1,6 @@
 import gdsfactory as gf
 import numpy as np
 import os
-import torch.nn as nn
-import torch
 import skrf as rf
 import matplotlib.pyplot as plt
 from itertools import product
@@ -10,10 +8,6 @@ from itertools import product
 from orca import BaseGeometry
 from orca.geometry.input_parameters import InputParameterIterator
 from ihp import PDK
-from orca.training.datasets.geo_to_s_param import GeoToSParamDataset
-from orca.training.models.mlp import OrcaMLP
-from orca.training.normalize import MinMaxNormalizer
-from orca.training.feature_transform import *
 from orca.utils.postprocessing import *
 
 class TransformerOcta(BaseGeometry):
@@ -44,7 +38,11 @@ class TransformerOcta(BaseGeometry):
             upper_linewidth = range(2, 11, 3), # 2, 9, 1
         )
     
-    def create_model(self) -> nn.Module:
+    def create_model(self):
+        from orca.training.models.mlp import OrcaMLP
+        from orca.training.normalize import MinMaxNormalizer
+        from orca.training.feature_transform import FeatureTransformPipeline, RatioFeature, ChebyshevFeature
+
         input_mins, input_maxs = self.get_input_parameters().get_min_max_values(add_frequency_dim=True)
         features = FeatureTransformPipeline(
             RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
@@ -60,7 +58,8 @@ class TransformerOcta(BaseGeometry):
             normalizer=MinMaxNormalizer(input_mins, input_maxs, features=features)
         )
 
-    def get_dataset(self, base_dir=os.path.join(os.getcwd(), "results")) -> torch.utils.data.Dataset:
+    def get_dataset(self, base_dir=os.path.join(os.getcwd(), "results")):
+        from orca.training.datasets.geo_to_s_param import GeoToSParamDataset
         return GeoToSParamDataset(data_dir=os.path.join(base_dir, self.name), geometry=self, split="train")
 
     def create_gds_file(self, params: dict[str, any]) -> str:

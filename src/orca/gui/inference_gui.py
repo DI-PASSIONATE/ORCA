@@ -220,8 +220,13 @@ class InferenceTab(QWidget):
                 
                 for freq_param in ["fstart [GHz]", "fstop [GHz]", "fstep [GHz]"]:
                     spinbox = QDoubleSpinBox()
-                    spinbox.setRange(-1e6, 1e6)
-                    spinbox.setValue(120.0 if freq_param in ["fstart [GHz]", "fstop [GHz]"] else 1.0)
+                    spinbox.setRange(1.0, 200.0)
+                    if freq_param == "fstart [GHz]":
+                        spinbox.setValue(1.0)
+                    elif freq_param == "fstop [GHz]":
+                        spinbox.setValue(200.0)
+                    else:
+                        spinbox.setValue(1.0)
                     spinbox.setDecimals(4)
                     spinbox.setMaximumWidth(110)
                     spinbox.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)

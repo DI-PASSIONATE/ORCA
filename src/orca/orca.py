@@ -6,12 +6,7 @@ import pandas as pd
 import os
 
 from orca.logger import logger
-from orca.training.train import train_model, test_model
-import torch.nn as nn
-from orca.training.onnx_wrapper import ONNXWrapper
 from orca.geometry.base_geometry import BaseGeometry
-from orca.training.datasets.base_dataset import BaseDataset
-from orca.simulation.simulate import create_palace_model_from_gds, run_palace
 
 def _convert_gds_worker(geo_inst, gds_filename, simconfig_filename):
     """
@@ -25,6 +20,8 @@ def _convert_gds_worker(geo_inst, gds_filename, simconfig_filename):
     Returns:
         Tuple of (geo_inst, gds_filename, output, params) or (geo_inst, gds_filename, error, None) on failure
     """
+
+    from orca.simulation.simulate import create_palace_model_from_gds, run_palace
     try:
         config_name, sim_path, data_dir = create_palace_model_from_gds(
             geometry=geo_inst,
@@ -203,6 +200,8 @@ class ORCA:
         """
         Runs simulations on the generated data.
         """
+
+        from orca.simulation.simulate import run_palace
         total_sims = len(self.palace_models)
         logger.info(f"Starting simulations with palace for {total_sims} models...")
         self._emit_progress("Palace Simulation", 0, total_sims, "Starting Palace simulations...")
@@ -247,11 +246,14 @@ class ORCA:
         self._emit_progress("Palace Simulation", total_sims, total_sims, 
                           f"Simulations complete: {completed} successful, {failed} failed")
 
-    def train(self, dataset: BaseDataset, cwd: str = os.getcwd(), epochs: int = 30):
+    def train(self, dataset, cwd: str = os.getcwd(), epochs: int = 30):
         """
         Trains the ORCA model using the simulation data.
         """
+        from orca.training.train import train_model, test_model
         import torch
+        import torch.nn as nn
+        from orca.training.onnx_wrapper import ONNXWrapper
         logger.info(f"Starting model training with {len(dataset)} samples...")
         self._emit_progress("Model Training", 0, 1, f"{len(dataset)} samples loaded for training.")
 
@@ -286,7 +288,7 @@ class ORCA:
         logger.info("#----------- Model training completed. -----------#")
         return trained_model
 
-    def evaluate_model(self, dataset: BaseDataset, model: nn.Module):
+    def evaluate_model(self, dataset, model):
         """
         Evaluates the trained ORCA model.
         """
