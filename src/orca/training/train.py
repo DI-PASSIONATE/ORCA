@@ -11,6 +11,14 @@ def complex_mse(pred, target):
     target = target.view(-1, N, 2)
     return torch.mean((pred - target) ** 2)
 
+def mse_plus_log_cosh_loss(pred, target):
+    diff = pred - target
+    lcsh = torch.mean(torch.log(torch.cosh(diff)))
+    pred = pred.view(-1, N, 2)
+    target = target.view(-1, N, 2)
+    mse = torch.mean((pred - target) ** 2)
+    return 2*lcsh + mse
+
 def train_model(
     dataset,
     model: nn.Module,
@@ -27,7 +35,7 @@ def train_model(
     train_loader = DataLoader(dataset.get_train_split(), batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(dataset.get_val_split(), batch_size=batch_size, shuffle=False)
 
-    criterion = complex_mse
+    criterion = mse_plus_log_cosh_loss
     optimizer = AdamW(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, factor=0.5, patience=10

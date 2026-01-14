@@ -39,7 +39,7 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
                 continue
 
             geometry_params = np.array(row.drop('name'), dtype=np.float32)
-            samples = self.load_samples(f"{geometry_name}.s4p", geometry_params)
+            samples = self.load_samples(f"{geometry_name}_deembedded.s4p", geometry_params)
 
             rand_num = self.random.rand()
             if \

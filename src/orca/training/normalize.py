@@ -89,7 +89,7 @@ class StandardNormalizer(Normalizer):
         return means, stds
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return (x - self.input_means) / self.input_stds
+        return (x - self.input_means) / (self.input_stds + 1e-8)
 
     def denormalize(self, x: torch.Tensor) -> torch.Tensor:
-        return x * self.input_stds + self.input_means
+        return x * (self.input_stds + 1e-8) + self.input_means

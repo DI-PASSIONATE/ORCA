@@ -250,7 +250,7 @@ class ORCA:
         """
         Trains the ORCA model using the simulation data.
         """
-        from orca.training.train import train_model, test_model
+        from orca.training.train import train_model
         import torch
         import torch.nn as nn
         from orca.training.onnx_wrapper import ONNXWrapper
