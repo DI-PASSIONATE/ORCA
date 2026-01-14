@@ -40,6 +40,7 @@ class TransformerOcta(BaseGeometry):
     
     def create_model(self):
         from orca.training.models.mlp import OrcaMLP
+        from orca.training.models.rnn import OrcaRNN
         from orca.training.normalize import MinMaxNormalizer
         from orca.training.feature_transform import FeatureTransformPipeline, RatioFeature, ChebyshevFeature
 
@@ -50,9 +51,17 @@ class TransformerOcta(BaseGeometry):
             RatioFeature(i=5, j=0),  # frequency / input_winding_diameter
             ChebyshevFeature(i=5, degree=3),  # Chebyshev features of frequency,
         )
-        return OrcaMLP(
+        # return OrcaMLP(
+        #     input_dim=5+1+len(features),  # 5 original params + 1 frequency + 3 ratio features
+        #     hidden_sizes=[128, 256, 256, 128],
+        #     output_dim=32,
+        #     features=features,
+        #     normalizer=MinMaxNormalizer(input_mins, input_maxs, features=features)
+        # )
+        return OrcaRNN(
             input_dim=5+1+len(features),  # 5 original params + 1 frequency + 3 ratio features
-            hidden_sizes=[128, 256, 256, 128],
+            hidden_size=256,
+            num_layers=3,
             output_dim=32,
             features=features,
             normalizer=MinMaxNormalizer(input_mins, input_maxs, features=features)
