@@ -420,10 +420,10 @@ if __name__ == "__main__":
     geometry = TransformerOcta(n_samples=10)
     params = {
         "input_winding_diameter": 20,
-        "output_winding_diameter": 80,
-        "center_displacement": 0,
-        "bottom_linewidth": 4,
-        "upper_linewidth": 9,
+        "output_winding_diameter": 100,
+        "center_displacement": 10,
+        "bottom_linewidth": 2,
+        "upper_linewidth": 2,
     }
     output_path = geometry.create_gds_file(params)
     print(f"GDS file created at: {output_path}")
