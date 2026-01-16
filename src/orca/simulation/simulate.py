@@ -5,7 +5,7 @@ from orca.simulation.read_simconfig import read_simconfig
 from orca.simulation.combine_snp_results import convert_to_touchstone
 from gds2palace import gds_reader, stackup_reader, utilities, simulation_setup
 
-def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simconfig_filename: str) -> tuple[str, str, str]:
+def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simconfig_filename: str, show_mesh_results: bool = False) -> tuple[str, str, str]:
     """
     Uses gds2palace to create a Palace model from a GDS file and simulation configuration.
     The simconfig is a json and can either be created manually or by using setupEM GUI and saving the configuration.
@@ -71,7 +71,7 @@ def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simc
     settings['allpolygons'] = allpolygons
     settings['sim_path'] = sim_path
     settings['model_basename'] = model_basename
-    settings['nogui'] = True  # create files without showing 3D model
+    settings['no_gui'] = not show_mesh_results  # create files without showing 3D model
 
     # list of ports that are excited (set voltage to zero in port excitation to skip an excitation!)
     excite_ports = simulation_ports.all_active_excitations()
