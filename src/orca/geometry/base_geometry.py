@@ -28,7 +28,6 @@ class BaseGeometry(ABC):
 
         if params is None: # If no params provided, we assume instance is a GeometryFactory
             self.input_iterator = iter(self.get_input_parameters())
-            logger.info(f"Created GeometryFactory with input parameter iterator. Values: {self.input_iterator.input_values}")
 
     @property
     def name(self) -> str:

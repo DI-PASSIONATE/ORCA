@@ -29,13 +29,13 @@ class TransformerOcta(BaseGeometry):
     
     def get_input_parameters(self) -> InputParameterIterator:
         return InputParameterIterator(
-            picking_strategy="random",
+            picking_strategy="grid",
             n_samples=self.n_samples,
-            input_winding_diameter = range(20, 101, 1), # 20, 101, 5
-            output_winding_diameter = range(20, 101, 1), # 20, 101, 5
-            center_displacement = range(0, 21, 1), # 0, 21, 1
-            bottom_linewidth = range(2, 11, 1), # 2, 9, 1
-            upper_linewidth = range(2, 11, 1), # 2, 9, 1
+            input_winding_diameter = [x/10 for x in range(200, 1001, 1)], # 20.0 to 100.0 in 0.1 steps
+            output_winding_diameter = [x/10 for x in range(200, 1001, 1)], # 20.0 to 100.0 in 0.1 steps
+            center_displacement = [x/10 for x in range(0, 151, 1)], # 0.0 to 15.0 in 0.1 steps
+            bottom_linewidth = [x/10 for x in range(20, 81, 1)], # 2.0 to 10.0 in 0.1 steps
+            upper_linewidth = [x/10 for x in range(20, 81, 1)], # 2.0 to 10.0 in 0.1 steps
         )
     
     def create_model(self):
@@ -172,19 +172,19 @@ class TransformerOcta(BaseGeometry):
         # -------------------------------------------------
         # 1. Variable Calculation & Overlap Check
         # -------------------------------------------------
-        wic_int = bottom_center_tap_width if bottom_center_tap_width > 0.1 else bottom_linewidth
-        woc_int = upper_center_tap_width if upper_center_tap_width > 0.1 else upper_linewidth
+        bottom_centertap_width = bottom_center_tap_width if bottom_center_tap_width > 0.1 else bottom_linewidth
+        top_centertap_width = upper_center_tap_width if upper_center_tap_width > 0.1 else upper_linewidth
         fo_int = int(round(upper_feed_type))
         fi_int = int(round(lower_feed_type))
 
         # --- Safety Check: Octagon Opening Width ---
         # Top Winding Gap is on the RIGHT.
         # Bot Center Tap (if fi_int & 1) goes RIGHT. It crosses Top Gap.
-        fs_top = max(feedline_spacing, wic_int)
+        fs_top = max(feedline_spacing, bottom_centertap_width)
 
         # Bot Winding Gap is on the LEFT.
         # Top Center Tap (if fo_int & 2) goes LEFT. It crosses Bot Gap.
-        fs_bot = max(feedline_spacing, woc_int)
+        fs_bot = max(feedline_spacing, top_centertap_width)
 
         # Geometry Limits
         tf_y = max(output_winding_diameter, input_winding_diameter) / 2.0 + gnd_side_spacing
@@ -200,22 +200,23 @@ class TransformerOcta(BaseGeometry):
         port_xl = min(top_left_x, bot_left_x) - gnd_lower_spacing
 
 
-
         # Check if linewidth is too large for winding diameter
         if bottom_linewidth > input_winding_diameter / 3.0:
             raise ValueError("bottom_linewidth is too large for input_winding_diameter.")
         elif upper_linewidth > output_winding_diameter / 3.0:
             raise ValueError("upper_linewidth is too large for output_winding_diameter.")
         # Check if center tap width is too large for winding diameter of the other winding
-        if wic_int > output_winding_diameter / 3.0:
+        if bottom_centertap_width > output_winding_diameter / 3.0:
             raise ValueError("bottom_center_tap_width is too large for output_winding_diameter.")
-        elif woc_int > input_winding_diameter / 3.0:
+        elif top_centertap_width > input_winding_diameter / 3.0:
             raise ValueError("upper_center_tap_width is too large for input_winding_diameter.")
+        elif abs(input_winding_diameter - output_winding_diameter) > 40.0:
+            raise ValueError("input_winding_diameter and output_winding_diameter difference is too large. No sufficient coupling.")
 
         # -------------------------------------------------
         # 2. Helper: Winding Generator
         # -------------------------------------------------
-        def create_octa_winding(diameter, width, gap_size, layer, center_x, center_y, rotation_deg, feed_target_x):
+        def create_octa_winding(diameter, width, gap_size, layer, center_x, center_y, rotation_deg, feed_target_x, centertap_target_x):
             """
             Creates octagon winding AND the feed extension lines (rectangles) to the port.
             gap_size: spacing between inner edges of feed lines.
@@ -229,6 +230,10 @@ class TransformerOcta(BaseGeometry):
             # Calculate start X (at the gap face)
             # Using 22.5 deg vertex logic (vertical flat side approximation)
             x_face = r * np.cos(np.radians(22.5))
+
+            # Calculate end X (for center tap) on the other side
+            # Using 22.5 deg vertex logic (vertical flat side approximation)
+            x_end = -r * np.cos(np.radians(22.5))
             
             # --- 1. Main Octagon Path ---
             path_pts = []
@@ -251,8 +256,8 @@ class TransformerOcta(BaseGeometry):
             # We need to calculate coordinates in the rotated frame or global frame.
             
             # Local coordinates of feed tips:
-            p_up_local = (x_face - width / 2, y_upper + width / 2.0)
-            p_lo_local = (x_face - width / 2, y_lower - width / 2.0)
+            p_up_local = (x_face - width / 2.0, y_upper + width / 2.0)
+            p_lo_local = (x_face - width / 2.0, y_lower - width / 2.0)
             
             # Transform to Global
             # Rotation Matrix
@@ -280,6 +285,15 @@ class TransformerOcta(BaseGeometry):
             # Lower Feed
             path_l = gf.Path([start_lo, end_lo])
             c << path_l.extrude(width=width, layer=layer)
+
+            # Create center tap - find point 
+            p_center_local = (x_end + width / 2.0, center_y)
+            start_ct = transform(p_center_local)
+            end_ct = (centertap_target_x, center_y)
+
+            path_ct = gf.Path([start_ct, end_ct])
+            c << path_ct.extrude(width=width, layer=layer)
+
             
             return start_up, start_lo # Return actual start points for reference if needed
 
@@ -291,14 +305,16 @@ class TransformerOcta(BaseGeometry):
         create_octa_winding(
             diameter=output_winding_diameter, width=upper_linewidth, gap_size=fs_top, 
             layer=LAYER_TOP, center_x=center_displacement/2.0, center_y=0, 
-            rotation_deg=0, feed_target_x=port_xr - gnd_ring_width
+            rotation_deg=0, feed_target_x=port_xr - gnd_ring_width,
+            centertap_target_x=port_xl + gnd_ring_width
         )
 
         # Bot Winding (Rot 180, Gap Left -> connects to port_xl)
         create_octa_winding(
             diameter=input_winding_diameter, width=bottom_linewidth, gap_size=fs_bot, 
             layer=LAYER_BOT, center_x=-center_displacement/2.0, center_y=0, 
-            rotation_deg=180, feed_target_x=port_xl + gnd_ring_width
+            rotation_deg=180, feed_target_x=port_xl + gnd_ring_width,
+            centertap_target_x=port_xr - gnd_ring_width
         )
 
         # -------------------------------------------------
@@ -310,18 +326,6 @@ class TransformerOcta(BaseGeometry):
         y_bot_p = fs_bot / 2.0 + bottom_linewidth / 2.0 # Bot is rotated 180, but Y logic is symmetric magnitude
         y_bot_n = -fs_bot / 2.0 - bottom_linewidth / 2.0 
         
-        ### TOP LAYER (ports on the RIGHT) -> Port 1 and 2 -> Layer 201, 202
-        # OP (Top, Right, Upper)
-        c.add_port(name="op", center=(port_xr - gnd_ring_width, y_top_p), width=upper_linewidth, orientation=0, layer=(201, 0))
-        # ON (Top, Right, Lower)
-        c.add_port(name="on", center=(port_xr - gnd_ring_width, y_top_n), width=upper_linewidth, orientation=0, layer=(202, 0))
-
-        ### BOT LAYER (ports on the LEFT) -> Port 3 and 4 -> Layer 203, 204
-        # IP (Bot, Left, Upper)
-        c.add_port(name="ip", center=(port_xl + gnd_ring_width, y_bot_p), width=bottom_linewidth, orientation=180, layer=(203, 0))
-        # IN (Bot, Left, Lower)
-        c.add_port(name="in", center=(port_xl + gnd_ring_width, y_bot_n), width=bottom_linewidth, orientation=180, layer=(204, 0))
-        
 
         # Visual/meshing markers for ports: small rectangles on port layers so GDS contains geometry for source_layernum 201-204
         port_len = 1.0  # Length of port marker rectangles
@@ -331,49 +335,70 @@ class TransformerOcta(BaseGeometry):
             ref = c << rect
             ref.move((center[0], center[1] - width / 2.0))
 
+        ### TOP LAYER (ports on the RIGHT) -> Port 1 and 2 -> Layer 201, 202
+        # OP (Top, Right, Upper)
+        c.add_port(name="op", center=(port_xr - gnd_ring_width, y_top_p), width=upper_linewidth, orientation=0, layer=(201, 0))
         add_port_marker((port_xr - gnd_ring_width, y_top_p), upper_linewidth, (201, 0))
+        # ON (Top, Right, Lower)
+        c.add_port(name="on", center=(port_xr - gnd_ring_width, y_top_n), width=upper_linewidth, orientation=0, layer=(202, 0))
         add_port_marker((port_xr - gnd_ring_width, y_top_n), upper_linewidth, (202, 0))
+        # Center Tap (Top, Center)
+        c.add_port(name="oci", center=(port_xl + gnd_ring_width, 0), width=top_centertap_width, orientation=180, layer=(205, 0))
+        add_port_marker((port_xl + gnd_ring_width, 0), top_centertap_width, (205, 0))
+
+        ### BOT LAYER (ports on the LEFT) -> Port 3 and 4 -> Layer 203, 204
+        # IP (Bot, Left, Upper)
+        c.add_port(name="ip", center=(port_xl + gnd_ring_width, y_bot_p), width=bottom_linewidth, orientation=180, layer=(203, 0))
         add_port_marker((port_xl + gnd_ring_width, y_bot_p), bottom_linewidth, (203, 0))
+        # IN (Bot, Left, Lower)
+        c.add_port(name="in", center=(port_xl + gnd_ring_width, y_bot_n), width=bottom_linewidth, orientation=180, layer=(204, 0))
         add_port_marker((port_xl + gnd_ring_width, y_bot_n), bottom_linewidth, (204, 0))
+        # Center Tap (Bot, Center)
+        c.add_port(name="ico", center=(port_xr - gnd_ring_width, 0), width=bottom_centertap_width, orientation=0, layer=(206, 0))
+        add_port_marker((port_xr - gnd_ring_width, 0), bottom_centertap_width, (206, 0))
 
         # -------------------------------------------------
         # 5. Center Taps (ici, ico, oci, oco)
         # -------------------------------------------------
         # Top Winding (Layer Top)
         # "Left" edge of Top winding (Back of C-shape)
-        top_back_x = center_displacement/2.0 - output_winding_diameter/2.0
+        # top_back_x = center_displacement/2.0 - output_winding_diameter/2.0
 
         # OCI (Top, goes Left?)
-        if fo_int & 1:
-            c << gf.Path([(port_xl + gnd_ring_width, 0), (top_back_x, 0)]).extrude(width=woc_int, layer=LAYER_TOP)
-            c.add_port(name="oci", center=(port_xl + gnd_ring_width, 0), width=woc_int, orientation=180, layer=(205, 0))
-        else:
-            # Default placeholder port
-            c.add_port(name="oci", center=(top_back_x - upper_linewidth/2.0 , 0), width=0.25, orientation=180, layer=(205, 0))
+        #if fo_int & 1:
+        
+        # else:
+        #     # Default placeholder port
+        #     c.add_port(name="oci", center=(top_back_x - upper_linewidth/2.0 , 0), width=0.25, orientation=180, layer=(205, 0))
+        #     add_port_marker((top_back_x - upper_linewidth/2.0 , 0), 0.25, (205, 0))
 
-        # OCO (Top, goes Right)
-        if fo_int & 2:
-            c << gf.Path([(top_back_x, 0), (port_xr, 0)]).extrude(width=woc_int, layer=LAYER_TOP)
-            c.add_port(name="oco", center=(port_xr, 0), width=woc_int, orientation=0, layer=(207, 0))
-        else:
-            c.add_port(name="oco", center=(top_back_x + upper_linewidth/2.0, 0), width=0.25, orientation=0, layer=(207, 0))
+        # # OCO (Top, goes Right)
+        # if fo_int & 2:
+        #     c << gf.Path([(top_back_x, 0), (port_xr, 0)]).extrude(width=woc_int, layer=LAYER_TOP)
+        #     c.add_port(name="oco", center=(port_xr, 0), width=woc_int, orientation=0, layer=(207, 0))
+        #     add_port_marker((port_xr, 0), woc_int, (207, 0))
+        # else:
+        # c.add_port(name="oco", center=(top_back_x + upper_linewidth/2.0, 0), width=0.25, orientation=0, layer=(207, 0))
+        # add_port_marker((top_back_x + upper_linewidth/2.0, 0), 0.25, (207, 0))
 
         # Bot Winding (Layer Bot)
-        bot_back_x = -center_displacement/2.0 + input_winding_diameter/2.0
+        # bot_back_x = -center_displacement/2.0 + input_winding_diameter/2
 
         # ICO (Bot, goes Right)
-        if fi_int & 1:
-            c << gf.Path([(bot_back_x, 0), (port_xr - gnd_ring_width, 0)]).extrude(width=wic_int, layer=LAYER_BOT)
-            c.add_port(name="ico", center=(port_xr - gnd_ring_width, 0), width=wic_int, orientation=0, layer=(206, 0))
-        else:
-            c.add_port(name="ico", center=(bot_back_x + bottom_linewidth/2.0, 0), width=0.25, orientation=0, layer=(206, 0))
+        # if fi_int & 1:
 
-        # ICI (Bot, goes Left)
-        if fi_int & 2:
-            c << gf.Path([(port_xl, 0), (bot_back_x, 0)]).extrude(width=wic_int, layer=LAYER_BOT)
-            c.add_port(name="ici", center=(port_xl, 0), width=wic_int, orientation=180, layer=(208, 0))
-        else:
-            c.add_port(name="ici", center=(bot_back_x - bottom_linewidth/2.0, 0), width=0.25, orientation=180, layer=(208, 0))
+        # else:
+        #     c.add_port(name="ico", center=(bot_back_x + bottom_linewidth/2.0, 0), width=0.25, orientation=0, layer=(206, 0))
+        #     add_port_marker((bot_back_x + bottom_linewidth/2.0, 0), 0.25, (206, 0))
+
+        # # ICI (Bot, goes Left)
+        # if fi_int & 2:
+        #     c << gf.Path([(port_xl, 0), (bot_back_x, 0)]).extrude(width=wic_int, layer=LAYER_BOT)
+        #     c.add_port(name="ici", center=(port_xl, 0), width=wic_int, orientation=180, layer=(208, 0))
+        #     add_port_marker((port_xl, 0), wic_int, (208, 0))
+        # else:
+        #     c.add_port(name="ici", center=(bot_back_x - bottom_linewidth/2.0, 0), width=0.25, orientation=180, layer=(208, 0))
+        #     add_port_marker((bot_back_x - bottom_linewidth/2.0, 0), 0.25, (208, 0))
 
         # -------------------------------------------------
         # 6. Ground Ring
@@ -417,13 +442,20 @@ class TransformerOcta(BaseGeometry):
     
 if __name__ == "__main__":
     # Test the geometry creation
-    geometry = TransformerOcta(n_samples=10)
+    geometry = TransformerOcta(n_samples=5000)
+
+    # Print all input parameter combinations
+    iterator = geometry.get_input_parameters()
+    for params in iterator:
+        print(params)
+
+
     params = {
-        "input_winding_diameter": 20,
+        "input_winding_diameter": 100,
         "output_winding_diameter": 100,
         "center_displacement": 10,
-        "bottom_linewidth": 2,
-        "upper_linewidth": 2,
+        "bottom_linewidth": 8,
+        "upper_linewidth": 8,
     }
     output_path = geometry.create_gds_file(params)
     print(f"GDS file created at: {output_path}")
