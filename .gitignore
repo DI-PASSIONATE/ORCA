@@ -13,6 +13,7 @@ testing/
 geometries/
 results/
 *.s4p
+*.s6p
 *.gds
 *.pth
 *.onnx

@@ -22,7 +22,10 @@ geometry = TransformerOcta(n_samples=0)
 #orca_instance.run(cpu_cores=16, epochs=0, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
 
 # # Load and plot the results
-ntwk = rf.Network("/home/david/Documents/git/ORCA/results/tf_octa_c_ports/tf_octa_c_ports_120.s4p")
+ntwk = rf.Network("/home/david/Documents/git/ORCA/results/tf_octa_c_ports_6/tf_octa_c_ports_6_4_dc_deembedded.s6p")
+# Plot S-parameters
+plt.figure()
+ntwk.plot_s_db(m=0, n=1)
 N, ntwk = single_ended_to_mixed_mode(ntwk)
 plot_diff_s_params_and_k(ntwk)
 #print("Ground truth network S-parameters at position 10:")
@@ -34,3 +37,4 @@ plot_diff_s_params_and_k(ntwk)
 # plot_diff_s_params_and_k(ntwk2)
 # #print(ntwk2.s[10])
 # plt.show()
+plt.show()

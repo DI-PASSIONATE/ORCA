@@ -1,9 +1,6 @@
 import gdsfactory as gf
 import numpy as np
 import os
-import skrf as rf
-import matplotlib.pyplot as plt
-from itertools import product
 
 from orca import BaseGeometry
 from orca.geometry.input_parameters import InputParameterIterator
@@ -28,8 +25,9 @@ class TransformerOcta(BaseGeometry):
         super().__init__(n_samples, name, stackup_xml, simconfig_filename, params)
     
     def get_input_parameters(self) -> InputParameterIterator:
+        np.random.seed(11)
         return InputParameterIterator(
-            picking_strategy="grid",
+            picking_strategy="random",
             n_samples=self.n_samples,
             input_winding_diameter = [x/10 for x in range(200, 1001, 1)], # 20.0 to 100.0 in 0.1 steps
             output_winding_diameter = [x/10 for x in range(200, 1001, 1)], # 20.0 to 100.0 in 0.1 steps
@@ -53,7 +51,7 @@ class TransformerOcta(BaseGeometry):
         return OrcaMLP(
             input_dim=5+1+len(features),  # 5 original params + 1 frequency + 3 ratio features
             hidden_sizes=[128, 256, 256, 128],
-            output_dim=32,  # 4-port S-parameters (16) with Re/Im (2) at 200 frequency points
+            output_dim=72,  # 4-port S-parameters (16) with Re/Im (2) at 200 frequency points
             features=features,
             normalizer=MinMaxNormalizer(input_mins, input_maxs, features=features),
         )
@@ -442,20 +440,14 @@ class TransformerOcta(BaseGeometry):
     
 if __name__ == "__main__":
     # Test the geometry creation
-    geometry = TransformerOcta(n_samples=5000)
-
-    # Print all input parameter combinations
-    iterator = geometry.get_input_parameters()
-    for params in iterator:
-        print(params)
-
+    geometry = TransformerOcta(n_samples=0)
 
     params = {
-        "input_winding_diameter": 100,
-        "output_winding_diameter": 100,
+        "input_winding_diameter": 60,
+        "output_winding_diameter": 60,
         "center_displacement": 10,
-        "bottom_linewidth": 8,
-        "upper_linewidth": 8,
+        "bottom_linewidth": 6,
+        "upper_linewidth": 6,
     }
     output_path = geometry.create_gds_file(params)
     print(f"GDS file created at: {output_path}")

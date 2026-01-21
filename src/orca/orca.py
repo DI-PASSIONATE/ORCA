@@ -21,12 +21,13 @@ def _convert_gds_worker(geo_inst, gds_filename, simconfig_filename):
         Tuple of (geo_inst, gds_filename, output, params) or (geo_inst, gds_filename, error, None) on failure
     """
 
-    from orca.simulation.simulate import create_palace_model_from_gds, run_palace
+    from orca.simulation.simulate import create_palace_model_from_gds
     try:
         config_name, sim_path, data_dir = create_palace_model_from_gds(
             geometry=geo_inst,
             gds_filename=gds_filename,
-            simconfig_filename=simconfig_filename
+            simconfig_filename=simconfig_filename,
+            show_mesh_results=False
         )
         return config_name, sim_path, data_dir, geo_inst.params
     except Exception as e:

@@ -32,14 +32,14 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
     
         for idx, row in self.params_df.iterrows():
             geometry_name = row['name'] # = name.s4p
-            s4p_path = f"{data_dir}/{geometry_name}_deembedded.s4p"
+            snp_path = f"{data_dir}/{geometry_name}_dc_deembedded.s6p"
 
-            if not os.path.exists(s4p_path):
-                logger.error(f"S-parameter file not found: {s4p_path}")
+            if not os.path.exists(snp_path):
+                logger.error(f"S-parameter file not found: {snp_path}")
                 continue
 
             geometry_params = np.array(row.drop('name'), dtype=np.float32)
-            samples = self.load_samples(f"{geometry_name}_deembedded.s4p", geometry_params)
+            samples = self.load_samples(f"{geometry_name}_dc_deembedded.s6p", geometry_params)
 
             rand_num = self.random.rand()
             if \
