@@ -39,7 +39,7 @@ dependencies = [
 
 [project.optional-dependencies]
 train = [
-    "ihp @ git+https://github.com/gdsfactory/IHP.git",
+    "ihp-gdsfactory @ git+https://github.com/gdsfactory/IHP.git",
     "gdsfactory",
     "gds2palace",
     "onnx",
