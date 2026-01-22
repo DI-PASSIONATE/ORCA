@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "orca"
-version = "0.0.1"
+version = "1.0.0"
 description = "ORCA - Open RF Circuit Automation"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
@@ -13,7 +13,7 @@ authors = [
     {name = "Gianluca Simone", email = "gianluca.simone@fau.de"},
 ]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
