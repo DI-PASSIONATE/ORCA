@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from orca.utils.postprocessing import *
 
-np.random.seed(11)
+#np.random.seed(11)
 ### Example of using a custom geometry
 # geometry = MyCustomGeometry( # Python class that inherits from BaseGeometry
 #     name = "my_geometry",
@@ -15,19 +15,19 @@ np.random.seed(11)
 
 # Use predefined geometry from examples
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
-geometry = TransformerOcta(n_samples=0)
+geometry = TransformerOcta(n_samples=2)
 
-#orca_instance = ORCA(geometry)
+orca_instance = ORCA(geometry)
 
-#orca_instance.run(cpu_cores=16, epochs=0, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
+orca_instance.run(cpu_cores=16, epochs=0, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
 
 # # Load and plot the results
-ntwk = rf.Network("/home/david/Documents/git/ORCA/results/tf_octa_c_ports_6/tf_octa_c_ports_6_4_dc_deembedded.s6p")
-# Plot S-parameters
-plt.figure()
-ntwk.plot_s_db(m=0, n=1)
-N, ntwk = single_ended_to_mixed_mode(ntwk)
-plot_diff_s_params_and_k(ntwk)
+# ntwk = rf.Network("/home/david/Documents/git/ORCA/results/tf_octa_c_ports_6/tf_octa_c_ports_6_4_dc_deembedded.s6p")
+# # Plot S-parameters
+# plt.figure()
+# ntwk.plot_s_db(m=0, n=1)
+# N, ntwk = single_ended_to_mixed_mode(ntwk)
+# plot_diff_s_params_and_k(ntwk)
 #print("Ground truth network S-parameters at position 10:")
 #print(ntwk.s[10])
 
@@ -37,4 +37,4 @@ plot_diff_s_params_and_k(ntwk)
 # plot_diff_s_params_and_k(ntwk2)
 # #print(ntwk2.s[10])
 # plt.show()
-plt.show()
+# plt.show()
