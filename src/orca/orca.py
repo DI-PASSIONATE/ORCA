@@ -1,6 +1,5 @@
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from ihp import PDK
 import multiprocessing
 import pandas as pd
 import os
@@ -50,7 +49,6 @@ class ORCA:
         self.working_geometries = pd.DataFrame(columns=["name"] + list(geometry.get_input_parameters().input_values.keys()))
         self.process_pool_executor = ProcessPoolExecutor(max_workers=multiprocessing.cpu_count())
         self.progress_callback = None
-        PDK.activate()
 
     def run(self, cpu_cores: int = multiprocessing.cpu_count(), epochs=50, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace", progress_callback=None):
         """
@@ -103,6 +101,9 @@ class ORCA:
         """
         Generates data based on the defined geometry.
         """
+        from ihp import PDK
+        PDK.activate()
+
         logger.info("Starting data generation using gdsfactory...")
         self._emit_progress("GDS Generation", 0, num_samples, "Starting GDS generation...")
         
