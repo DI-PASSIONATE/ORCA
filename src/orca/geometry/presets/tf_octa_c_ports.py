@@ -84,7 +84,7 @@ class TransformerOcta(BaseGeometry):
             upper_center_tap_width=0,
             lower_feed_type=1,
             upper_feed_type=1,
-            feedline_spacing=max(params["bottom_linewidth"], params["upper_linewidth"]),
+            feedline_spacing=max(params["bottom_linewidth"], params["upper_linewidth"]) + 0.1,
             gnd_upper_spacing=20,
             gnd_lower_spacing=20,
             gnd_side_spacing=20,
@@ -235,14 +235,14 @@ class TransformerOcta(BaseGeometry):
             
             # --- 1. Main Octagon Path ---
             path_pts = []
-            path_pts.append((x_face, y_upper )) # Start at upper feed
+            path_pts.append((round(x_face, 2), round(y_upper, 2))) # Start at upper feed
             
             # Vertices (22.5 to 337.5)
             for ang in np.arange(22.5, 360, 45):
                 rad = np.radians(ang)
-                path_pts.append((r * np.cos(rad), r * np.sin(rad)))
+                path_pts.append((round(r * np.cos(rad), 2), round(r * np.sin(rad), 2)))
                 
-            path_pts.append((x_face, y_lower)) # End at lower feed
+            path_pts.append((round(x_face, 2), round(y_lower, 2))) # End at lower feed
             
             p = gf.Path(path_pts)
             ref = c << p.extrude(width=width, layer=layer)
@@ -254,8 +254,8 @@ class TransformerOcta(BaseGeometry):
             # We need to calculate coordinates in the rotated frame or global frame.
             
             # Local coordinates of feed tips:
-            p_up_local = (x_face - width / 2.0, y_upper + width / 2.0)
-            p_lo_local = (x_face - width / 2.0, y_lower - width / 2.0)
+            p_up_local = (round(x_face - width / 2.0, 2), round(y_upper + width / 2.0, 2))
+            p_lo_local = (round(x_face - width / 2.0, 2), round(y_lower - width / 2.0, 2))
             
             # Transform to Global
             # Rotation Matrix
@@ -266,14 +266,14 @@ class TransformerOcta(BaseGeometry):
                 x, y = pt
                 x_new = x * c_rot - y * s_rot + center_x
                 y_new = x * s_rot + y * c_rot + center_y
-                return (x_new, y_new)
+                return (round(x_new, 2), round(y_new, 2))
 
             start_up = transform(p_up_local)
             start_lo = transform(p_lo_local)
             
             # End points are at feed_target_x with same Y
-            end_up = (feed_target_x, start_up[1])
-            end_lo = (feed_target_x, start_lo[1])
+            end_up = (round(feed_target_x, 2), start_up[1])
+            end_lo = (round(feed_target_x, 2), start_lo[1])
             
             # Create Feed Rectangles (Wires)
             # Upper Feed
@@ -285,9 +285,9 @@ class TransformerOcta(BaseGeometry):
             c << path_l.extrude(width=width, layer=layer)
 
             # Create center tap - find point 
-            p_center_local = (x_end + width / 2.0, center_y)
+            p_center_local = (round(x_end + width / 2.0, 2), round(center_y, 2))
             start_ct = transform(p_center_local)
-            end_ct = (centertap_target_x, center_y)
+            end_ct = (round(centertap_target_x, 2), round(center_y, 2))
 
             path_ct = gf.Path([start_ct, end_ct])
             c << path_ct.extrude(width=width, layer=layer)
@@ -328,32 +328,33 @@ class TransformerOcta(BaseGeometry):
         # Visual/meshing markers for ports: small rectangles on port layers so GDS contains geometry for source_layernum 201-204
         port_len = 1.0  # Length of port marker rectangles
         
-        def add_port_marker(center, width, layer):
-            rect = gf.components.rectangle(size=(port_len, width), layer=layer)
+        def add_port_marker(center, width, layer, thin_ports=False):
+            rect = gf.components.rectangle(size=(port_len, width / 2.0 if thin_ports else width), layer=layer)
             ref = c << rect
-            ref.move((center[0], center[1] - width / 2.0))
+            #ref.move((center[0], center[1] - width / 4.0))
+            ref.move((round(center[0], 2), round(center[1] - (width / 4.0 if thin_ports else width / 2.0), 2)))
 
         ### TOP LAYER (ports on the RIGHT) -> Port 1 and 2 -> Layer 201, 202
         # OP (Top, Right, Upper)
-        c.add_port(name="op", center=(port_xr - gnd_ring_width, y_top_p), width=upper_linewidth, orientation=0, layer=(201, 0))
-        add_port_marker((port_xr - gnd_ring_width, y_top_p), upper_linewidth, (201, 0))
+        c.add_port(name="op", center=(round(port_xr - gnd_ring_width, 2), round(y_top_p, 2)), width=upper_linewidth, orientation=0, layer=(201, 0))
+        add_port_marker((round(port_xr - gnd_ring_width, 2), round(y_top_p, 2)), upper_linewidth, (201, 0))
         # ON (Top, Right, Lower)
-        c.add_port(name="on", center=(port_xr - gnd_ring_width, y_top_n), width=upper_linewidth, orientation=0, layer=(202, 0))
-        add_port_marker((port_xr - gnd_ring_width, y_top_n), upper_linewidth, (202, 0))
+        c.add_port(name="on", center=(round(port_xr - gnd_ring_width, 2), round(y_top_n, 2)), width=upper_linewidth, orientation=0, layer=(202, 0))
+        add_port_marker((round(port_xr - gnd_ring_width, 2), round(y_top_n, 2)), upper_linewidth, (202, 0))
         # Center Tap (Top, Center)
-        c.add_port(name="oci", center=(port_xl + gnd_ring_width, 0), width=top_centertap_width, orientation=180, layer=(205, 0))
-        add_port_marker((port_xl + gnd_ring_width, 0), top_centertap_width, (205, 0))
+        c.add_port(name="oci", center=(round(port_xl + gnd_ring_width, 2), 0.0), width=top_centertap_width, orientation=180, layer=(205, 0))
+        add_port_marker((round(port_xl + gnd_ring_width, 2), 0.0), top_centertap_width, (205, 0))
 
         ### BOT LAYER (ports on the LEFT) -> Port 3 and 4 -> Layer 203, 204
         # IP (Bot, Left, Upper)
-        c.add_port(name="ip", center=(port_xl + gnd_ring_width, y_bot_p), width=bottom_linewidth, orientation=180, layer=(203, 0))
-        add_port_marker((port_xl + gnd_ring_width, y_bot_p), bottom_linewidth, (203, 0))
+        c.add_port(name="ip", center=(round(port_xl + gnd_ring_width, 2), round(y_bot_p, 2)), width=bottom_linewidth, orientation=180, layer=(203, 0))
+        add_port_marker((round(port_xl + gnd_ring_width, 2), round(y_bot_p, 2)), bottom_linewidth, (203, 0))
         # IN (Bot, Left, Lower)
-        c.add_port(name="in", center=(port_xl + gnd_ring_width, y_bot_n), width=bottom_linewidth, orientation=180, layer=(204, 0))
-        add_port_marker((port_xl + gnd_ring_width, y_bot_n), bottom_linewidth, (204, 0))
+        c.add_port(name="in", center=(round(port_xl + gnd_ring_width, 2), round(y_bot_n, 2)), width=bottom_linewidth, orientation=180, layer=(204, 0))
+        add_port_marker((round(port_xl + gnd_ring_width, 2), round(y_bot_n, 2)), bottom_linewidth, (204, 0))
         # Center Tap (Bot, Center)
-        c.add_port(name="ico", center=(port_xr - gnd_ring_width, 0), width=bottom_centertap_width, orientation=0, layer=(206, 0))
-        add_port_marker((port_xr - gnd_ring_width, 0), bottom_centertap_width, (206, 0))
+        c.add_port(name="ico", center=(round(port_xr - gnd_ring_width, 2), 0.0), width=bottom_centertap_width, orientation=0, layer=(206, 0))
+        add_port_marker((round(port_xr - gnd_ring_width, 2), 0.0), bottom_centertap_width, (206, 0))
 
         # -------------------------------------------------
         # 5. Center Taps (ici, ico, oci, oco)
@@ -414,25 +415,25 @@ class TransformerOcta(BaseGeometry):
             # Top bar
             top = gf.components.rectangle(size=(outer_w, gnd_ring_width), layer=LAYER_RING)
             top_ref = c << top
-            top_ref.move((port_xl, tf_y - gnd_ring_width))
+            top_ref.move((round(port_xl, 2), round(tf_y - gnd_ring_width, 2)))
 
             # Bottom bar
             bot = gf.components.rectangle(size=(outer_w, gnd_ring_width), layer=LAYER_RING)
             bot_ref = c << bot
-            bot_ref.move((port_xl, -tf_y))
+            bot_ref.move((round(port_xl, 2), round(-tf_y, 2)))
 
             # Left bar
             left_h = outer_h - 2 * gnd_ring_width
             if left_h > 0:
                 left = gf.components.rectangle(size=(gnd_ring_width, left_h), layer=LAYER_RING)
                 left_ref = c << left
-                left_ref.move((port_xl, -tf_y + gnd_ring_width))
+                left_ref.move((round(port_xl, 2), round(-tf_y + gnd_ring_width, 2)))
 
             # Right bar
             if left_h > 0:
                 right = gf.components.rectangle(size=(gnd_ring_width, left_h), layer=LAYER_RING)
                 right_ref = c << right
-                right_ref.move((port_xr - gnd_ring_width, -tf_y + gnd_ring_width))
+                right_ref.move((round(port_xr - gnd_ring_width, 2), round(-tf_y + gnd_ring_width, 2)))
         else:
             raise ValueError("Ground ring dimensions are invalid due to port spacing. Adjust parameters.")
         
