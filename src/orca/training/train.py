@@ -4,14 +4,16 @@ import torch.nn as nn
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
-N = 16  # Number of complex S-parameters (e.g., 16 for 4-port network)
+#N = 36  # Number of complex S-parameters (e.g., 16 for 4-port network)
 
 def complex_mse(pred, target):
+    N = pred.shape[1] // 2
     pred = pred.view(-1, N, 2)
     target = target.view(-1, N, 2)
     return torch.mean((pred - target) ** 2)
 
 def mse_plus_log_cosh_loss(pred, target):
+    N = pred.shape[1] // 2
     diff = pred - target
     lcsh = torch.mean(torch.log(torch.cosh(diff)))
     pred = pred.view(-1, N, 2)

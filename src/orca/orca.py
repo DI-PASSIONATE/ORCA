@@ -50,7 +50,7 @@ class ORCA:
         self.process_pool_executor = ProcessPoolExecutor(max_workers=multiprocessing.cpu_count())
         self.progress_callback = None
 
-    def run(self, cpu_cores: int = multiprocessing.cpu_count(), epochs=50, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace", progress_callback=None):
+    def run(self, cpu_cores: int = multiprocessing.cpu_count(), stages=["gds", "convert", "palace", "train", "evaluate"], epochs=50, palace_executable: str = "apptainer exec ~/Documents/git/palace/palace.sif palace", progress_callback=None):
         """
         Runs the ORCA pipeline, including data generation, simulation, training, and evaluation.
         
@@ -76,11 +76,16 @@ class ORCA:
         if not os.path.exists(save_path):
             os.makedirs(save_path)
 
-        self.generate_gds_data(num_samples)
-        self.convert_gds_to_palace()
-        self.run_simulation(save_path, palace_executable, cpu_cores)
-        model = self.train(self.geometry.get_dataset(), cwd=cwd, epochs=epochs)
-        self.evaluate_model(self.geometry.get_dataset(), model = model)
+        if "gds" in stages:
+            self.generate_gds_data(num_samples)
+        if "convert" in stages:
+            self.convert_gds_to_palace()
+        if "palace" in stages:
+            self.run_simulation(save_path, palace_executable, cpu_cores)
+        if "train" in stages:
+            model = self.train(self.geometry.get_dataset(), cwd=cwd, epochs=epochs)
+        if "evaluate" in stages:
+            self.evaluate_model(self.geometry.get_dataset(), model = model)
 
         logger.info("ORCA pipeline finished successfully.")
         self._emit_progress("Complete", num_samples, num_samples, f"Successfully trained model of {self.geometry.name}.")

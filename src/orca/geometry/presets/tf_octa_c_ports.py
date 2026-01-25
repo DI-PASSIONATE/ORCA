@@ -51,7 +51,7 @@ class TransformerOcta(BaseGeometry):
         return OrcaMLP(
             input_dim=5+1+len(features),  # 5 original params + 1 frequency + 3 ratio features
             hidden_sizes=[128, 256, 256, 128],
-            output_dim=72,  # 4-port S-parameters (16) with Re/Im (2) at 200 frequency points
+            output_dim=72,  # 6-port S-parameters (Re/Im) -> 6*6*2=72
             features=features,
             normalizer=MinMaxNormalizer(input_mins, input_maxs, features=features),
         )

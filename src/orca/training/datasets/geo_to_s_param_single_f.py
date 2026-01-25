@@ -14,7 +14,7 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
     a training sample for each frequency point in the S-parameter data. Each sample consists
     of input parameters and corresponding S-parameter values.
     """
-    def __init__(self, data_dir: str, geometry: BaseGeometry, split: str = "all"):
+    def __init__(self, data_dir: str, geometry: BaseGeometry, split: str = "all", n_ports: int = 6):
         super(GeoToSParamDatasetSingleFrequency, self).__init__(data_dir, geometry, split, True)
 
         # Load parameters from CSV
@@ -25,8 +25,8 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
 
         self.output_param_names = [
             f"S{i+1}{j+1}_{part}"
-            for i in range(4)
-            for j in range(4)
+            for i in range(n_ports)
+            for j in range(n_ports)
             for part in ("real", "imag")
         ]
     
@@ -35,7 +35,7 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
             snp_path = f"{data_dir}/{geometry_name}_dc_deembedded.s6p"
 
             if not os.path.exists(snp_path):
-                logger.error(f"S-parameter file not found: {snp_path}")
+                logger.warning(f"S-parameter file not found: {snp_path}")
                 continue
 
             geometry_params = np.array(row.drop('name'), dtype=np.float32)
