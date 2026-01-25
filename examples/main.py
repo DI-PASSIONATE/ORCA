@@ -4,7 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from orca.utils.postprocessing import *
 
-#np.random.seed(11)
+PLOT = False
+
 ### Example of using a custom geometry
 # geometry = MyCustomGeometry( # Python class that inherits from BaseGeometry
 #     name = "my_geometry",
@@ -14,27 +15,25 @@ from orca.utils.postprocessing import *
 
 
 # Use predefined geometry from examples
+np.random.seed(11)
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
-geometry = TransformerOcta(n_samples=2)
+geometry = TransformerOcta(n_samples=2, name="tf_octa_c_ports_200200")
 
 orca_instance = ORCA(geometry)
 
-orca_instance.run(cpu_cores=16, epochs=0, palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
+orca_instance.run(cpu_cores=16, epochs=25, stages=["gds", "convert", "palace"], palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
 
-# # Load and plot the results
-# ntwk = rf.Network("/home/david/Documents/git/ORCA/results/tf_octa_c_ports_6/tf_octa_c_ports_6_4_dc_deembedded.s6p")
-# # Plot S-parameters
-# plt.figure()
-# ntwk.plot_s_db(m=0, n=1)
-# N, ntwk = single_ended_to_mixed_mode(ntwk)
-# plot_diff_s_params_and_k(ntwk)
-#print("Ground truth network S-parameters at position 10:")
-#print(ntwk.s[10])
 
-# plt.figure()
-# ntwk2 = rf.Network("/home/david/Documents/git/ORCA/tf_octa_c_ports.s4p")
-# ntwk2 = single_ended_to_mixed_mode(ntwk2)
-# plot_diff_s_params_and_k(ntwk2)
-# #print(ntwk2.s[10])
-# plt.show()
-# plt.show()
+if PLOT:
+    # # Load and plot the results
+    ntwk = rf.Network("/home/david/Documents/git/ORCA/results/tf_octa_c_ports/tf_octa_c_ports_110_dc_deembedded.s6p")
+    # Plot S-parameters
+    plot_rfic_transformer_metrics(ntwk)
+    #ntwk.plot_s_db()
+    #N, ntwk = single_ended_to_mixed_mode(ntwk)
+    print("Ground truth network S-parameters at position 10:")
+
+    ntwk2 = rf.Network("/home/david/Documents/git/ORCA/tf_octa_c_ports.s6p")
+    #N, ntwk2 = single_ended_to_mixed_mode(ntwk2)
+    plot_rfic_transformer_metrics(ntwk2)
+    plt.show()

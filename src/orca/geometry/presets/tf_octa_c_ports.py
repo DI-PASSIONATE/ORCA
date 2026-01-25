@@ -117,13 +117,16 @@ class TransformerOcta(BaseGeometry):
         filename = f"{self.name}.s{N}p"
         ntwk.write_touchstone(filename)
 
-        N, ntwk = single_ended_to_mixed_mode(ntwk)
-        plot_diff_s_params_and_k(ntwk)
+        #N, ntwk = single_ended_to_mixed_mode(ntwk)
+        plot_rfic_transformer_metrics(ntwk)
+        # plot_diff_s_params_and_k(ntwk)
 
         # Write Touchstone
         print(f"Touchstone file saved as {filename}")
         
         return output_dict
+    
+
 
     def tf_octa_c(
         self,

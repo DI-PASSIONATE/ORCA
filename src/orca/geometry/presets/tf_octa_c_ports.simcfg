@@ -3,7 +3,7 @@
     "data_format": "1.0",
     "saved_values": {
         "preprocess_gds": true,
-        "merge_polygon_size": 0.2,
+        "merge_polygon_size": 0.5,
         "purpose": [
             0
         ],
@@ -12,7 +12,7 @@
         "fstep": 1.0,
         "refined_cellsize": 2.0,
         "order": 2,
-        "cells_per_wavelength": 20.0,
+        "cells_per_wavelength": 10.0,
         "meshsize_max": 100.0,
         "adaptive_mesh_iterations": 0,
         "iterative": false,
@@ -26,7 +26,7 @@
         ],
         "margin": 100.0,
         "air_around": 100.0,
-        "ELMER_MPI_THREADS": 8,
+        "ELMER_MPI_THREADS": 4,
         "model_basename": "tf_octa_c_ports"
     },
     "ports": [
