@@ -2,8 +2,6 @@ import threading
 from itertools import product
 import numpy as np
 
-from orca import MIN_FREQUENCY, MAX_FREQUENCY
-
 class InputParameterIterator:
     """
     Class for keeping track of geometry input parameters.
@@ -12,13 +10,13 @@ class InputParameterIterator:
         input_values (dict): Dictionary mapping parameter names to their values or ranges.
     """
 
-    def __init__(self, n_samples: int = 1, picking_strategy: str = "grid", **input_values):
+    def __init__(self, n_samples: int = 1, picking_strategy: str = "grid", frequency: list|range|np.ndarray|None = None, **input_values):
         """
         Initializes InputParameters with given input values and picking strategy.   
 
         Args:
             picking_strategy (str): Strategy for picking parameters ('grid', 'random', etc.).
-            **input_values: Keyword arguments representing parameter names and their possible ranges, e.g. radius_bottom=range(20, 100). Possible values can be lists, ranges, or numpy arrays.
+            frequency (list|range|np.ndarray|None): Optional frequency values to include as an additional input dimension. Does not get returned by __next__ (since it's handled by palace) but is considered for min/max calculations.
         """
         # Check if all input_values are lists or ranges
         for name, values in input_values.items():
@@ -27,6 +25,7 @@ class InputParameterIterator:
 
         self.n_samples = n_samples
         self.picking_strategy = picking_strategy
+        self.frequency = frequency
         self.n_inputs = len(input_values)
         self.input_values = input_values
         self.input_names = list(input_values.keys())
@@ -63,7 +62,7 @@ class InputParameterIterator:
             except StopIteration:
                 raise
 
-    def get_min_max_values(self, add_frequency_dim=False) -> tuple[list[float], list[float]]:
+    def get_min_max_values(self) -> tuple[list[float], list[float]]:
         """
         Returns the minimum and maximum values for each input parameter.
         Useful for normalization purposes.
@@ -71,8 +70,8 @@ class InputParameterIterator:
             tuple: A tuple containing two lists - (min_values, max_values).
         """
         return (
-            [min(param_list ) for param_list in self.input_values.values()] + ([MIN_FREQUENCY] if add_frequency_dim else []),
-            [max(param_list ) for param_list in self.input_values.values()] + ([MAX_FREQUENCY] if add_frequency_dim else [])
+            [min(param_list ) for param_list in self.input_values.values()] + ([min(self.frequency)] if self.frequency is not None else []),
+            [max(param_list ) for param_list in self.input_values.values()] + ([max(self.frequency)] if self.frequency is not None else [])
         )
     
     def step_grid(self):

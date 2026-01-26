@@ -5,7 +5,13 @@ from orca.simulation.read_simconfig import read_simconfig
 from orca.simulation.combine_snp_results import convert_to_touchstone
 from gds2palace import gds_reader, stackup_reader, utilities, simulation_setup
 
-def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simconfig_filename: str, show_mesh_results: bool = False) -> tuple[str, str, str]:
+def create_palace_model_from_gds(
+        geometry_name: str, 
+        gds_filename: str, 
+        stackup_xml: str,
+        simconfig_filename: str, 
+        show_mesh_results: bool = False
+    ) -> tuple[str, str, str]:
     """
     Uses gds2palace to create a Palace model from a GDS file and simulation configuration.
     The simconfig is a json and can either be created manually or by using setupEM GUI and saving the configuration.
@@ -22,7 +28,7 @@ def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simc
     # Path where the output simulation files will be stored -> use current working directory
     script_path = os.getcwd()
     # Model basename is taken from geometry name
-    model_basename = geometry.name
+    model_basename = geometry_name
     # set and create directory for simulation output
     sim_path = utilities.create_sim_path(script_path,model_basename)
 
@@ -47,7 +53,7 @@ def create_palace_model_from_gds(geometry: BaseGeometry, gds_filename: str, simc
             )
         )
 
-    materials_list, dielectrics_list, metals_list = stackup_reader.read_substrate(geometry.stackup_xml)
+    materials_list, dielectrics_list, metals_list = stackup_reader.read_substrate(stackup_xml)
     layernumbers = metals_list.getlayernumbers()
     layernumbers.extend(simulation_ports.portlayers)
 

@@ -283,7 +283,7 @@ class SimulationTrainingTab(QWidget):
 			try:
 				geometry_class = geometry_info["class"]
 				temp_geometry = geometry_class()
-				default_model = temp_geometry.create_model()
+				default_model = temp_geometry.model
 				default_model_class = type(default_model).__name__
 			except Exception as e:
 				logger.warning(f"Could not get default model for {geometry_name}: {e}")

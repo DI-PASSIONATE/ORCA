@@ -53,8 +53,13 @@ class RatioFeature(Feature):
         self.eps = 1e-8  # Small constant to avoid division by zero
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        new_feature = x[:, self.i] / (x[:, self.j] + self.eps)
-        return torch.cat([x, new_feature.unsqueeze(1)], dim=1)
+        # Add batch dimension if missing
+        if len(x.shape) == 1:
+            new_feature = x[self.i] / (x[self.j] + self.eps)
+            return torch.cat([x, new_feature.unsqueeze(0)], dim=0)
+        else:
+            new_feature = x[:, self.i] / (x[:, self.j] + self.eps)
+            return torch.cat([x, new_feature.unsqueeze(1)], dim=1)
     
     def calculate_min_max(self, input_mins: list[float], input_maxs: list[float]) -> tuple[float, float]:
         min_i = input_mins[self.i]
@@ -87,6 +92,11 @@ class ChebyshevFeature(Feature):
         self.degree = degree
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Check if input is 1D or 2D (batched or single sample)
+        output_shape = x.shape
+        if len(output_shape) == 1:
+            x = x.unsqueeze(0)  # Add batch dimension
+
         # Normalize the input parameter to the range [-1, 1]
         x_input = x[:, self.index] # One parameter over entire batch
         x_normalized = 2 * (x_input - self.min_freq) / (self.max_freq - self.min_freq) - 1
@@ -104,6 +114,10 @@ class ChebyshevFeature(Feature):
         elif len(x.shape) == 1:
             x = x.unsqueeze(1)
         res = torch.cat([x, new_features], dim=1)
+
+        # If original input was 1D, remove batch dimension
+        if len(output_shape) == 1:
+            res = res.squeeze(0)
         return res
     
     def calculate_min_max(self, input_mins: list[float], input_maxs: list[float]) -> tuple[float, float]:

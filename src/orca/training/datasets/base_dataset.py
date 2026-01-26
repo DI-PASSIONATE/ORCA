@@ -1,12 +1,12 @@
 import torch
 import numpy as np
 
-from orca.geometry.base_geometry import BaseGeometry
 from orca.training.normalize import Normalizer
+from orca.training.feature_transform import FeatureTransformPipeline
 
 
 class BaseDataset(torch.utils.data.Dataset):
-    def __init__(self,  data_dir: str, geometry: BaseGeometry, split: str = "all", frequency_as_input: bool = False):
+    def __init__(self,  data_dir: str, split: str = "all", features: FeatureTransformPipeline | None = None, input_normalizer: Normalizer|None = None, output_normalizer: Normalizer|None = None):
         """
         Defines the base dataset class for ORCA training datasets.
         This class should be extended by specific dataset implementations.
@@ -14,19 +14,23 @@ class BaseDataset(torch.utils.data.Dataset):
 
         Args:
             data_dir (str): Directory containing the dataset files.
-            geometry (BaseGeometry): Geometry object defining the input parameters.
-            frequency_as_input (bool): Whether to include frequency as an input parameter.
+            split (str): Dataset split to use ('all', 'train', 'val', 'test').
+            features (FeatureTransformPipeline | None): Optional feature pipeline.
+            input_normalizer (Normalizer|None): Normalizer for input parameters.
+            output_normalizer (Normalizer|None): Normalizer for output parameters.
         """
         super(BaseDataset, self).__init__()
 
         self.data_dir = data_dir
-        self.geometry = geometry
+        #self.geometry = geometry
         self.split = split
-        self.frequency_as_input = frequency_as_input
+        self.features = features
         self.samples: list[tuple[np.ndarray, np.ndarray]] = []  # List of (input_params, output_params) tuples
-        self.output_normalizer: Normalizer | None = None
+        self.input_normalizer = input_normalizer
+        self.output_normalizer = output_normalizer
         self.random = np.random.RandomState(seed=11)  # Ensure same behavior for all instances
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
     def get_train_split(self) -> 'BaseDataset':
         """
@@ -34,8 +38,10 @@ class BaseDataset(torch.utils.data.Dataset):
         """
         return self.__class__(
             data_dir=self.data_dir,
-            geometry=self.geometry,
             split="train",
+            features=self.features,
+            input_normalizer=self.input_normalizer,
+            output_normalizer=self.output_normalizer,
         )
     
     def get_val_split(self) -> 'BaseDataset':
@@ -44,8 +50,10 @@ class BaseDataset(torch.utils.data.Dataset):
         """
         return self.__class__(
             data_dir=self.data_dir,
-            geometry=self.geometry,
-            split="val"
+            split="val",
+            features=self.features,
+            input_normalizer=self.input_normalizer,
+            output_normalizer=self.output_normalizer,
         )
     
     def get_test_split(self) -> 'BaseDataset':
@@ -54,18 +62,25 @@ class BaseDataset(torch.utils.data.Dataset):
         """
         return self.__class__(
             data_dir=self.data_dir,
-            geometry=self.geometry,
-            split="test"
+            split="test",
+            features=self.features,
+            input_normalizer=self.input_normalizer,
+            output_normalizer=self.output_normalizer,
         )
-
     
     def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
         x, y = self.samples[idx]
 
         # Convert to tensors
         x, y = torch.tensor(x, dtype=torch.float32, device=self.device), torch.tensor(y, dtype=torch.float32, device=self.device)
+        
+        if self.features is not None:
+            x = self.features(x)
 
-        # Normalize output (input is normalized in the model itself, to embed it into the exported ONNX model)
+        if self.input_normalizer is not None:
+            x = self.input_normalizer(x)
+
+        # Normalize output
         # Output is denormalized in the ONNX wrapper class after inference
         if self.output_normalizer is not None:
             y = self.output_normalizer(y)

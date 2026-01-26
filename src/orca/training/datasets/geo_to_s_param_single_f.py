@@ -2,10 +2,12 @@ import pandas as pd
 import skrf as rf
 import os
 import numpy as np
+import torch
 
 from orca.training.datasets.base_dataset import BaseDataset
-from orca.training.normalize import StandardNormalizer
+from orca.training.normalize import StandardNormalizer, MinMaxNormalizer, Normalizer
 from orca.geometry.base_geometry import BaseGeometry
+from orca.training.feature_transform import FeatureTransformPipeline
 from orca.logger import logger
 
 class GeoToSParamDatasetSingleFrequency(BaseDataset):
@@ -14,8 +16,8 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
     a training sample for each frequency point in the S-parameter data. Each sample consists
     of input parameters and corresponding S-parameter values.
     """
-    def __init__(self, data_dir: str, geometry: BaseGeometry, split: str = "all", n_ports: int = 6):
-        super(GeoToSParamDatasetSingleFrequency, self).__init__(data_dir, geometry, split, True)
+    def __init__(self, data_dir: str, split: str = "all", features: FeatureTransformPipeline | None = None,n_ports: int = 6, input_normalizer: Normalizer|None = None, output_normalizer: Normalizer|None = None):
+        super(GeoToSParamDatasetSingleFrequency, self).__init__(data_dir, split, features, input_normalizer, output_normalizer)
 
         # Load parameters from CSV
         self.params_df = pd.read_csv(os.path.join(data_dir, "params.csv"))
@@ -49,7 +51,10 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
             (self.split == "test" and rand_num >= 0.85):
                 self.samples.extend(samples)
 
-        self.output_normalizer = StandardNormalizer(self.samples)
+        print(f"Loaded {len(self.samples)} samples for split '{self.split}' from {data_dir}")
+
+        if self.output_normalizer is not None:
+            self.output_normalizer.set_samples([y for _, y in self.samples])
 
     def load_samples(self, filename: str, geometry_params: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
         """Load S-parameter data from a Touchstone file."""

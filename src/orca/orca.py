@@ -7,7 +7,7 @@ import os
 from orca.logger import logger
 from orca.geometry.base_geometry import BaseGeometry
 
-def _convert_gds_worker(geo_inst, gds_filename, simconfig_filename):
+def _convert_gds_worker(geometry_name, gds_filename, stackup_xml, simconfig_filename):
     """
     Worker function for parallel GDS to Palace conversion.
     
@@ -17,20 +17,21 @@ def _convert_gds_worker(geo_inst, gds_filename, simconfig_filename):
         simconfig_filename: Path to simulation config file
         
     Returns:
-        Tuple of (geo_inst, gds_filename, output, params) or (geo_inst, gds_filename, error, None) on failure
+        Tuple of (geo_inst, gds_filename, output) or (geo_inst, gds_filename, error) on failure
     """
 
     from orca.simulation.simulate import create_palace_model_from_gds
     try:
         config_name, sim_path, data_dir = create_palace_model_from_gds(
-            geometry=geo_inst,
+            geometry_name=geometry_name,
+            stackup_xml=stackup_xml,
             gds_filename=gds_filename,
             simconfig_filename=simconfig_filename,
             show_mesh_results=False
         )
-        return config_name, sim_path, data_dir, geo_inst.params
+        return config_name, sim_path, data_dir
     except Exception as e:
-        return e, None, None, None
+        return e, None, None
 
 
 class ORCA:
@@ -44,9 +45,9 @@ class ORCA:
 
     def __init__(self, geometry: BaseGeometry):
         self.geometry: BaseGeometry = geometry
-        self.geometry_instances: list[tuple[BaseGeometry, str]] = []
-        self.palace_models: list[tuple[str, str, str, dict]] = []
-        self.working_geometries = pd.DataFrame(columns=["name"] + list(geometry.get_input_parameters().input_values.keys()))
+        self.geometry_instances: list[tuple[str, dict, str]] = []  # List of (geometry_name, input_params, gds_filename)
+        self.palace_models: list[tuple[str, str, str, dict]] = []  # List of (config_name, sim_path, data_dir)
+        self.working_geometries = pd.DataFrame(columns=["name"] + list(geometry.input_iterator.input_values.keys()))
         self.process_pool_executor = ProcessPoolExecutor(max_workers=multiprocessing.cpu_count())
         self.progress_callback = None
 
@@ -68,8 +69,6 @@ class ORCA:
         
         num_samples = self.geometry.n_samples
 
-        logger.info(f"Running {num_samples} ORCA simulations of {self.geometry.name} with {cpu_cores} CPU cores...")         
-        self._emit_progress("Initializing", 0, num_samples, "Starting ORCA pipeline...")
 
         cwd = os.getcwd()
         save_path = os.path.join(cwd, "results", self.geometry.name)
@@ -83,9 +82,9 @@ class ORCA:
         if "palace" in stages:
             self.run_simulation(save_path, palace_executable, cpu_cores)
         if "train" in stages:
-            model = self.train(self.geometry.get_dataset(), cwd=cwd, epochs=epochs)
+            model = self.train(self.geometry.dataset, cwd=cwd, epochs=epochs)
         if "evaluate" in stages:
-            self.evaluate_model(self.geometry.get_dataset(), model = model)
+            self.evaluate_model(self.geometry.dataset, model = model)
 
         logger.info("ORCA pipeline finished successfully.")
         self._emit_progress("Complete", num_samples, num_samples, f"Successfully trained model of {self.geometry.name}.")
@@ -109,16 +108,17 @@ class ORCA:
         from ihp import PDK
         PDK.activate()
 
-        logger.info("Starting data generation using gdsfactory...")
+        logger.info(f"Starting GDS generation for {num_samples} samples...")
         self._emit_progress("GDS Generation", 0, num_samples, "Starting GDS generation...")
         
         for i, input_params in enumerate(self.geometry.input_iterator):
             if i >= num_samples:
                 break
             try:
-                geo_inst = self.geometry.create_geometry_instance(name=f"{self.geometry.name}_{i}", params=input_params)
-                gds_filename = geo_inst.create_gds_file(params=input_params)
-                self.geometry_instances.append((geo_inst, gds_filename))
+                #geo_inst = self.geometry.create_geometry_instance(name=f"{self.geometry.name}_{i}", params=input_params)
+                geo_name = f"{self.geometry.name}_{i}"
+                gds_filename = self.geometry.create_gds_file(name=geo_name, params=input_params)
+                self.geometry_instances.append((geo_name, input_params, gds_filename))
             except Exception as e:
                 logger.error(f"Error generating GDS for sample {i}: {e}")
                 continue
@@ -146,23 +146,24 @@ class ORCA:
             futures = {
                 executor.submit(
                     _convert_gds_worker,
-                    geo_inst,
-                    gds_filename,
-                    geo_inst.simconfig_filename
-                ): (geo_inst, gds_filename)
-                for geo_inst, gds_filename in self.geometry_instances
+                    geometry_name=geo_name,
+                    gds_filename=gds_filename,
+                    stackup_xml=self.geometry.stackup_xml,
+                    simconfig_filename=self.geometry.simconfig_filename
+                ): (geo_name, input_params, gds_filename)
+                for geo_name, input_params, gds_filename in self.geometry_instances
             }
             
             # Process results as they complete
             for future in as_completed(futures):
-                geo_inst, gds_filename = futures[future]
+                geo_name, input_params, gds_filename = futures[future]
                 try:
                     result = future.result()
-                    config_name, sim_path, data_dir, params = result
+                    config_name, sim_path, data_dir = result
                     
                     # Check if the result was an error
                     if isinstance(config_name, Exception):
-                        logger.error(f"## ERROR ## Conversion of GDS to Palace model failed for {geo_inst.name} with error: {config_name}")
+                        logger.error(f"## ERROR ## Conversion of GDS to Palace model failed for {geo_name} with error: {config_name}")
                         failed += 1
                         completed += 1
                         self._emit_progress("Palace Conversion", completed, total_gds, 
@@ -170,8 +171,8 @@ class ORCA:
                         continue
                     
                     # Save parameters
-                    row = {"name": geo_inst.name}
-                    row.update(params if params is not None else {})
+                    row = {"name": geo_name}
+                    row.update(input_params)
                     self.working_geometries = pd.concat(
                         [self.working_geometries, pd.DataFrame([row])],
                         ignore_index=True
@@ -186,7 +187,7 @@ class ORCA:
                                       f"Converting GDS to Palace ({completed}/{total_gds}, {failed} failed)...")
                     
                 except Exception as e:
-                    logger.warning(f"## ERROR ## Failed to process result for {geo_inst.name}: {e}")
+                    logger.warning(f"## ERROR ## Failed to process result for {geo_name}: {e}")
                     os.remove(gds_filename)
                     failed += 1
                     completed += 1
@@ -259,14 +260,11 @@ class ORCA:
         """
         from orca.training.train import train_model
         import torch
-        import torch.nn as nn
         from orca.training.onnx_wrapper import ONNXWrapper
         logger.info(f"Starting model training with {len(dataset)} samples...")
         self._emit_progress("Model Training", 0, 1, f"{len(dataset)} samples loaded for training.")
 
-        model = self.geometry.create_model()
-
-        trained_model = train_model(dataset, model=model, epochs=epochs, batch_size=32, learning_rate=1e-3, progress_callback=self._emit_progress)
+        trained_model = train_model(dataset, model=self.geometry.model, epochs=epochs, batch_size=32, learning_rate=1e-3, progress_callback=self._emit_progress)
         
         model_save_dir = os.path.join(cwd, "models", self.geometry.name)
         model_save_path = os.path.join(model_save_dir, f"{self.geometry.name}.onnx")
@@ -282,7 +280,7 @@ class ORCA:
 
         # Export to ONNX with multiple inputs/outputs using ONNXWrapper
         torch.onnx.export(
-            ONNXWrapper(trained_model, output_denormalizer=dataset.output_normalizer),
+            ONNXWrapper(trained_model, features=dataset.features, input_normalizer=dataset.input_normalizer, output_denormalizer=dataset.output_normalizer),
             tuple(torch.randn(1, 1, device=dataset.device) for _ in dataset.input_param_names),
             input_names=dataset.input_param_names,
             output_names=dataset.output_param_names,
@@ -300,7 +298,7 @@ class ORCA:
         Evaluates the trained ORCA model.
         """
         from orca.training.train import test_model
-        logger.warning("Starting model evaluation...")
+        logger.info("Starting model evaluation...")
         self._emit_progress("Model Evaluation", 0, 1, "Model evaluation not yet implemented")
         test_loss = test_model(dataset, model=model, batch_size=32)
         logger.info(f"Model evaluation completed. Test Loss: {test_loss:.4f}")

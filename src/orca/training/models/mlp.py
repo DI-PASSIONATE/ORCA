@@ -11,8 +11,6 @@ class OrcaMLP(nn.Module):
         input_dim: int,
         hidden_sizes: list[int],
         output_dim: int,
-        normalizer: Normalizer,
-        features: FeatureTransformPipeline | None = None,
         output_shape: tuple[int, ...] | None = None,
     ):
         """
@@ -22,8 +20,6 @@ class OrcaMLP(nn.Module):
             input_dim (int): Number of input parameters.
             hidden_sizes (list[int]): Sizes of hidden layers.
             output_dim (int): Total number of output parameters (flattened).
-            normalizer (Normalizer): Input normalizer.
-            features (FeatureTransformPipeline | None): Optional feature pipeline.
             output_shape (tuple[int, ...] | None):
                 If provided, reshape output to (B, *output_shape).
                 Otherwise, return flat output (B, output_dim).
@@ -36,8 +32,6 @@ class OrcaMLP(nn.Module):
                 f"output_shape {output_shape} does not match output_dim={output_dim}"
             )
 
-        self.normalizer = normalizer
-        self.features = features
         self.output_shape = output_shape
 
         layers = []
@@ -51,14 +45,6 @@ class OrcaMLP(nn.Module):
         self.model = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Feature expansion
-        if self.features is not None:
-            x = self.features(x)
-
-        # Input normalization
-        if self.normalizer is not None:
-            x = self.normalizer(x)
-
         # Forward pass
         y = self.model(x)
 
