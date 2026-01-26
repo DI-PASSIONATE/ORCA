@@ -1,15 +1,14 @@
 from dataclasses import dataclass
-import gdsfactory as gf
 import numpy as np
 import os
 import torch.nn as nn
+import torchvision
 
 from orca import BaseGeometry
 from orca.geometry.cells.transformer import tf_octa_c
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.training.datasets.base_dataset import BaseDataset
 from orca.training.normalize import MinMaxNormalizer, StandardNormalizer, OutputMinMaxNormalizer
-from ihp import PDK
 from orca.utils.postprocessing import *
 
 from orca.training.models.mlp import OrcaMLP
@@ -51,10 +50,9 @@ class TransformerOcta(BaseGeometry):
         input_normalizer=MinMaxNormalizer(input_parameter_iterator, features),
         output_normalizer=OutputMinMaxNormalizer(),
     )
-    model: nn.Module = OrcaMLP(
-        input_dim=5+1+len(features),  # 5 original params + 1 frequency + features
-        hidden_sizes=[128, 256, 256, 128],
-        output_dim=72,  # 6-port S-parameters (Re/Im) -> 6*6*2=72
+    model: nn.Module = torchvision.ops.MLP(
+        in_channels=5+1+len(features),  # 5 original params + 1 frequency + features
+        hidden_channels=[128, 256, 256, 128, 72],  # 6-port S-parameters (Re/Im) -> 6*6*2=72
     )
 
     def create_gds_file(self, name:str, params: dict[str, any]) -> str:
