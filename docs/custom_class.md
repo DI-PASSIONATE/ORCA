@@ -8,11 +8,15 @@ If you want to simulate and predict your own geometry, you simply need to create
 Once you have these three files, you can head over to [Running ORCA](/docs/running_orca.md) to see how to run ORCA with these files.
 
 ### Python Class
-The Python class should extend the `orca.BaseGeometry` class and implement the following methods:
+The Python class should extend the `orca.BaseGeometry` class and implement the following properties/methods:
 
-- `__init__(self, name: str, stackup_xml: str, simconfig_filename: str)`: You can define the number of input and output parameters here. Make sure to call the superclass constructor
-- `create_gds_file(self) -> str`: This method should create the GDS file (e.g. using [gdsfactory](https://gdsfactory.github.io/gdsfactory/)) for your geometry and return the path to the created file.
-- `get_input_parameters(self) -> InputParameterIterator`: This method should return an InputParameterIterator specifying input parameters, their ranges and the picking strategy that should be used.
+- `name`: A string representing the name of your geometry.
+- `stackup_xml`: A string / path to your stackup XML file.
+- `simconfig_filename`: A string / path to your simulation configuration file.
+- `n_samples`: An integer defining the number of samples to generate for training.
+- `input_parameter_iterator`: An instance of `InputParameterIterator` defining the input parameters and their ranges.
+- `create_gds_file(name: str, params: dict[str, any]) -> str`: A method that creates the GDS file for the geometry given a name and a dictionary of input parameters. It should return the path to the created GDS file.
+- `postprocess_outputs(output, frequency_points=None)`: (Optional) A method that post-processes the raw model outputs after inference. This can be used to save Touchstone files, plot results, etc.
 
 Example:
 
@@ -21,43 +25,75 @@ from orca import BaseGeometry
 from orca.geometry.input_parameters import InputParameterIterator
 from ihp import PDK
 
-
+@dataclass
 class TransformerOcta(BaseGeometry):
     """
-    Represents a transformer geometry with octagonal shape and C-ports.
-    No input parameters are required for this geometry.
+    Represents a transformer geometry with octagonal shape.
     """
+    name: str = "tf_octa_c_ports"
+    stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml")
+    simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
+    params = None
+    n_samples: int = 1000
+    input_parameter_iterator: InputParameterIterator = InputParameterIterator(
+        picking_strategy="random",
+        n_samples=n_samples,
+        frequency = [1e8, 200e8],  # 1 GHz to 200 GHz in 1 GHz steps
+        input_winding_diameter = [x/10 for x in range(200, 1001, 1)], # 20.0 to 100.0 in 0.1 steps
+        output_winding_diameter = [x/10 for x in range(200, 1001, 1)], # 20.0 to 100.0 in 0.1 steps
+        center_displacement = [x/10 for x in range(0, 151, 1)], # 0.0 to 15.0 in 0.1 steps
+        bottom_linewidth = [x/10 for x in range(20, 81, 1)], # 2.0 to 10.0 in 0.1 steps
+        upper_linewidth = [x/10 for x in range(20, 81, 1)], # 2.0 to 10.0 in 0.1 steps
+    )
+    features = FeatureTransformPipeline(
+        # You can implement manual feature engineering here (e.g. ratio between two input parameters, polynomial features, etc.)
+    )
+    dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(
+        data_dir=os.path.join(os.path.join(os.getcwd(), "results"), name), 
+        split="train",
+        n_ports=6,
+        features=features,
+        input_normalizer=MinMaxNormalizer(input_parameter_iterator, features),
+        output_normalizer=OutputMinMaxNormalizer(),
+    )
+    model: nn.Module = OrcaMLP(
+        input_dim=5+1+len(features),  # 5 original params + 1 frequency + features
+        hidden_sizes=[128, 256, 256, 128],
+        output_dim=72,  # 6-port S-parameters (Re/Im) -> 6*6*2=72
+    )
 
-    def __init__(self,
-                 name = "tf_octa_c_ports",
-                 stackup_xml: str = os.path.join(os.path.dirname(__file__), "..", "SG13G2_nosub.xml"),
-                 simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg"),
-                 params = None
-                ):
-
-        # Call the base class constructor with the parameters
-        super().__init__(name, stackup_xml, simconfig_filename, params)
-    
-    def get_input_parameters(self) -> InputParameterIterator:
-        return InputParameterIterator(
-            picking_strategy="grid",
-            input_winding_diameter = range(60, 101, 10), # 20, 101, 5
-            output_winding_diameter = range(60, 101, 10), # 20, 101, 5
-            center_displacement = range(0, 21, 10), # 0, 21, 1
-            bottom_linewidth = range(5, 9, 3), # 2, 9, 1
-            upper_linewidth = range(5, 9, 3), # 2, 9, 1
-        )
-
-    def create_gds_file(self, params: dict[str, any]) -> str:
+    def create_gds_file(self, name:str, params: dict[str, any]) -> str:
         output_path = os.path.join(
             os.getcwd(),
             "geometries",
-            self.name + ".gds"
+            name + ".gds"
         )
 
-        # create component here
+        if not os.path.exists(os.path.dirname(output_path)):
+            os.makedirs(os.path.dirname(output_path))
+
+        # CREATE YOUR COMPONENT HERE USING THE PARAMETERS IN THE 'params' DICTIONARY
+        
         c.write_gds(output_path, with_metadata=False)
         return output_path
+
+    def postprocess_outputs(self, output, frequency_points=None):
+        """
+        Optional: Post-process the raw model outputs of GUI inference (e.g. plot results, save Touchstone files, etc.)
+        """
+        # Frequency points are just from 1 to 200 in 1 GHz steps
+        if frequency_points is None:
+            frequency_points = np.arange(1, 201)  # 1 GHz to 200 GHz
+        N, ntwk, output_dict = s_param_dict_to_network(output, frequency_points)
+        filename = f"{self.name}.s{N}p"
+
+        # Save Touchstone file
+        ntwk.write_touchstone(filename)
+
+        # Plot coupling factor, s parameters, inductance, ...
+        plot_rfic_transformer_metrics(ntwk)
+        
+        return output_dict
 ```
 
 ### Stackup XML File
