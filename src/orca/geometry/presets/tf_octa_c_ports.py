@@ -37,22 +37,22 @@ class TransformerOcta(BaseGeometry):
         upper_linewidth = [x/10 for x in range(20, 81, 1)], # 2.0 to 10.0 in 0.1 steps
     )
     features = FeatureTransformPipeline(
-        # RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
-        # RatioFeature(i=3, j=4),  # bottom_linewidth / upper_linewidth
-        # RatioFeature(i=5, j=0),  # frequency / input_winding_diameter
-        # ChebyshevFeature(i=5, degree=3),  # Chebyshev features of frequency
+        RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
+        RatioFeature(i=3, j=4),  # bottom_linewidth / upper_linewidth
+        RatioFeature(i=5, j=0),  # frequency / input_winding_diameter
+        ChebyshevFeature(i=5, degree=3),  # Chebyshev features of frequency
     )
     dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(
         data_dir=os.path.join(os.path.join(os.getcwd(), "results"), name), 
-        split="train",
         n_ports=6,
         features=features,
         input_normalizer=MinMaxNormalizer(input_parameter_iterator, features),
-        output_normalizer=OutputMinMaxNormalizer(),
+        output_normalizer=StandardNormalizer(),
     )
     model: nn.Module = torchvision.ops.MLP(
         in_channels=5+1+len(features),  # 5 original params + 1 frequency + features
         hidden_channels=[128, 256, 256, 128, 72],  # 6-port S-parameters (Re/Im) -> 6*6*2=72
+        activation_layer=nn.SiLU
     )
 
     def create_gds_file(self, name:str, params: dict[str, any]) -> str:

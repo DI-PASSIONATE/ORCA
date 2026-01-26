@@ -18,6 +18,7 @@ def mse_plus_log_cosh_loss(pred, target):
     pred = pred.view(-1, N, 2)
     target = target.view(-1, N, 2)
     mse = torch.mean((pred - target) ** 2)
+
     return 2*lcsh + mse
 
 def train_model(
@@ -27,7 +28,7 @@ def train_model(
     batch_size=128,
     learning_rate=1e-3,
     patience=20,
-    criterion = mse_plus_log_cosh_loss,
+    criterion = nn.MSELoss(),
     optimizer = AdamW,
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     progress_callback=None,

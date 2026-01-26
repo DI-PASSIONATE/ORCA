@@ -17,7 +17,7 @@ PLOT = False
 # Use predefined geometry from examples
 np.random.seed(11)
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
-geometry = TransformerOcta(n_samples=100, name="tf_octa_c_ports_testing")
+geometry = TransformerOcta(n_samples=100, name="tf_octa_c_ports")
 
 orca_instance = ORCA(geometry)
 
