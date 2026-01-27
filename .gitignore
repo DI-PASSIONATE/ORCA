@@ -19,3 +19,5 @@ results/
 *.onnx
 *.onnx.data
 *cache
+*.zip
+*.csv
