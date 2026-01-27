@@ -14,8 +14,8 @@ class GeoToSParamDataset(BaseDataset):
     a training sample for each frequency point in the S-parameter data. Each sample consists
     of input parameters and corresponding S-parameter values.
     """
-    def __init__(self, data_dir: str, geometry: BaseGeometry, split: str = "all"):
-        super(GeoToSParamDataset, self).__init__(data_dir, geometry, split, True)
+    def __init__(self, data_dir: str, split: str = "all", n_ports=6, features=None, input_normalizer=None, output_normalizer=None):
+        super(GeoToSParamDataset, self).__init__(data_dir, split, features, input_normalizer, output_normalizer)
 
         # Load parameters from CSV
         self.params_df = pd.read_csv(os.path.join(data_dir, "params.csv"))
@@ -26,21 +26,21 @@ class GeoToSParamDataset(BaseDataset):
         # Initialize output parameter names
         self.output_param_names = [
             f"S{i+1}{j+1}_{part}"
-            for i in range(4)
-            for j in range(4)
+            for i in range(n_ports)
+            for j in range(n_ports)
             for part in ("real", "imag")
         ]
     
         for idx, row in self.params_df.iterrows():
             geometry_name = row['name'] # = name.s4p
-            s4p_path = f"{data_dir}/{geometry_name}_deembedded.s4p"
+            s4p_path = f"{data_dir}/{geometry_name}_dc_deembedded.s{n_ports}p"
 
             if not os.path.exists(s4p_path):
                 logger.error(f"S-parameter file not found: {s4p_path}")
                 continue
 
             geometry_params = np.array(row.drop('name'), dtype=np.float32)
-            sample = self.load_samples(f"{geometry_name}.s4p", geometry_params)
+            sample = self.load_samples(s4p_path, geometry_params)
 
             rand_num = self.random.rand()
             if \
@@ -50,11 +50,11 @@ class GeoToSParamDataset(BaseDataset):
             (self.split == "test" and rand_num >= 0.85):
                 self.samples.append(sample)
 
-        self.output_normalizer = StandardNormalizer(self.samples)
+        if self.output_normalizer is not None:
+            self.output_normalizer.set_samples([y for _, y in self.samples])
 
-    def load_samples(self, filename: str, geometry_params: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def load_samples(self, sparam_path: str, geometry_params: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Load S-parameter data from a Touchstone file and return a single sample with all frequencies."""
-        sparam_path = f"{self.data_dir}/{filename}"
         
         net = rf.Network(sparam_path)
         freq = net.f

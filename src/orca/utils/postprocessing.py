@@ -92,21 +92,22 @@ def plot_rfic_transformer_metrics(ntwk):
 def s_param_dict_to_network(s_param_dict: dict, frequencies: np.ndarray) -> tuple[int, rf.Network, dict]:
     N = int(np.sqrt(len(s_param_dict) // 2))  # number of ports
 
-    nb_f = len(frequencies)
+    num_freq = len(frequencies)
 
     # Check frequency length
-    if nb_f < 1:
+    if num_freq < 1:
         raise ValueError("Frequency array must have at least one element.")
 
     # Initialize S-matrix of shape (nb_f, N, N)
-    S = np.zeros((nb_f, N, N), dtype=np.complex64)
+    S = np.zeros((num_freq, N, N), dtype=np.complex64)
 
     # Fill S-matrix
     for i in range(N):
         for j in range(N):
-            real = np.array(s_param_dict[f"S{i+1}{j+1}_real"], dtype=np.float32)
-            imag = np.array(s_param_dict[f"S{i+1}{j+1}_imag"], dtype=np.float32)
-            if real.shape[0] != nb_f or imag.shape[0] != nb_f:
+            real = np.array(s_param_dict[f"S{i+1}{j+1}_real"]).squeeze()
+            imag = np.array(s_param_dict[f"S{i+1}{j+1}_imag"]).squeeze()
+
+            if real.shape[0] != num_freq or imag.shape[0] != num_freq:
                 raise ValueError(f"S{i+1}{j+1} length mismatch with frequency array.")
             S[:, i, j] = real + 1j * imag  # note: frequency as first dimension
 

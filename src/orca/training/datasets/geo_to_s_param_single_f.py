@@ -34,14 +34,14 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
     
         for idx, row in self.params_df.iterrows():
             geometry_name = row['name'] # = name.s4p
-            snp_path = f"{data_dir}/{geometry_name}_dc_deembedded.s6p"
+            snp_path = f"{data_dir}/{geometry_name}_dc_deembedded.s{n_ports}p"
 
             if not os.path.exists(snp_path):
                 logger.warning(f"S-parameter file not found: {snp_path}")
                 continue
 
             geometry_params = np.array(row.drop('name'), dtype=np.float32)
-            samples = self.load_samples(f"{geometry_name}_dc_deembedded.s6p", geometry_params)
+            samples = self.load_samples(snp_path, geometry_params)
 
             rand_num = self.random.rand()
             if \
@@ -56,10 +56,9 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
         if self.output_normalizer is not None:
             self.output_normalizer.set_samples([y for _, y in self.samples])
 
-    def load_samples(self, filename: str, geometry_params: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
+    def load_samples(self, sparam_path: str, geometry_params: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
         """Load S-parameter data from a Touchstone file."""
         samples = []
-        sparam_path = f"{self.data_dir}/{filename}"
         
         net = rf.Network(sparam_path)
         freq = net.f
