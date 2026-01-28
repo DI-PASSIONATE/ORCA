@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.logger import logger
 from orca.training.datasets.base_dataset import BaseDataset
@@ -19,16 +20,19 @@ class BaseGeometry(ABC):
     input_parameter_iterator: InputParameterIterator
     features: FeatureTransformPipeline|None = None
 
+    def __post_init__(self):
+        # Ensure the input parameter iterator knows the number of samples
+        # This is done here instead of passing it to the constructor of InputParameterIterator
+        # because dataclass fields are initialized statically.
+        self.input_parameter_iterator.set_sample_count(self.n_samples)
+
     @property
-    def input_iterator(self) -> InputParameterIterator:
-        if self.input_parameter_iterator is None:
-            print("Warning: input_parameter_iterator is not initialized.")
-            return None
+    def input_iterator(self) -> InputParameterIterator | None:
         # Return the input parameter iterator, ensuring it is initialized with iter()
         return iter(self.input_parameter_iterator)
         
     @abstractmethod
-    def create_gds_file(self, name:str, params: dict[str, any]) -> str:
+    def create_gds_file(self, name:str, params: dict[str, Any]) -> str:
         """
         Creates a GDS file based on the current input parameters.
         Input parameters are a list of values defining the geometry, e.g. width, length, radius etc.
@@ -36,7 +40,7 @@ class BaseGeometry(ABC):
 
         Returns:
             str: Path to the created GDS file.
-            params: dict[str, any]: Dictionary of input parameters used to create the GDS file. Mapping is the same as what get_input_parameters returns.
+            params: dict[str, Any]: Dictionary of input parameters used to create the GDS file. Mapping is the same as what get_input_parameters returns.
         """
 
     def postprocess_outputs(self, output: dict[str, list], frequency_points: list|np.ndarray) -> dict[str, list]:
