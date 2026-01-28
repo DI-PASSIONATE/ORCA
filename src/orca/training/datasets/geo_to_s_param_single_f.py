@@ -18,19 +18,22 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
     """
     def __init__(self, data_dir: str, split: str = "all", features: FeatureTransformPipeline | None = None,n_ports: int = 6, input_normalizer: Normalizer|None = None, output_normalizer: Normalizer|None = None):
         super(GeoToSParamDatasetSingleFrequency, self).__init__(data_dir, split, features, input_normalizer, output_normalizer)
-
-        # Load parameters from CSV
-        self.params_df = pd.read_csv(os.path.join(data_dir, "params.csv"))
-
-        self.input_param_names = list(self.params_df.columns) + ['frequency (GHz)']
-        self.input_param_names.remove('name')  # Remove 'name' column
-
+        
         self.output_param_names = [
             f"S{i+1}{j+1}_{part}"
             for i in range(n_ports)
             for j in range(n_ports)
             for part in ("real", "imag")
         ]
+
+        if not os.path.exists(data_dir):
+            logger.warning(f"Data directory not found: {data_dir}")
+            return
+        # Load parameters from CSV
+        self.params_df = pd.read_csv(os.path.join(data_dir, "params.csv"))
+
+        self.input_param_names = list(self.params_df.columns) + ['frequency (GHz)']
+        self.input_param_names.remove('name')  # Remove 'name' column
     
         for idx, row in self.params_df.iterrows():
             geometry_name = row['name'] # = name.s4p
