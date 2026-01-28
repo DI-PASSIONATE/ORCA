@@ -35,8 +35,14 @@ def train_model(
 ):
     model.to(device)
 
-    train_loader = DataLoader(dataset.get_train_split(), batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(dataset.get_val_split(), batch_size=batch_size, shuffle=False)
+    train_split = dataset.get_train_split()
+    val_split = dataset.get_val_split()
+
+    train_split.load_samples()
+    val_split.load_samples()
+
+    train_loader = DataLoader(train_split, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_split, batch_size=batch_size, shuffle=False)
 
     optimizer = optimizer(model.parameters(), lr=learning_rate)
     
@@ -132,7 +138,10 @@ def test_model(
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    test_loader = DataLoader(dataset.get_test_split(), batch_size=batch_size, shuffle=False)
+    test_split = dataset.get_test_split()
+    test_split.load_samples()
+
+    test_loader = DataLoader(test_split, batch_size=batch_size, shuffle=False)
 
     criterion = complex_mse
 

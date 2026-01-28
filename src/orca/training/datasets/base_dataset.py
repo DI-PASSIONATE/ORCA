@@ -1,11 +1,12 @@
 import torch
 import numpy as np
+from abc import ABC, abstractmethod
 
 from orca.training.normalize import Normalizer
 from orca.training.feature_transform import FeatureTransformPipeline
 
 
-class BaseDataset(torch.utils.data.Dataset):
+class BaseDataset(ABC, torch.utils.data.Dataset):
     def __init__(self,  data_dir: str, split: str = "all", features: FeatureTransformPipeline | None = None, input_normalizer: Normalizer|None = None, output_normalizer: Normalizer|None = None):
         """
         Defines the base dataset class for ORCA training datasets.
@@ -31,6 +32,13 @@ class BaseDataset(torch.utils.data.Dataset):
         self.random = np.random.RandomState(seed=11)  # Ensure same behavior for all instances
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+    @abstractmethod
+    def load_samples(self) -> None:
+        """
+        Load samples from the dataset.
+        This method should be implemented by subclasses to load data specific from its self.data_dir.
+        """
+        pass
 
     def get_train_split(self) -> 'BaseDataset':
         """

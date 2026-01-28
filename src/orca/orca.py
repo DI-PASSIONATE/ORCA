@@ -123,9 +123,8 @@ class ORCA:
                 logger.error(f"Error generating GDS for sample {i}: {e}")
                 continue
             
-            # Progress update every sample or every 10% for large batches
-            if i % max(1, num_samples // 10) == 0 or i == num_samples - 1:
-                self._emit_progress("GDS Generation", i + 1, num_samples, f"Generated {i + 1}/{num_samples} GDS files...")
+            # Progress update
+            self._emit_progress("GDS Generation", i + 1, num_samples, f"Generated {i + 1}/{num_samples} GDS files...")
             
         logger.info("#----------- Data generation completed. -----------#")
         self._emit_progress("GDS Generation", num_samples, num_samples, f"Generated {num_samples} GDS files successfully")
