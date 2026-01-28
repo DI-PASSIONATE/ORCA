@@ -10,7 +10,7 @@ class InputParameterIterator:
         input_values (dict): Dictionary mapping parameter names to their values or ranges.
     """
 
-    def __init__(self, n_samples: int = 1, picking_strategy: str = "grid", frequency: list|range|np.ndarray|None = None, **input_values):
+    def __init__(self, picking_strategy: str = "grid", frequency: list|range|np.ndarray|None = None, **input_values):
         """
         Initializes InputParameters with given input values and picking strategy.   
 
@@ -23,7 +23,6 @@ class InputParameterIterator:
             if not isinstance(values, (list, range, np.ndarray)):
                 raise ValueError(f"Input kwarg '{name}' must be a list, range, or numpy array of possible values. Found type: {type(values)} (value: {values})")
 
-        self.n_samples = n_samples
         self.picking_strategy = picking_strategy
         self.frequency = frequency
         self.n_inputs = len(input_values)
@@ -32,14 +31,25 @@ class InputParameterIterator:
         
         self._lock = threading.Lock() # For thread-safe iteration
 
+        # Created after set_sample_count is called
+        self._iterator = None
+
+    def set_sample_count(self, n_samples: int):
+        """
+        Sets the number of samples to generate. This is used for strategies
+        that depend on the total number of samples, such as 'uniform_grid' and 'random'.
+
+        Args:
+            n_samples (int): Number of samples to generate.
+        """
+        self.n_samples = n_samples
+        # Reinitialize the iterator based on the picking strategy
         if self.picking_strategy == "step_grid":
             self._iterator = self.step_grid()
         elif self.picking_strategy == "uniform_grid" or self.picking_strategy == "grid":
             self._iterator = self.uniform_grid()
         elif self.picking_strategy == "random":
             self._iterator = self.random_sampling()
-        else:
-            raise ValueError(f"Unsupported picking strategy: {self.picking_strategy}. Supported strategies are 'grid'.")
 
     def __len__(self):
         """
