@@ -277,6 +277,9 @@ class ORCA:
             os.rename(model_save_path, archived_model_path)
             logger.info(f"Existing model found. Archived previous model to {archived_model_path}")
 
+
+        dataset.load_samples()  # Ensure input names are loaded
+
         # Export to ONNX with multiple inputs/outputs using ONNXWrapper
         torch.onnx.export(
             ONNXWrapper(trained_model, features=dataset.features, input_normalizer=dataset.input_normalizer, output_denormalizer=dataset.output_normalizer),

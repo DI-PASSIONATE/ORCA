@@ -114,14 +114,14 @@ class OutputMinMaxNormalizer(OutputNormalizer):
     """
     def process_samples(self, samples: list[tuple[np.ndarray, np.ndarray]]):
         output_mins, output_maxs = self.get_output_min_max(samples)
-        self.register_buffer("output_mins", torch.tensor(output_mins, dtype=torch.float32, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")))
-        self.register_buffer("output_maxs", torch.tensor(output_maxs, dtype=torch.float32, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")))
+        self.register_buffer("output_mins", output_mins)
+        self.register_buffer("output_maxs", output_maxs)
     
     def get_output_min_max(self, samples) -> tuple[list[float], list[float]]:
         """Calculate min and max of output parameters for normalization."""
-        stacked_samples = np.vstack(samples)
-        mins = np.min(stacked_samples, axis=0)
-        maxs = np.max(stacked_samples, axis=0)
+        stacked_samples = torch.vstack(samples)
+        mins = torch.min(stacked_samples, dim=0).values
+        maxs = torch.max(stacked_samples, dim=0).values
         print("OutputMinMaxNormalizer mins:", mins)
         print("OutputMinMaxNormalizer maxs:", maxs)
         return mins, maxs
@@ -138,13 +138,14 @@ class StandardNormalizer(OutputNormalizer):
     """
     def process_samples(self, samples: list[tuple[np.ndarray, np.ndarray]]):
         input_means, input_stds = self.get_output_means_stds(samples)
-        self.register_buffer("input_means", torch.tensor(input_means, dtype=torch.float32, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")))
-        self.register_buffer("input_stds", torch.tensor(input_stds, dtype=torch.float32, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")))
+        self.register_buffer("input_means", input_means)
+        self.register_buffer("input_stds", input_stds)
     
     def get_output_means_stds(self, samples) -> tuple[list[float], list[float]]:
         """Calculate means and standard deviations of output parameters for normalization."""
-        means = np.mean(samples, axis=0)
-        stds = np.std(samples, axis=0)
+        stacked_samples = torch.vstack(samples)
+        means = torch.mean(stacked_samples, dim=0)
+        stds = torch.std(stacked_samples, dim=0)
         print("StandardNormalizer means:", means)
         print("StandardNormalizer stds:", stds)
         return means, stds

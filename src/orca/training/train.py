@@ -38,8 +38,8 @@ def train_model(
     train_split = dataset.get_train_split()
     val_split = dataset.get_val_split()
 
-    train_split.load_samples()
-    val_split.load_samples()
+    train_split.load_samples_and_normalize()
+    val_split.load_samples_and_normalize()
 
     train_loader = DataLoader(train_split, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_split, batch_size=batch_size, shuffle=False)
@@ -139,7 +139,7 @@ def test_model(
     model.to(device)
 
     test_split = dataset.get_test_split()
-    test_split.load_samples()
+    test_split.load_samples_and_normalize()
 
     test_loader = DataLoader(test_split, batch_size=batch_size, shuffle=False)
 

@@ -1,26 +1,16 @@
 import skrf as rf
 import numpy as np
-from itertools import product
 import matplotlib.pyplot as plt
-import numpy as np
-import matplotlib.pyplot as plt
-import skrf as rf
-import numpy as np
-import matplotlib.pyplot as plt
-import skrf as rf
-import numpy as np
-import matplotlib.pyplot as plt
-import skrf as rf
 
-def plot_rfic_transformer_metrics(ntwk):
+def calculate_electrical_parameters(ntwk):
     # 1. Single-ended to Mixed-Mode Conversion
     mm_ntwk = ntwk.copy()
     if ntwk.nports >= 4:
         mm_ntwk.se2gmm(p=2)
-    
-    freq = ntwk.f / 1e9
+
+    freq_ghz = ntwk.f / 1e9
     omega = 2 * np.pi * ntwk.f
-    
+
     # Extract Differential Z-parameters for lumped metrics
     # Index 0 = Primary Diff (d1), Index 1 = Secondary Diff (d2)
     z_d11 = mm_ntwk.z[:, 0, 0]
@@ -28,10 +18,40 @@ def plot_rfic_transformer_metrics(ntwk):
     z_d12 = mm_ntwk.z[:, 0, 1]
 
     # Calculate Parameters
-    Lp, Ls = np.imag(z_d11)/omega * 1e9, np.imag(z_d22)/omega * 1e9
-    Rp, Rs = np.real(z_d11), np.real(z_d22)
-    Qp, Qs = np.imag(z_d11)/np.real(z_d11), np.imag(z_d22)/np.real(z_d22)
-    k = np.abs(np.imag(z_d12)) / np.sqrt(np.abs(np.imag(z_d11) * np.imag(z_d22)))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        Lp = np.imag(z_d11) / omega * 1e9
+        Ls = np.imag(z_d22) / omega * 1e9
+        Rp, Rs = np.real(z_d11), np.real(z_d22)
+        Qp = np.imag(z_d11) / np.real(z_d11)
+        Qs = np.imag(z_d22) / np.real(z_d22)
+        k = np.abs(np.imag(z_d12)) / np.sqrt(np.abs(np.imag(z_d11) * np.imag(z_d22)))
+
+    srf_idx = np.where(np.diff(np.sign(np.imag(z_d11))))[0]
+    srf_f = freq_ghz[srf_idx[0]] if len(srf_idx) > 0 else None
+
+    return {
+        "mm_ntwk": mm_ntwk,
+        "freq_ghz": freq_ghz,
+        "Lp": Lp,
+        "Ls": Ls,
+        "Rp": Rp,
+        "Rs": Rs,
+        "Qp": Qp,
+        "Qs": Qs,
+        "k": k,
+        "z_d11": z_d11,
+        "srf_f": srf_f,
+    }
+
+def plot_rfic_transformer_metrics(ntwk):
+    metrics = calculate_electrical_parameters(ntwk)
+    mm_ntwk = metrics["mm_ntwk"]
+    freq = metrics["freq_ghz"]
+    Lp, Ls = metrics["Lp"], metrics["Ls"]
+    Rp, Rs = metrics["Rp"], metrics["Rs"]
+    Qp, Qs = metrics["Qp"], metrics["Qs"]
+    k = metrics["k"]
+    z_d11 = metrics["z_d11"]
 
     # Setup Plot
     fig, axes = plt.subplots(3, 2, figsize=(14, 10))
@@ -74,9 +94,8 @@ def plot_rfic_transformer_metrics(ntwk):
     # Subplot 6: Reactance & SRF Identification
     axes[2, 1].plot(freq, np.imag(z_d11), label='Im(Zdd11)', color='brown')
     axes[2, 1].axhline(0, color='black', lw=1) # y=0 line to find zero-crossing
-    srf_idx = np.where(np.diff(np.sign(np.imag(z_d11))))[0] # Indices where Im(Z) crosses zero
-    if len(srf_idx) > 0: # If SRF found
-        srf_f = freq[srf_idx[0]]
+    srf_f = metrics["srf_f"]
+    if srf_f is not None:
         axes[2, 1].axvline(srf_f, color='red', linestyle=':', label=f'SRF: {srf_f:.2f} GHz')
     axes[2, 1].set_title("Primary Reactance & SRF", fontsize=14)
     axes[2, 1].set_ylabel("Im(Z) [Ω]")
@@ -121,6 +140,24 @@ def s_param_dict_to_network(s_param_dict: dict, frequencies: np.ndarray) -> tupl
             merged_output[f"S{i+1}{j+1}"] = S[:, i, j]
 
     return N, ntwk, merged_output
+
+def s_param_list_to_network(s_param_list: np.ndarray) -> tuple[int, list[rf.Network]]:
+    # Assume s_param_list shape is (batch_size, num_params)
+    num_params = s_param_list.shape[1]
+    N = int(np.sqrt(num_params // 2))  # number of ports
+    print(f"Number of ports inferred: {N}")
+    # Create a network for each sample in the batch
+    ntwk_list = []
+    for sample in s_param_list:
+        S = np.zeros((1, N, N), dtype=np.complex64)  # single frequency point
+        for i in range(N):
+            for j in range(N):
+                real = sample[2 * (i * N + j)]
+                imag = sample[2 * (i * N + j) + 1]
+                S[0, i, j] = real + 1j * imag
+        ntwk = rf.Network(frequency=[1e9], s=S, f_unit='GHz')  # dummy frequency
+        ntwk_list.append(ntwk)
+    return N, ntwk_list
 
 def single_ended_to_mixed_mode(ntwk: rf.Network) -> rf.Network:
     """
