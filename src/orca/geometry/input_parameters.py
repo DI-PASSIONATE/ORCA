@@ -1,5 +1,6 @@
 import threading
 from itertools import product
+from typing import Any
 import numpy as np
 
 class InputParameterIterator:
@@ -61,7 +62,7 @@ class InputParameterIterator:
         self.n_geometries_created = 0
         return self
     
-    def __next__(self) -> dict[str, any]:
+    def __next__(self) -> dict[str, Any]:
         with self._lock: # Ensure thread-safe access
             self.n_geometries_created += 1 # May be used for logging or tracking
             try:

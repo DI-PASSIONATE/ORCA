@@ -60,7 +60,7 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
 
         print(f"Loaded {len(self.samples)} samples for split '{self.split}' from {self.data_dir}")
 
-    def load_single_sample(self, sparam_path: str, geometry_params: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
+    def load_single_sample(self, sparam_path: str, geometry_params: np.ndarray) -> list[tuple[torch.Tensor, torch.Tensor]]:
         """Load S-parameter data from a Touchstone file."""
         samples = []
         

@@ -125,7 +125,7 @@ class InferenceEngine:
         """Get list of output names."""
         return list(self.output_specs.keys())
     
-    def infer(self, inputs: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    def infer(self, inputs: Dict[str, np.ndarray]) -> Dict[str, Any]:
         """
         Run inference on input data.
         
@@ -160,21 +160,6 @@ class InferenceEngine:
             }
         except Exception as e:
             raise RuntimeError(f"Inference failed: {str(e)}")
-    
-    def infer_batch(
-        self,
-        input_batch: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
-        """
-        Run inference on batch input data.
-        
-        Args:
-            input_batch: Dictionary mapping input names to batched numpy arrays
-        
-        Returns:
-            Dictionary mapping output names to result arrays
-        """
-        return self.infer(input_batch)
     
     def get_model_info(self) -> Dict[str, Any]:
         """Get comprehensive information about the loaded model."""

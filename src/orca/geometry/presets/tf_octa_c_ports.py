@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 import numpy as np
 import os
 import torch.nn as nn
@@ -54,7 +55,7 @@ class TransformerOcta(BaseGeometry):
         activation_layer=nn.SiLU
     )
 
-    def create_gds_file(self, name:str, params: dict[str, any]) -> str:
+    def create_gds_file(self, name:str, params: dict[str, Any]) -> str:
         output_path = os.path.join(
             os.getcwd(),
             "geometries",
