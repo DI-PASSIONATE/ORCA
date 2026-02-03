@@ -2,6 +2,7 @@ import torch
 from orca.training.feature_transform import FeatureTransformPipeline
 from orca.training.normalize import Normalizer
 
+
 class ONNXWrapper(torch.nn.Module):
     """
     A wrapper for ONNX models to adapt input/output formats.
@@ -16,7 +17,13 @@ class ONNXWrapper(torch.nn.Module):
         A torch.nn.Module that can be passed to torch.onnx.export.
     """
 
-    def __init__(self, model, features: FeatureTransformPipeline | None, input_normalizer: Normalizer, output_denormalizer: Normalizer):
+    def __init__(
+        self,
+        model,
+        features: FeatureTransformPipeline | None,
+        input_normalizer: Normalizer,
+        output_denormalizer: Normalizer,
+    ):
         super().__init__()
         self.model = model
         self.features = features

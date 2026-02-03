@@ -5,11 +5,13 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 import tqdm
 
+
 def complex_mse(pred, target):
     N = pred.shape[1] // 2
     pred = pred.view(-1, N, 2)
     target = target.view(-1, N, 2)
     return torch.mean((pred - target) ** 2)
+
 
 def mse_plus_log_cosh_loss(pred, target):
     N = pred.shape[1] // 2
@@ -19,7 +21,8 @@ def mse_plus_log_cosh_loss(pred, target):
     target = target.view(-1, N, 2)
     mse = torch.mean((pred - target) ** 2)
 
-    return 2*lcsh + mse
+    return 2 * lcsh + mse
+
 
 def train_model(
     train_dataset,
@@ -29,9 +32,9 @@ def train_model(
     batch_size=128,
     learning_rate=1e-3,
     patience=20,
-    criterion = nn.MSELoss(),
-    optimizer = AdamW,
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+    criterion=nn.MSELoss(),
+    optimizer=AdamW,
+    device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     progress_callback=None,
 ):
     model.to(device)
@@ -40,7 +43,7 @@ def train_model(
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     optimizer = optimizer(model.parameters(), lr=learning_rate)
-    
+
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, factor=0.5, patience=10
     )
@@ -75,11 +78,7 @@ def train_model(
                 f"Train: {train_loss:.4f} | Val: {val_loss:.4f}",
             )
 
-        print(
-            f"Epoch {epoch+1:4d} | "
-            f"Train: {train_loss:.4f} | "
-            f"Val: {val_loss:.4f}"
-        )
+        print(f"Epoch {epoch + 1:4d} | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
 
         if patience_counter >= patience:
             print("Early stopping triggered")
@@ -89,6 +88,7 @@ def train_model(
         model.load_state_dict(best_state)
 
     return model
+
 
 def _train(model, criterion, optimizer, device, train_loader):
     model.train()
@@ -109,6 +109,7 @@ def _train(model, criterion, optimizer, device, train_loader):
     train_loss /= len(train_loader)
     return train_loss
 
+
 def _val(model, criterion, device, val_loader, scheduler):
     model.eval()
     val_loss = 0.0
@@ -124,6 +125,7 @@ def _val(model, criterion, device, val_loader, scheduler):
 
     scheduler.step(val_loss)
     return val_loss
+
 
 def test_model(
     dataset,

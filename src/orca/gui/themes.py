@@ -22,7 +22,7 @@ class OrcaTheme(ABC):
 class SageTheme(OrcaTheme):
     def get_palette(self) -> QPalette:
         palette = QPalette()
-        
+
         # Sage/Navy palette
         # Very light sage: 235,244,221 | Sage: 144,171,139 | Deep sage: 90,120,99 | Navy: 59,73,83
         palette.setColor(QPalette.ColorRole.Window, QColor(59, 73, 83))
@@ -121,7 +121,6 @@ class SageTheme(OrcaTheme):
         """
 
 
-
 class LightTheme(OrcaTheme):
     """Light theme - Clean bright color scheme."""
 
@@ -142,7 +141,6 @@ class LightTheme(OrcaTheme):
         return palette
 
     def get_stylesheet(self) -> str:
-    
         return """QGroupBox {
                 border: 2px solid #2196F3;
                 border-radius: 5px;

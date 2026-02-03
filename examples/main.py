@@ -2,7 +2,12 @@ from orca import ORCA
 import skrf as rf
 import numpy as np
 import matplotlib.pyplot as plt
-from orca.utils.postprocessing import *
+
+from orca.utils.postprocessing import (
+    plot_rfic_transformer_metrics,
+    single_ended_to_mixed_mode,
+)
+from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 import orca
 
 PLOT = False
@@ -17,31 +22,34 @@ PLOT = False
 
 # Use predefined geometry from examples
 np.random.seed(11)
-from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 geometry = TransformerOcta()
 
-orca_instance = ORCA([
-    #orca.GDSGenerator(num_samples=2),
-    #orca.GDSConverter(),
-    #orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
-    orca.ModelTrainer(),
-    orca.OnnxExporter(),
-    orca.ModelTester()
-])
+orca_instance = ORCA(
+    [
+        # orca.GDSGenerator(num_samples=2),
+        # orca.GDSConverter(),
+        # orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
+        orca.ModelTrainer(),
+        orca.OnnxExporter(),
+        orca.ModelTester(),
+    ]
+)
 
 orca_instance.run(geometry=geometry, cpu_cores=16)
 
 
 if PLOT:
     # # Load and plot the results
-    ntwk = rf.Network("/home/david/Documents/git/ORCA/results/tf_octa_c_ports/tf_octa_c_ports_110_dc_deembedded.s6p")
+    ntwk = rf.Network(
+        "/home/david/Documents/git/ORCA/results/tf_octa_c_ports/tf_octa_c_ports_110_dc_deembedded.s6p"
+    )
     # Plot S-parameters
     plot_rfic_transformer_metrics(ntwk)
-    #ntwk.plot_s_db()
-    #N, ntwk = single_ended_to_mixed_mode(ntwk)
+    # ntwk.plot_s_db()
+    # N, ntwk = single_ended_to_mixed_mode(ntwk)
     print("Ground truth network S-parameters at position 10:")
 
     ntwk2 = rf.Network("/home/david/Documents/git/ORCA/tf_octa_c_ports.s6p")
-    #N, ntwk2 = single_ended_to_mixed_mode(ntwk2)
+    # N, ntwk2 = single_ended_to_mixed_mode(ntwk2)
     plot_rfic_transformer_metrics(ntwk2)
     plt.show()

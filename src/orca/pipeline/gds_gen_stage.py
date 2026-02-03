@@ -7,32 +7,44 @@ from orca.logger import logger
 import tqdm
 import os
 
+
 class GDSGenerator(PipelineStage):
     """
     Pipeline stage for generating GDS files from trained models.
     """
+
     def __init__(self, num_samples: int = 1000):
         super().__init__(name="GDS Generator", index=0)
         self.num_samples = num_samples
 
-    def run(self, context: Dict[str, Any], progress_callback: Optional[Callable[[float, str], None]] = None) -> Dict[str, Any]:
+    def run(
+        self,
+        context: Dict[str, Any],
+        progress_callback: Optional[Callable[[float, str], None]] = None,
+    ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
         base_dir: str = context.get("base_dir", os.getcwd())
         output_dir = os.path.join(base_dir, "geometries")
         gds_csv = os.path.join(output_dir, f"{geometry.name}.csv")
-        logger.info(f"Starting GDS generation for {self.num_samples} samples using {cpu_cores} CPU cores.")
-        
+        logger.info(
+            f"Starting GDS generation for {self.num_samples} samples using {cpu_cores} CPU cores."
+        )
+
         try:
             from ihp import PDK
+
             PDK.activate()
         except ImportError:
-            logger.error("IHP PDK not found. Please install the IHP PDK to use GDS conversion.")
+            logger.error(
+                "IHP PDK not found. Please install the IHP PDK to use GDS conversion."
+            )
             return context
 
         # Create output directory if it doesn't exist
         if os.path.exists(output_dir):
             import shutil
+
             shutil.rmtree(output_dir)
 
         os.makedirs(output_dir)
@@ -46,20 +58,23 @@ class GDSGenerator(PipelineStage):
             for i, input_params in enumerate(geometry.input_iterator):
                 if i >= self.num_samples:
                     break
-                
+
                 # Pass geometry class and name separately to avoid pickling the whole instance (with locks)
                 future = executor.submit(
                     GDSGenerator._generate_gds_file,
                     geometry.create_gds_file,
                     f"{geometry.name}_{i}.gds",
                     output_dir,
-                    input_params
+                    input_params,
                 )
                 futures.append(future)
 
-
             # Print progress bar using tqdm and call progress_callback
-            for i, future in enumerate(tqdm.tqdm(as_completed(futures), total=len(futures), desc="GDS Generation")):
+            for i, future in enumerate(
+                tqdm.tqdm(
+                    as_completed(futures), total=len(futures), desc="GDS Generation"
+                )
+            ):
                 try:
                     gds_path, name, params = future.result()
 
@@ -70,14 +85,18 @@ class GDSGenerator(PipelineStage):
                 finally:
                     if progress_callback:
                         progress = (i + 1) / len(futures)
-                        progress_callback(progress, f"GDS Generation Progress: {i + 1}/{len(futures)}")
+                        progress_callback(
+                            progress, f"GDS Generation Progress: {i + 1}/{len(futures)}"
+                        )
 
         logger.info("GDS generation completed.")
         context["gds_csv"] = gds_csv
         return context
-    
+
     @staticmethod
-    def _generate_gds_file(gds_method: Callable, name: str, output_dir: str, params: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    def _generate_gds_file(
+        gds_method: Callable, name: str, output_dir: str, params: dict[str, Any]
+    ) -> tuple[str, str, dict[str, Any]]:
         """
         Static method to generate a GDS file given a geometry class, name, and parameters.
         This is used for multiprocessing to avoid pickling issues with instance methods.
@@ -94,7 +113,7 @@ class GDSGenerator(PipelineStage):
         output_path = os.path.join(output_dir, name)
         path = gds_method(name, output_path, params)
         return path, name, params
-    
+
     def _save_csv(self, csv_path, name: str, params: dict[str, Any]):
         """
         Saves the input parameters to a CSV file.
@@ -108,4 +127,4 @@ class GDSGenerator(PipelineStage):
         if not os.path.exists(csv_path):
             df.to_csv(csv_path, header=True, index=False)
         else:
-            df.to_csv(csv_path, mode='a', header=False, index=False)
+            df.to_csv(csv_path, mode="a", header=False, index=False)

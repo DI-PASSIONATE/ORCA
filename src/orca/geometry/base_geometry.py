@@ -9,6 +9,7 @@ from orca.training.feature_transform import FeatureTransformPipeline
 import numpy as np
 import torch.nn as nn
 
+
 @dataclass
 class BaseGeometry(ABC):
     name: str
@@ -17,13 +18,13 @@ class BaseGeometry(ABC):
     dataset: BaseDataset
     model: nn.Module
     input_parameter_iterator: InputParameterIterator
-    features: FeatureTransformPipeline|None = None
+    features: FeatureTransformPipeline | None = None
 
     @property
     def input_iterator(self) -> InputParameterIterator | None:
         # Return the input parameter iterator, ensuring it is initialized with iter()
         return iter(self.input_parameter_iterator)
-        
+
     @staticmethod
     @abstractmethod
     def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:
@@ -36,7 +37,9 @@ class BaseGeometry(ABC):
             str: Path to the created GDS file.
         """
 
-    def postprocess_outputs(self, output: dict[str, list], frequency_points: list|np.ndarray) -> dict[str, list]:
+    def postprocess_outputs(
+        self, output: dict[str, list], frequency_points: list | np.ndarray
+    ) -> dict[str, list]:
         """
         Postprocess the outputs of the ONNX model after inference.
         This method can be overridden by subclasses to apply any necessary transformations
