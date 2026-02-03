@@ -28,14 +28,25 @@ from orca import ORCA
 from orca.geometry.examples.transformer.tf_octa_c_ports import TransformerOcta
 geometry = TransformerOcta()
 
-geometry = TransformerOcta(n_samples=100, name="tf_octa_c_ports_testing")
+# Setup the pipeline stages
+orca_instance = ORCA(
+    [
+        orca.GDSGenerator(num_samples=1000),
+        orca.GDSConverter(),
+        orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
+        orca.ModelTrainer(),
+        orca.OnnxExporter(),
+        orca.ModelTester(),
+    ]
+)
 
-orca_instance = ORCA(geometry)
-
-orca_instance.run(cpu_cores=16, epochs=15, stages=["gds", "convert", "palace", "train", "evaluate"], palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
+# Run the ORCA pipeline
+orca_instance.run(geometry=geometry, cpu_cores=16)
 ```
 
-This will create 3 differently parameterized instances of the `tf_octa_c_ports` transformer geometry, run electromagnetic simulations using Palace, and store the results in Touchstone format. You can specify which stages to run (simulation, training, evaluation) using the `stages` parameter.
+This will create 1000 differently parameterized instances of the `tf_octa_c_ports` transformer geometry, run electromagnetic simulations using Palace, store the results in Touchstone format, train a machine learning model, export it to ONNX format, and finally test the model.
+If you only want to run specific stages of the pipeline, you can modify the list of stages passed to the `ORCA` constructor.
+Note that some stages may require additional parameters or depend on the outputs of previous stages.
 
 ### 3. OpenStack VM REST API
 OpenStack is an open-source cloud computing platform (like AWS), perfect for running large-scale simulations. We provide an OpenStack VM image and an API with the corresponding client CLI in our [ORCA-OpenStack repository](https://github.com/DavidL-11/ORCA-OpenStack).
