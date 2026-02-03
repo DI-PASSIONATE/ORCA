@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 
 from orca.utils.postprocessing import (
     plot_rfic_transformer_metrics,
-    single_ended_to_mixed_mode,
 )
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 import orca

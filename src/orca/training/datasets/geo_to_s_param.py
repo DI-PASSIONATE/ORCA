@@ -5,8 +5,6 @@ import numpy as np
 import torch
 
 from orca.training.datasets.base_dataset import BaseDataset
-from orca.training.normalize import StandardNormalizer
-from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 
 

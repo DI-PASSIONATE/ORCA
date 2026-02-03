@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 from orca.geometry.input_parameters import InputParameterIterator
-from orca.logger import logger
 from orca.training.datasets.base_dataset import BaseDataset
 from orca.training.feature_transform import FeatureTransformPipeline
 import numpy as np

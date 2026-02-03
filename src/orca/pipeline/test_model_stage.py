@@ -1,12 +1,9 @@
 from typing import Optional, Any, Dict, Callable
 import os
-import torch
 
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
-from orca.training.onnx_wrapper import ONNXWrapper
-from orca.training.train import test_model
 
 
 class ModelTester(PipelineStage):
@@ -35,6 +32,6 @@ class ModelTester(PipelineStage):
             )
             return context
 
-        logger.info(f"Testing not implemented yet.")
+        logger.info("Testing not implemented yet.")
 
         return context

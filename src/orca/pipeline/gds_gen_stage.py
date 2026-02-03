@@ -1,6 +1,6 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import pandas as pd
-from typing import Any, Dict, Callable, Optional, Type
+from typing import Any, Dict, Callable, Optional
 from orca.geometry.base_geometry import BaseGeometry
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger

@@ -3,7 +3,6 @@ import subprocess
 import json
 
 from orca.logger import logger
-from orca.geometry.base_geometry import BaseGeometry
 from orca.simulation.combine_snp_results import convert_to_touchstone
 
 

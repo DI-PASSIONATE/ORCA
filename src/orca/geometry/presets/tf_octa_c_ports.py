@@ -10,14 +10,11 @@ from orca.geometry.cells.transformer import tf_octa_c
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.training.datasets.base_dataset import BaseDataset
 from orca.training.normalize import (
-    MinMaxNormalizer,
     StandardNormalizer,
     OutputMinMaxNormalizer,
 )
 from orca.utils.postprocessing import *
 
-from orca.training.models.mlp import OrcaMLP
-from orca.training.normalize import MinMaxNormalizer
 from orca.training.feature_transform import (
     FeatureTransformPipeline,
     RatioFeature,
