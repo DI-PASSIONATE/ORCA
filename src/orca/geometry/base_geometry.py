@@ -11,7 +11,6 @@ import torch.nn as nn
 
 @dataclass
 class BaseGeometry(ABC):
-    n_samples: int
     name: str
     stackup_xml: str
     simconfig_filename: str
@@ -19,12 +18,6 @@ class BaseGeometry(ABC):
     model: nn.Module
     input_parameter_iterator: InputParameterIterator
     features: FeatureTransformPipeline|None = None
-
-    def __post_init__(self):
-        # Ensure the input parameter iterator knows the number of samples
-        # This is done here instead of passing it to the constructor of InputParameterIterator
-        # because dataclass fields are initialized statically.
-        self.input_parameter_iterator.set_sample_count(self.n_samples)
 
     @property
     def input_iterator(self) -> InputParameterIterator | None:

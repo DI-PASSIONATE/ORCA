@@ -1,4 +1,5 @@
 import os
+import multiprocessing
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
@@ -12,7 +13,7 @@ class ORCA:
         # Sort stages by their index to ensure correct execution order
         self.stages.sort(key=lambda stage: stage.index)
 
-    def run(self, geometry: BaseGeometry, cpu_cores: int = 16, progress_callback=None):
+    def run(self, geometry: BaseGeometry, cpu_cores: int = multiprocessing.cpu_count(), progress_callback=None):
         """
         Runs the ORCA pipeline with the specified geometry and CPU cores.
 

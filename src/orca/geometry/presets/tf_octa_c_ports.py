@@ -26,7 +26,6 @@ class TransformerOcta(BaseGeometry):
     stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml")
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
     params = None
-    n_samples: int = 1000
     input_parameter_iterator: InputParameterIterator = InputParameterIterator(
         picking_strategy="random",
         frequency=[1e8, 200e8],  # 1 GHz to 200 GHz

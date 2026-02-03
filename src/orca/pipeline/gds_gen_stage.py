@@ -37,6 +37,9 @@ class GDSGenerator(PipelineStage):
         if os.path.exists(gds_csv):
             os.remove(gds_csv)
 
+        # Tell the input parameter iterator the number of samples to generate
+        geometry.input_parameter_iterator.set_sample_count(self.num_samples)
+
         futures = []
         with ProcessPoolExecutor(max_workers=cpu_cores) as executor:
             # Create cpu_cores processes to generate GDS files in parallel

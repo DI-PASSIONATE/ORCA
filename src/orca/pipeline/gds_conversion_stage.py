@@ -20,6 +20,7 @@ class GDSConverter(PipelineStage):
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
         gds_csv = context.get("gds_csv", "")
+        palace_csv = os.path.join(context.get("base_dir", ""), "palace_models", f"{geometry.name}.csv")
 
         if not gds_csv:
             logger.error("No GDS path provided in context for conversion.")
@@ -51,6 +52,7 @@ class GDSConverter(PipelineStage):
                 future = executor.submit(
                     create_palace_model_from_gds,
                     geometry_name=name,
+                    params=params,
                     output_dir=context.get("base_dir", ""),
                     gds_filename=gds_path,
                     stackup_xml=geometry.stackup_xml,
@@ -63,7 +65,9 @@ class GDSConverter(PipelineStage):
             # Print progress bar using tqdm
             for i, future in enumerate(tqdm.tqdm(as_completed(futures), total=len(futures), desc="GDS Conversion Progress")):
                 try:
-                    config_name, sim_path, data_dir = future.result()
+                    params, config_name, sim_path, data_dir = future.result()
+                    # Save input parameters to CSV
+                    self._save_csv(gds_csv, name, params)
                 except Exception as e:
                     logger.error(f"GDS conversion failed for file index {i} with error: {e}")
                 finally: # and call progress_callback even on failure
@@ -73,3 +77,19 @@ class GDSConverter(PipelineStage):
 
             logger.info("GDS conversion completed.")
         return context
+    
+
+    def _save_csv(self, csv_path, name: str, params: dict[str, Any], data_dir: str, sim_path: str):
+        """
+        Saves the input parameters to a CSV file.
+
+        Args:
+            csv_path (str): Path to the CSV file.
+            name (str): Name of the geometry instance.
+            params (dict[str, Any]): Input parameters to save.
+        """
+        df = pd.DataFrame([{"name": name} | params])
+        if not os.path.exists(csv_path):
+            df.to_csv(csv_path, header=True, index=False)
+        else:
+            df.to_csv(csv_path, mode='a', header=False, index=False)

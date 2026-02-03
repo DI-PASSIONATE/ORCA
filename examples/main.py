@@ -18,11 +18,12 @@ PLOT = False
 # Use predefined geometry from examples
 np.random.seed(11)
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
-geometry = TransformerOcta(n_samples=5000, name="tf_octa_c_ports")
+geometry = TransformerOcta()
 
 orca_instance = ORCA([
-    orca.GDSGenerator(),
-    orca.GDSConverter()
+    orca.GDSGenerator(num_samples=100),
+    orca.GDSConverter(),
+    orca.PalaceSimulator()
 ])
 
 orca_instance.run(geometry=geometry, cpu_cores=16)
