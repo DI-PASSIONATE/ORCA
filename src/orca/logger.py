@@ -14,4 +14,4 @@ fmt = colorlog.ColoredFormatter(
 stdout.setFormatter(fmt)
 logger.addHandler(stdout)
 
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)

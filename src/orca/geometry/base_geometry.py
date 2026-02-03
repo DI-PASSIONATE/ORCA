@@ -41,7 +41,6 @@ class BaseGeometry(ABC):
 
         Returns:
             str: Path to the created GDS file.
-            params: dict[str, Any]: Dictionary of input parameters used to create the GDS file. Mapping is the same as what get_input_parameters returns.
         """
 
     def postprocess_outputs(self, output: dict[str, list], frequency_points: list|np.ndarray) -> dict[str, list]:

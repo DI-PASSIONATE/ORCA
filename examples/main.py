@@ -25,10 +25,7 @@ orca_instance = ORCA([
     orca.GDSConverter()
 ])
 
-def progress_callback(stage_name: str, percentage: float, message: str):
-    print(f"[{stage_name}] {percentage*100:.2f}% - {message}")
-
-orca_instance.run(geometry=geometry, cpu_cores=16, progress_callback=progress_callback)
+orca_instance.run(geometry=geometry, cpu_cores=16)
 
 
 if PLOT:
