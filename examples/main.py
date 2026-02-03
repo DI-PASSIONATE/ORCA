@@ -21,9 +21,9 @@ from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 geometry = TransformerOcta()
 
 orca_instance = ORCA([
-    orca.GDSGenerator(num_samples=10),
+    orca.GDSGenerator(num_samples=2),
     orca.GDSConverter(),
-    orca.PalaceSimulator()
+    orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
 ])
 
 orca_instance.run(geometry=geometry, cpu_cores=16)

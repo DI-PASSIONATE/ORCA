@@ -19,22 +19,18 @@ class GDSConverter(PipelineStage):
     def run(self, context: Dict[str, Any], progress_callback: Optional[Callable[[float, str], None]] = None) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
-        gds_csv = context.get("gds_csv", "")
-        palace_csv = os.path.join(context.get("base_dir", ""), "palace_model", f"{geometry.name}.csv")
+        base_dir: str = context.get("base_dir", os.getcwd())
+        gds_csv = context.get("gds_csv", base_dir + f"/geometries/{geometry.name}.csv")
+        palace_csv = os.path.join(base_dir, "palace_sims", f"{geometry.name}.csv")
 
-        if not gds_csv:
-            logger.error("No GDS path provided in context for conversion.")
+        if not os.path.exists(os.path.dirname(palace_csv)):
+            os.makedirs(os.path.dirname(palace_csv))
+        if not os.path.exists(gds_csv):
+            logger.error("No GDS CSV file found for conversion.")
             return context
         else:
             gds_data = pd.read_csv(gds_csv)
             logger.info(f"Starting GDS conversion for {len(gds_data)} files using {cpu_cores} CPU cores.")
-        
-        try:
-            from ihp import PDK
-            PDK.activate()
-        except ImportError:
-            logger.error("IHP PDK not found. Please install the IHP PDK to use GDS conversion.")
-            return context
         
         with ProcessPoolExecutor(max_workers=cpu_cores) as executor:
             futures = []
@@ -53,7 +49,7 @@ class GDSConverter(PipelineStage):
                     create_palace_model_from_gds,
                     geometry_name=name,
                     params=params,
-                    output_dir=context.get("base_dir", ""),
+                    output_dir=base_dir,
                     gds_filename=gds_path,
                     stackup_xml=geometry.stackup_xml,
                     simconfig_filename=geometry.simconfig_filename,
@@ -63,11 +59,11 @@ class GDSConverter(PipelineStage):
 
             # Collect finished results
             # Print progress bar using tqdm
-            for i, future in enumerate(tqdm.tqdm(as_completed(futures), total=len(futures), desc="GDS Conversion Progress")):
+            for i, future in enumerate(tqdm.tqdm(as_completed(futures), total=len(futures), desc="GDS Conversion")):
                 try:
                     params, config_name, sim_path, data_dir = future.result()
                     # Save input parameters to CSV
-                    self._save_csv(gds_csv, name, params, data_dir, sim_path)
+                    self._save_csv(palace_csv, params, data_dir, sim_path, config_name)
                 except Exception as e:
                     logger.error(f"GDS conversion failed for file index {i} with error: {e}")
                 finally: # and call progress_callback even on failure
@@ -76,10 +72,12 @@ class GDSConverter(PipelineStage):
                         progress_callback(percentage, f"Converted {i + 1} of {len(futures)} GDS files.")
 
             logger.info("GDS conversion completed.")
+
+        context["palace_csv"] = palace_csv
         return context
     
 
-    def _save_csv(self, csv_path, name: str, params: dict[str, Any], data_dir: str, sim_path: str):
+    def _save_csv(self, csv_path, params: dict[str, Any], data_dir: str, sim_path: str, config_name: str):
         """
         Saves the input parameters to a CSV file.
 
@@ -90,7 +88,7 @@ class GDSConverter(PipelineStage):
             data_dir (str): Directory where data is stored.
             sim_path (str): Path to the simulation file.
         """
-        df = pd.DataFrame([{"name": name} | params])
+        df = pd.DataFrame([params | {"data_dir": data_dir, "sim_path": sim_path, "config_name": config_name}])
         if not os.path.exists(csv_path):
             df.to_csv(csv_path, header=True, index=False)
         else:

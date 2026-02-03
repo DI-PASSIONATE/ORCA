@@ -26,8 +26,19 @@ class ORCA:
         context = {
             "geometry": geometry,
             "cpu_cores": cpu_cores,
-            "base_dir": os.path.join(os.getcwd(), "output"),
+            "base_dir": os.path.join(os.getcwd(), "output", geometry.name)
         }
+
+        if os.path.exists(context["base_dir"]):
+            # Ask user to confirm overwriting existing output directory
+            response = input(f"Output directory {context['base_dir']} already exists. Overwrite? (y/n): ")
+            if response.lower() != 'y':
+                logger.info("Aborting pipeline run.")
+                return
+            else:
+                # Clear the existing directory
+                import shutil
+                shutil.rmtree(context["base_dir"])
 
         for stage in self.stages:
             def stage_callback(percentage: float, message: str):

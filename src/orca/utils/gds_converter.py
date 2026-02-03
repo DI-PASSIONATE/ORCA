@@ -34,10 +34,10 @@ def create_palace_model_from_gds(
             null_file = stack.enter_context(open(os.devnull, "w"))
             stack.enter_context(redirect_stdout(null_file))
 
-        # Model basename is taken from geometry name
-        model_basename = geometry_name
+        model_basename = utilities.get_basename(gds_filename)
+
         # set and create directory for simulation output
-        sim_path = utilities.create_sim_path(output_dir,model_basename)
+        sim_path = utilities.create_sim_path(script_path=output_dir, model_basename=model_basename, dirname="palace_sims")
 
         # Read the simconfig file
         simconfig = read_simconfig(simconfig_filename)

@@ -63,7 +63,7 @@ def parse_elmer_results(found_filename, freq, S_dB, S_arg):
 
 
     if re_s11_column+num_ports**2 != im_s11_column:
-        print('Incorrect number of values in data file, does not match port count') 
+        logger.debug('Incorrect number of values in data file, does not match port count') 
         exit(1)
 
 
@@ -157,7 +157,7 @@ def parse_palace_csv (input_filename, freq, S_dB, S_arg):
                         b = int(splitted [1])
                         num_ports = max(num_ports,a,b)
 
-                print('Number of ports: ', num_ports)
+                logger.debug('Number of ports: ', num_ports)
 
             else:
                 # process data line
@@ -204,9 +204,9 @@ def traverse_directories(path, level=0):
                 found_datafiles.append(item_path)
 
     except PermissionError:
-        print(item +  "[Permission Denied]")
+        logger.debug(item +  "[Permission Denied]")
     except FileNotFoundError:
-        print(item +  "[Not Found]")
+        logger.debug(item +  "[Not Found]")
     return found_datafiles
 
 # ----------------------
@@ -220,20 +220,17 @@ def extrapolate_to_DC (snp_filename):
     # check if we have point below 1 GHz, otherwise exit
     if nw.frequency.npoints > 20:
         if nw.frequency.start <= 1e9:
-            if True: # nw.frequency.npoints > 50:
-                # extrapolate to DC
-                extrapolated = nw.extrapolate_to_dc(points=None, dc_sparam=None,  kind='cubic', coords='polar')
-                filename, file_extension = os.path.splitext(snp_filename)
-                out_filename = filename + '_dc' # without extension
-                extrapolated.write_touchstone(out_filename, skrf_comment='DC point added by extrapolation', form='db', write_noise=True)
-                returnval = out_filename
-                print('Created file with DC extrapolation: ', out_filename,'\n')
-            else:
-                print('Not enough frequency points, skipping DC extrapolation')    
+            # extrapolate to DC
+            extrapolated = nw.extrapolate_to_dc(points=None, dc_sparam=None,  kind='cubic', coords='polar')
+            filename, file_extension = os.path.splitext(snp_filename)
+            out_filename = filename + '_dc' # without extension
+            extrapolated.write_touchstone(out_filename, skrf_comment='DC point added by extrapolation', form='db', write_noise=True)
+            returnval = out_filename
+            logger.debug('Created file with DC extrapolation: ', out_filename,'\n')
         else:
-            print('No data at low frequency, skipping DC extrapolation')    
+            logger.debug('No data at low frequency, skipping DC extrapolation')    
     else:
-        print('Skipping DC extrapolation, not enough frequency points')    
+        logger.debug('Skipping DC extrapolation, not enough frequency points')    
     # return empty string or filename of DC extrapolated data
     return returnval
 
@@ -252,7 +249,7 @@ def flat_strip_inductance(length, width, thickness, unit):
 
 def port_deembedding (snp_filename, port_info_available, port_info_data):
     if port_info_available:
-        print('Port de-embedding based on port geometry data')
+        logger.debug('Port de-embedding based on port geometry data')
         unit = port_info_data.get("unit", 1e-6) # default dimension is micron 
 
         # calculate parasitic port inductance for all ports
@@ -281,7 +278,7 @@ def port_deembedding (snp_filename, port_info_available, port_info_data):
         media = rf.media.DefinedGammaZ0(frequency=freq, z0=50)
 
         for n,L in enumerate(L_values):
-            print(f'Cascading L= {L*1e12:.2f} pH at port {n+1}')
+            logger.debug(f'Cascading L= {L*1e12:.2f} pH at port {n+1}')
             # series inductor
             inductor = media.inductor(L=L)
             # cascade with the main network 
@@ -293,9 +290,9 @@ def port_deembedding (snp_filename, port_info_available, port_info_data):
         filename, file_extension = os.path.splitext(snp_filename)
         out_filename = filename + '_deembedded' # without extension
         ntwk.write_touchstone(out_filename, skrf_comment='De-embedded by adding negative series L at ports', form='db', write_noise=True)
-        print('Created file with de-embedding (cascaded negative port L): ', out_filename,'\n')
+        logger.debug('Created file with de-embedding (cascaded negative port L): ', out_filename,'\n')
     else:
-        print('Skipping port de-embedding, not port geometry information available')    
+        logger.debug('Skipping port de-embedding, not port geometry information available')    
 
 
 def convert_to_touchstone(workdir, output_dir):
@@ -303,7 +300,7 @@ def convert_to_touchstone(workdir, output_dir):
 
     # evaluate the found data files
     for found_filename in found_datafiles:
-        # print(str(f))
+        # logger.debug(str(f))
 
         # Before we evaluate S-parameters, also check if we have a file port_information.json
         port_info_available = False
@@ -321,7 +318,7 @@ def convert_to_touchstone(workdir, output_dir):
 
         # If we found the port file one or two levels above
         if os.path.isfile(port_info_filename):
-            print(f"Found extra file with port information: {port_info_filename}")
+            logger.debug(f"Found extra file with port information: {port_info_filename}")
 
             # Load the JSON data
             with open(port_info_filename, "r") as f:
@@ -329,7 +326,7 @@ def convert_to_touchstone(workdir, output_dir):
 
             # Extract all Z0 values
             Z0_values = [port["Z0"] for port in port_info_data.get("ports", []) if "Z0" in port]
-            print("Port Z0 values found:", Z0_values)
+            logger.debug("Port Z0 values found:", Z0_values)
 
             Z0_string = str(Z0_values[0])
             for Z in Z0_values:
@@ -338,7 +335,7 @@ def convert_to_touchstone(workdir, output_dir):
             # If string is filled, we have a Z0 parameter for Touchstone header line. 
             # For mixed port impedance, we have multiple values there
             port_info_available = True
-            print("Port impedance for Touchstone header: ", Z0_string)
+            logger.debug("Port impedance for Touchstone header: ", Z0_string)
 
             # We might also get the model basename from the port information file. 
             # This can be useful for Elmer files where the output file and directory 
@@ -364,7 +361,7 @@ def convert_to_touchstone(workdir, output_dir):
             # Elmer
             num_ports, freq_unit = parse_elmer_results(found_filename, freq, S_dB, S_arg)
         else:
-            print('Invalid file, exit')    
+            logger.debug('Invalid file, exit')    
             exit(1)
 
         data_lines = []
@@ -431,7 +428,7 @@ def convert_to_touchstone(workdir, output_dir):
             output_file.write(line + "\n")
 
         output_file.close() 
-        print('Created combined S-parameter file for ', num_ports, 'ports, filename: ', output_filename)
+        logger.debug('Created combined S-parameter file for ', num_ports, 'ports, filename: ', output_filename)
 
         if not port_info_available:
             logger.warning('NOTE: Port impedance not listed in Palace file, assuming 50 Ohm!')

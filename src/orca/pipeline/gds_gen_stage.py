@@ -19,7 +19,7 @@ class GDSGenerator(PipelineStage):
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
         base_dir: str = context.get("base_dir", os.getcwd())
-        output_dir = os.path.join(base_dir, "geometries", geometry.name)
+        output_dir = os.path.join(base_dir, "geometries")
         gds_csv = os.path.join(output_dir, f"{geometry.name}.csv")
         logger.info(f"Starting GDS generation for {self.num_samples} samples using {cpu_cores} CPU cores.")
         
@@ -59,7 +59,7 @@ class GDSGenerator(PipelineStage):
 
 
             # Print progress bar using tqdm and call progress_callback
-            for i, future in enumerate(tqdm.tqdm(as_completed(futures), total=len(futures), desc="GDS Generation Progress")):
+            for i, future in enumerate(tqdm.tqdm(as_completed(futures), total=len(futures), desc="GDS Generation")):
                 try:
                     gds_path, name, params = future.result()
 

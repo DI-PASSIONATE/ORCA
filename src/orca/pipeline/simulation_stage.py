@@ -1,5 +1,7 @@
 from typing import Optional, Any, Dict, Callable
 import os
+import pandas as pd
+import tqdm
 
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
@@ -10,16 +12,46 @@ class PalaceSimulator(PipelineStage):
     """
     Pipeline stage for running Palace EM simulations.
     """
-    def __init__(self):
+    def __init__(self, palace_executable: str = "palace"):
         super().__init__(name="Palace EM Simulator", index=2)
+        self.palace_executable = palace_executable
 
     def run(self, context: Dict[str, Any], progress_callback: Optional[Callable[[float, str], None]] = None) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
         base_dir: str = context.get("base_dir", os.getcwd())
-        output_dir = os.path.join(base_dir, "results", geometry.name)
+        output_dir = os.path.join(base_dir, "results") # Touchstone results get stored here
+        palace_csv = context.get("palace_csv", base_dir + f"/palace_sims/{geometry.name}.csv")
 
-        return context
-
+        if not os.path.exists(palace_csv):
+            logger.error("No Palace CSV file found for simulation.")
+            return context
         
-   
+        palace_data = pd.read_csv(palace_csv)
+        logger.info(f"Starting Palace EM simulations for {len(palace_data)} models using {cpu_cores} CPU cores.")
+
+        for i, (index, row) in tqdm.tqdm(enumerate(palace_data.iterrows()), total=len(palace_data), desc="Palace Simulations"):
+            palace_config_name = row["config_name"]
+            data_directory = row["data_dir"]
+            sim_path = row["sim_path"]
+
+            # Runs palace and converts results to Touchstone format
+            # This is not done in parallel because Palace is already parallelized very well internally, so we run one simulation with max cores
+            # Also, we convert results after each simulation instead of an extra stage to allow using intermediate results
+            run_palace(
+                sim_path=sim_path,
+                data_dir=data_directory,
+                result_dir=output_dir,
+                config_name=palace_config_name,
+                palace_executable=self.palace_executable,
+                cpu_cores=cpu_cores
+            )
+
+            if progress_callback:
+                percentage = (i + 1) / len(palace_data) * 100
+                progress_callback(percentage, f"Simulated {i + 1} of {len(palace_data)} models.")
+
+        context["result_dir"] = output_dir
+        context["palace_csv"] = palace_csv
+        logger.info("Palace EM simulations completed.")
+        return context
