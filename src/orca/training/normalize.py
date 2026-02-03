@@ -5,6 +5,7 @@ import numpy as np
 
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.training.feature_transform import FeatureTransformPipeline
+from orca.logger import logger
 
 class Normalizer(nn.Module, ABC):
     """
@@ -122,8 +123,8 @@ class OutputMinMaxNormalizer(OutputNormalizer):
         stacked_samples = torch.vstack(samples)
         mins = torch.min(stacked_samples, dim=0).values
         maxs = torch.max(stacked_samples, dim=0).values
-        print("OutputMinMaxNormalizer mins:", mins)
-        print("OutputMinMaxNormalizer maxs:", maxs)
+        logger.debug(f"OutputMinMaxNormalizer mins: {mins}")
+        logger.debug(f"OutputMinMaxNormalizer maxs: {maxs}")
         return mins, maxs
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -146,8 +147,8 @@ class StandardNormalizer(OutputNormalizer):
         stacked_samples = torch.vstack(samples)
         means = torch.mean(stacked_samples, dim=0)
         stds = torch.std(stacked_samples, dim=0)
-        print("StandardNormalizer means:", means)
-        print("StandardNormalizer stds:", stds)
+        logger.debug(f"StandardNormalizer means: {means}")
+        logger.debug(f"StandardNormalizer stds: {stds}")
         return means, stds
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:

@@ -22,7 +22,8 @@ def mse_plus_log_cosh_loss(pred, target):
     return 2*lcsh + mse
 
 def train_model(
-    dataset,
+    train_dataset,
+    val_dataset,
     model: nn.Module,
     epochs=100,
     batch_size=128,
@@ -35,14 +36,8 @@ def train_model(
 ):
     model.to(device)
 
-    train_split = dataset.get_train_split()
-    val_split = dataset.get_val_split()
-
-    train_split.load_samples_and_normalize()
-    val_split.load_samples_and_normalize()
-
-    train_loader = DataLoader(train_split, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_split, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     optimizer = optimizer(model.parameters(), lr=learning_rate)
     

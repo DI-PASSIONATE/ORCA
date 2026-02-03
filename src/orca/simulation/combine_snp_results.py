@@ -439,10 +439,10 @@ def convert_to_touchstone(workdir, output_dir):
 
         # try port-deembedding of port geometry information is available
         if port_info_available: 
-            port_deembedding (output_filename, port_info_available, port_info_data)
+            port_deembedding(output_filename, port_info_available, port_info_data)
             if dc_extrapolated_filename != '':
                 # we need to add file extension
                 fn = dc_extrapolated_filename + '.s' + str(num_ports) + 'p'
                 if os.path.isfile(fn):
-                    port_deembedding (fn, port_info_available, port_info_data)
+                    port_deembedding(fn, port_info_available, port_info_data)
         

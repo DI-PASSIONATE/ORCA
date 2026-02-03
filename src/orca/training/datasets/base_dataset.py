@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import pandas as pd
 from abc import ABC, abstractmethod
 
 from orca.training.normalize import Normalizer
@@ -7,7 +8,7 @@ from orca.training.feature_transform import FeatureTransformPipeline
 
 
 class BaseDataset(ABC, torch.utils.data.Dataset):
-    def __init__(self,  data_dir: str, split: str = "all", features: FeatureTransformPipeline | None = None, input_normalizer: Normalizer|None = None, output_normalizer: Normalizer|None = None):
+    def __init__(self, features: FeatureTransformPipeline | None = None, input_normalizer: Normalizer|None = None, output_normalizer: Normalizer|None = None):
         """
         Defines the base dataset class for ORCA training datasets.
         This class should be extended by specific dataset implementations.
@@ -22,9 +23,6 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         """
         super(BaseDataset, self).__init__()
 
-        self.data_dir = data_dir
-        #self.geometry = geometry
-        self.split = split
         self.features = features
         self.samples: list[tuple[torch.Tensor, torch.Tensor]] = []
         self.input_normalizer = input_normalizer
@@ -32,12 +30,12 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         self.random = np.random.RandomState(seed=11)  # Ensure same behavior for all instances
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    def load_samples_and_normalize(self) -> None:
+    def _load_samples_and_normalize(self, directory: str, data_df: pd.DataFrame) -> None:
         """
         Load features and apply normalization to the dataset samples.
         This method should be called after loading samples.
         """
-        self.load_samples()
+        self.load_samples(directory, data_df)
 
         if self.features is not None:
             self.samples = list(map(lambda s: (self.features(s[0]), s[1]), self.samples))
@@ -59,51 +57,34 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         ), self.samples))
 
     @abstractmethod
-    def load_samples(self) -> None:
+    def load_samples(self, directory: str, data_df: pd.DataFrame) -> None:
         """
         Load samples from the dataset.
         This method should be implemented by subclasses to load data specific from its self.data_dir.
         """
         pass
-
-    def get_train_split(self) -> 'BaseDataset':
-        """
-        Returns a dataset instance for the training split.
-        """
-        return self.__class__(
-            data_dir=self.data_dir,
-            split="train",
-            features=self.features,
-            input_normalizer=self.input_normalizer,
-            output_normalizer=self.output_normalizer,
-        )
-    
-    def get_val_split(self) -> 'BaseDataset':
-        """
-        Returns a dataset instance for the validation split.
-        """
-        return self.__class__(
-            data_dir=self.data_dir,
-            split="val",
-            features=self.features,
-            input_normalizer=self.input_normalizer,
-            output_normalizer=self.output_normalizer,
-        )
-    
-    def get_test_split(self) -> 'BaseDataset':
-        """
-        Returns a dataset instance for the test split.
-        """
-        return self.__class__(
-            data_dir=self.data_dir,
-            split="test",
-            features=self.features,
-            input_normalizer=self.input_normalizer,
-            output_normalizer=self.output_normalizer,
-        )
     
     def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
         return self.samples[idx]
 
     def __len__(self):
         return len(self.samples)
+    
+    def new_split(self, directory: str, data_df: pd.DataFrame) -> 'BaseDataset':
+        """
+        Create a new dataset split (train/val/test) with the same normalizers and feature pipeline.
+        The new split will load its own samples from the provided data_df.
+
+        Args:
+            directory (str): Directory containing the dataset files for the new split.
+            data_df (pd.DataFrame): DataFrame containing the data for the new split.
+        Returns:
+            BaseDataset: New dataset split instance.
+        """
+        new_dataset = self.__class__(
+            features=self.features,
+            input_normalizer=self.input_normalizer,
+            output_normalizer=self.output_normalizer
+        )
+        new_dataset._load_samples_and_normalize(directory, data_df)
+        return new_dataset

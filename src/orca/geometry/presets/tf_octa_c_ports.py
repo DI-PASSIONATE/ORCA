@@ -42,7 +42,6 @@ class TransformerOcta(BaseGeometry):
         ChebyshevFeature(i=5, degree=3),  # Chebyshev features of frequency
     )
     dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(
-        data_dir=os.path.join(os.path.join(os.getcwd(), "results"), name), 
         n_ports=6,
         features=features,
         input_normalizer=OutputMinMaxNormalizer(),

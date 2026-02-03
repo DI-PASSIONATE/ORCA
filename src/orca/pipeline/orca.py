@@ -31,7 +31,7 @@ class ORCA:
 
         if os.path.exists(context["base_dir"]):
             # Ask user to confirm overwriting existing output directory
-            response = input(f"Output directory {context['base_dir']} already exists. Stages will overwrite existing files. Continue? (y/n): ")
+            response = input(f"Output directory {context['base_dir']} already exists. Stages may overwrite existing files. Continue? (y/n): ")
             if response.lower() != 'y':
                 logger.info("Aborting pipeline run.")
                 return
@@ -46,12 +46,12 @@ class ORCA:
 
     def print_super_cool_logo_art(self):
         logger.info("###########################################################")  
-        logger.info(" ██████╗ ██████╗  ██████╗ █████╗ ")
-        logger.info("██╔═══██╗██╔══██╗██╔════╝██╔══██╗")
-        logger.info("██║   ██║██████╔╝██║     ███████║")
-        logger.info("██║   ██║██╔══██╗██║     ██╔══██║")
-        logger.info("╚██████╔╝██║  ██║╚██████╗██║  ██║")
-        logger.info(" ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝")       
+        logger.info("#            ██████╗ ██████╗  ██████╗ █████╗              #")
+        logger.info("#           ██╔═══██╗██╔══██╗██╔════╝██╔══██╗             #")
+        logger.info("#           ██║   ██║██████╔╝██║     ███████║             #")
+        logger.info("#           ██║   ██║██╔══██╗██║     ██╔══██║             #")
+        logger.info("#           ╚██████╔╝██║  ██║╚██████╗██║  ██║             #")
+        logger.info("#            ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝             #")       
         logger.info("###########################################################")
-        logger.info("Welcome to ORCA - Open AI-Assisted RF Circuit Automation")
+        logger.info("# Welcome to ORCA - Open AI-Assisted RF Circuit Automation")
         logger.info("###########################################################")

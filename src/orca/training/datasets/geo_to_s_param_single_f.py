@@ -3,6 +3,7 @@ import skrf as rf
 import os
 import numpy as np
 import torch
+import tqdm
 
 from orca.training.datasets.base_dataset import BaseDataset
 from orca.training.normalize import StandardNormalizer, MinMaxNormalizer, Normalizer
@@ -16,8 +17,8 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
     a training sample for each frequency point in the S-parameter data. Each sample consists
     of input parameters and corresponding S-parameter values.
     """
-    def __init__(self, data_dir: str, split: str = "all", features: FeatureTransformPipeline | None = None, n_ports: int = 6, input_normalizer: Normalizer|None = None, output_normalizer: Normalizer|None = None):
-        super(GeoToSParamDatasetSingleFrequency, self).__init__(data_dir, split, features, input_normalizer, output_normalizer)
+    def __init__(self, features: FeatureTransformPipeline | None = None, n_ports: int = 6, input_normalizer: Normalizer|None = None, output_normalizer: Normalizer|None = None):
+        super(GeoToSParamDatasetSingleFrequency, self).__init__(features, input_normalizer, output_normalizer)
 
         self.n_ports = n_ports
 
@@ -28,37 +29,22 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
             for part in ("real", "imag")
         ]
 
-    def load_samples(self) -> None:
-        csv_path = os.path.join(self.data_dir, "params.csv")
-        if not os.path.exists(csv_path):
-            raise FileNotFoundError(f"Parameters CSV file not found: {csv_path}")
-        
-        # Load parameters from CSV
-        self.params_df = pd.read_csv(csv_path)
-
-        self.input_param_names = list(self.params_df.columns) + ['frequency (GHz)']
+    def load_samples(self, directory: str, data_df: pd.DataFrame) -> None:
+        self.input_param_names = list(data_df.columns) + ['frequency (GHz)']
         self.input_param_names.remove('name')  # Remove 'name' column
     
-        for idx, row in self.params_df.iterrows():
-            geometry_name = row['name'] # = name.s4p
-            snp_path = f"{self.data_dir}/{geometry_name}_dc_deembedded.s{self.n_ports}p"
+        for idx, row in tqdm.tqdm(data_df.iterrows(), total=len(data_df), desc="Loading samples"):
+            geometry_name = row['name'].replace(".gds", f"_dc_deembedded.s{self.n_ports}p")
+            snp_path = os.path.join(directory, geometry_name)
 
             if not os.path.exists(snp_path):
-                logger.warning(f"S-parameter file not found: {snp_path}")
+                logger.debug(f"S-parameter file not found: {snp_path}")
                 continue
 
             geometry_params = np.array(row.drop('name'), dtype=np.float32)
             samples = self.load_single_sample(snp_path, geometry_params)
 
-            rand_num = self.random.rand()
-            if \
-            (self.split == "all") or \
-            (self.split == "train" and rand_num < 0.7) or \
-            (self.split == "val" and 0.7 <= rand_num < 0.85) or \
-            (self.split == "test" and rand_num >= 0.85):
-                self.samples.extend(samples)
-
-        print(f"Loaded {len(self.samples)} samples for split '{self.split}' from {self.data_dir}")
+            self.samples.extend(samples)
 
     def load_single_sample(self, sparam_path: str, geometry_params: np.ndarray) -> list[tuple[torch.Tensor, torch.Tensor]]:
         """Load S-parameter data from a Touchstone file."""
