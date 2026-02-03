@@ -31,11 +31,11 @@ class GDSGenerator(PipelineStage):
             return context
 
         # Create output directory if it doesn't exist
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        # Remove existing CSV file if it exists
-        if os.path.exists(gds_csv):
-            os.remove(gds_csv)
+        if os.path.exists(output_dir):
+            import shutil
+            shutil.rmtree(output_dir)
+
+        os.makedirs(output_dir)
 
         # Tell the input parameter iterator the number of samples to generate
         geometry.input_parameter_iterator.set_sample_count(self.num_samples)

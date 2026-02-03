@@ -14,7 +14,7 @@ def create_palace_model_from_gds(
         stackup_xml: str,
         simconfig_filename: str, 
         show_mesh_results: bool = False
-    ) -> tuple[dict[str, Any], str, str, str]:
+    ) -> tuple[str, dict[str, Any], str, str, str]:
     """
     Uses gds2palace to create a Palace model from a GDS file and simulation configuration.
     The simconfig is a json and can either be created manually or by using setupEM GUI and saving the configuration.
@@ -96,4 +96,4 @@ def create_palace_model_from_gds(
         # for convenience, write run script to model directory
         utilities.create_run_script(settings['sim_path'])
 
-        return params, config_name, sim_path, data_dir
+        return geometry_name, params, config_name, sim_path, data_dir
