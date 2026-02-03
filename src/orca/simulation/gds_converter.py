@@ -4,7 +4,7 @@ from contextlib import redirect_stdout, ExitStack
 
 import gmsh
 from typing import Any
-from orca.simulation.read_simconfig import read_simconfig
+from orca.simulation.simulate import read_simconfig
 
 def create_palace_model_from_gds(
         geometry_name: str, 

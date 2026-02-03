@@ -20,7 +20,6 @@ class ModelTrainer(PipelineStage):
     def run(self, context: Dict[str, Any], progress_callback: Optional[Callable[[float, str], None]] = None) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         base_dir: str = context.get("base_dir", os.getcwd())
-        output_dir = os.path.join(base_dir, "models") # Model gets stored here
         result_dir = context.get("result_dir", os.path.join(base_dir, "results"))
         result_csv = context.get("result_csv", os.path.join(result_dir, f"{geometry.name}.csv"))
 
@@ -45,5 +44,7 @@ class ModelTrainer(PipelineStage):
             learning_rate=1e-3, 
             progress_callback=None
         )
-        
+
+        context["trained_model"] = trained_model
+        context["dataset"] = train_dataset
         return context

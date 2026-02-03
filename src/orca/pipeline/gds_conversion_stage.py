@@ -7,7 +7,7 @@ from typing import Any, Dict, Callable, Optional
 from orca.geometry.base_geometry import BaseGeometry
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger
-from orca.utils.gds_converter import create_palace_model_from_gds
+from orca.simulation.gds_converter import create_palace_model_from_gds
 
 class GDSConverter(PipelineStage):
     """
