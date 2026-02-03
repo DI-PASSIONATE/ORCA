@@ -55,7 +55,8 @@ class TransformerOcta(BaseGeometry):
         activation_layer=nn.SiLU
     )
 
-    def create_gds_file(self, name:str, params: dict[str, Any]) -> str:
+    @staticmethod
+    def create_gds_file(name:str, params: dict[str, Any]) -> str:
         output_path = os.path.join(
             os.getcwd(),
             "geometries",

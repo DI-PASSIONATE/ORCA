@@ -31,8 +31,9 @@ class BaseGeometry(ABC):
         # Return the input parameter iterator, ensuring it is initialized with iter()
         return iter(self.input_parameter_iterator)
         
+    @staticmethod
     @abstractmethod
-    def create_gds_file(self, name:str, params: dict[str, Any]) -> str:
+    def create_gds_file(name: str, params: dict[str, Any]) -> str:
         """
         Creates a GDS file based on the current input parameters.
         Input parameters are a list of values defining the geometry, e.g. width, length, radius etc.

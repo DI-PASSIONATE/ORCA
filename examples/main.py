@@ -3,6 +3,7 @@ import skrf as rf
 import numpy as np
 import matplotlib.pyplot as plt
 from orca.utils.postprocessing import *
+import orca
 
 PLOT = False
 
@@ -17,11 +18,17 @@ PLOT = False
 # Use predefined geometry from examples
 np.random.seed(11)
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
-geometry = TransformerOcta(n_samples=100, name="tf_octa_c_ports")
+geometry = TransformerOcta(n_samples=5000, name="tf_octa_c_ports")
 
-orca_instance = ORCA(geometry)
+orca_instance = ORCA([
+    orca.GDSGenerator(),
+    orca.GDSConverter()
+])
 
-orca_instance.run(cpu_cores=16, epochs=15, stages=["train", "evaluate"], palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace")
+def progress_callback(stage_name: str, percentage: float, message: str):
+    print(f"[{stage_name}] {percentage*100:.2f}% - {message}")
+
+orca_instance.run(geometry=geometry, cpu_cores=16, progress_callback=progress_callback)
 
 
 if PLOT:
