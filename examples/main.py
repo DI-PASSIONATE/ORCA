@@ -21,7 +21,7 @@ from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 geometry = TransformerOcta()
 
 orca_instance = ORCA([
-    orca.GDSGenerator(num_samples=100),
+    orca.GDSGenerator(num_samples=10),
     orca.GDSConverter(),
     orca.PalaceSimulator()
 ])

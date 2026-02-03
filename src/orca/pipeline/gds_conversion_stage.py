@@ -20,7 +20,7 @@ class GDSConverter(PipelineStage):
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
         gds_csv = context.get("gds_csv", "")
-        palace_csv = os.path.join(context.get("base_dir", ""), "palace_models", f"{geometry.name}.csv")
+        palace_csv = os.path.join(context.get("base_dir", ""), "palace_model", f"{geometry.name}.csv")
 
         if not gds_csv:
             logger.error("No GDS path provided in context for conversion.")
@@ -67,7 +67,7 @@ class GDSConverter(PipelineStage):
                 try:
                     params, config_name, sim_path, data_dir = future.result()
                     # Save input parameters to CSV
-                    self._save_csv(gds_csv, name, params)
+                    self._save_csv(gds_csv, name, params, data_dir, sim_path)
                 except Exception as e:
                     logger.error(f"GDS conversion failed for file index {i} with error: {e}")
                 finally: # and call progress_callback even on failure
@@ -87,6 +87,8 @@ class GDSConverter(PipelineStage):
             csv_path (str): Path to the CSV file.
             name (str): Name of the geometry instance.
             params (dict[str, Any]): Input parameters to save.
+            data_dir (str): Directory where data is stored.
+            sim_path (str): Path to the simulation file.
         """
         df = pd.DataFrame([{"name": name} | params])
         if not os.path.exists(csv_path):
