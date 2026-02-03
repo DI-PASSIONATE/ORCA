@@ -56,16 +56,7 @@ class TransformerOcta(BaseGeometry):
     )
 
     @staticmethod
-    def create_gds_file(name:str, params: dict[str, Any]) -> str:
-        output_path = os.path.join(
-            os.getcwd(),
-            "geometries",
-            name + ".gds"
-        )
-
-        if not os.path.exists(os.path.dirname(output_path)):
-            os.makedirs(os.path.dirname(output_path))
-
+    def create_gds_file(name:str, output_path:str, params: dict[str, Any]) -> str:
         c = tf_octa_c(
             name=name,
             input_winding_diameter=params["input_winding_diameter"],

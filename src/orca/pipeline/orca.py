@@ -1,3 +1,4 @@
+import os
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
@@ -23,7 +24,8 @@ class ORCA:
 
         context = {
             "geometry": geometry,
-            "cpu_cores": cpu_cores
+            "cpu_cores": cpu_cores,
+            "base_dir": os.path.join(os.getcwd(), "output"),
         }
 
         for stage in self.stages:

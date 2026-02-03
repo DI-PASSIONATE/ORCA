@@ -12,6 +12,7 @@ build/
 testing/
 geometries/
 results/
+output/
 *.s4p
 *.s6p
 *.gds

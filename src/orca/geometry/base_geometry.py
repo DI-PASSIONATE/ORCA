@@ -33,7 +33,7 @@ class BaseGeometry(ABC):
         
     @staticmethod
     @abstractmethod
-    def create_gds_file(name: str, params: dict[str, Any]) -> str:
+    def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:
         """
         Creates a GDS file based on the current input parameters.
         Input parameters are a list of values defining the geometry, e.g. width, length, radius etc.

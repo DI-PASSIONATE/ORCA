@@ -18,7 +18,9 @@ class GDSGenerator(PipelineStage):
     def run(self, context: Dict[str, Any], progress_callback: Optional[Callable[[float, str], None]] = None) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
-        gds_csv = f"{geometry.name}_params.csv"
+        base_dir: str = context.get("base_dir", os.getcwd())
+        output_dir = os.path.join(base_dir, "geometries", geometry.name)
+        gds_csv = os.path.join(output_dir, f"{geometry.name}.csv")
         logger.info(f"Starting GDS generation for {self.num_samples} samples using {cpu_cores} CPU cores.")
         
         try:
@@ -27,6 +29,13 @@ class GDSGenerator(PipelineStage):
         except ImportError:
             logger.error("IHP PDK not found. Please install the IHP PDK to use GDS conversion.")
             return context
+
+        # Create output directory if it doesn't exist
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        # Remove existing CSV file if it exists
+        if os.path.exists(gds_csv):
+            os.remove(gds_csv)
 
         futures = []
         with ProcessPoolExecutor(max_workers=cpu_cores) as executor:
@@ -40,18 +49,13 @@ class GDSGenerator(PipelineStage):
                     GDSGenerator._generate_gds_file,
                     geometry.create_gds_file,
                     f"{geometry.name}_{i}.gds",
+                    output_dir,
                     input_params
                 )
                 futures.append(future)
 
-            # Remove existing CSV if present
-            try:
-                if os.path.exists(gds_csv):
-                    os.remove(gds_csv)
-            except Exception as e:
-                logger.debug(f"Could not remove existing CSV file: {e}")
 
-            # Update progress as tasks complete
+            # Print progress bar using tqdm and call progress_callback
             for i, future in enumerate(tqdm.tqdm(as_completed(futures), total=len(futures), desc="GDS Generation Progress")):
                 try:
                     gds_path, name, params = future.result()
@@ -70,7 +74,7 @@ class GDSGenerator(PipelineStage):
         return context
     
     @staticmethod
-    def _generate_gds_file(gds_method: Callable, name: str, params: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    def _generate_gds_file(gds_method: Callable, name: str, output_dir: str, params: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
         """
         Static method to generate a GDS file given a geometry class, name, and parameters.
         This is used for multiprocessing to avoid pickling issues with instance methods.
@@ -78,12 +82,14 @@ class GDSGenerator(PipelineStage):
         Args:
             geometry_class (Type[BaseGeometry]): The geometry class to instantiate.
             name (str): The name of the GDS file to create.
+            output_dir (str): The directory to save the GDS file.
             params (dict[str, Any]): The input parameters for the geometry.
 
         Returns:
             str: Path to the created GDS file.
         """
-        path = gds_method(name, params)
+        output_path = os.path.join(output_dir, name)
+        path = gds_method(name, output_path, params)
         return path, name, params
     
     def _save_csv(self, csv_path, name: str, params: dict[str, Any]):
