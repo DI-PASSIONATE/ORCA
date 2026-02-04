@@ -4,6 +4,7 @@ import numpy as np
 import os
 import torch.nn as nn
 import torchvision
+import optuna
 
 from orca import BaseGeometry
 from orca.geometry.cells.transformer import tf_octa_c
@@ -36,7 +37,6 @@ class TransformerOcta(BaseGeometry):
     simconfig_filename: str = os.path.join(
         os.path.dirname(__file__), "tf_octa_c_ports.simcfg"
     )
-    params = None
     input_parameter_iterator: InputParameterIterator = InputParameterIterator(
         picking_strategy="random",
         frequency=[1e8, 200e8],  # 1 GHz to 200 GHz
@@ -53,10 +53,10 @@ class TransformerOcta(BaseGeometry):
         upper_linewidth=[x / 10 for x in range(20, 81, 1)],  # 2.0 to 10.0 in 0.1 steps
     )
     features = FeatureTransformPipeline(
-        RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
-        RatioFeature(i=3, j=4),  # bottom_linewidth / upper_linewidth
-        RatioFeature(i=5, j=0),  # frequency / input_winding_diameter
-        ChebyshevFeature(i=5, degree=3),  # Chebyshev features of frequency
+        # RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
+        # RatioFeature(i=3, j=4),  # bottom_linewidth / upper_linewidth
+        # RatioFeature(i=5, j=0),  # frequency / input_winding_diameter
+        # ChebyshevFeature(i=5, degree=3),  # Chebyshev features of frequency
     )
     dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(
         n_ports=6,
@@ -64,17 +64,36 @@ class TransformerOcta(BaseGeometry):
         input_normalizer=OutputMinMaxNormalizer(),
         output_normalizer=StandardNormalizer(),
     )
-    model: nn.Module = torchvision.ops.MLP(
-        in_channels=5 + 1 + len(features),  # 5 original params + 1 frequency + features
-        hidden_channels=[
-            128,
-            256,
-            256,
-            128,
-            72,
-        ],  # 6-port S-parameters (Re/Im) -> 6*6*2=72
-        activation_layer=nn.SiLU,
-    )
+    
+    def get_hyperparameter_search_space(self) -> dict[str, Any]:
+        return {
+            "learning_rate": optuna.distributions.FloatDistribution(1e-5, 1e-2, log=True),
+            "batch_size": [16, 32, 64, 128],
+            "epochs": optuna.distributions.IntDistribution(5, 25, step=5),
+            "num_layers": optuna.distributions.IntDistribution(1, 6, step=1),
+            "hidden_size": [64, 128, 256, 512],
+            "dropout": optuna.distributions.FloatDistribution(0.0, 0.4, step=0.1),
+            "activation_function": ["ReLU", "ELU", "GELU", "SiLU"],
+        }
+    
+    def get_model(self, hyperparameters: dict[str, Any]) -> nn.Module:
+        """
+        Returns a new instance of the model with the specified hyperparameters.
+        This allows for dynamic model creation during hyperparameter optimization.
+        """
+        print(f"Creating model with hyperparameters: {hyperparameters}")
+        num_layers = hyperparameters["num_layers"]
+        hidden_size = hyperparameters["hidden_size"]
+        dropout = hyperparameters["dropout"]
+        activation_function = hyperparameters["activation_function"]
+
+        hidden_channels = [hidden_size] * num_layers + [72]  # 72 output channels for 6 ports
+        return torchvision.ops.MLP(
+            in_channels=5 + 1,# + len(self.features),
+            hidden_channels=hidden_channels,
+            activation_layer=getattr(nn, activation_function),
+            dropout=dropout,
+        )
 
     @staticmethod
     def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:

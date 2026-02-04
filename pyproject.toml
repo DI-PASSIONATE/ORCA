@@ -45,6 +45,7 @@ train = [
     "onnxscript",
     "torch",
     "torchvision",
+    "optuna",
 ]
 
 [project.scripts]

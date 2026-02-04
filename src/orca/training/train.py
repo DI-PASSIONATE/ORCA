@@ -1,9 +1,11 @@
 import copy
+from typing import Any
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 import tqdm
+import optuna
 
 
 def complex_mse(pred, target):
@@ -88,7 +90,7 @@ def train_model(
     if best_state is not None:
         model.load_state_dict(best_state)
 
-    return model
+    return model, best_loss
 
 
 def _train(model, criterion, optimizer, device, train_loader):
@@ -156,3 +158,51 @@ def test_model(
     test_loss /= len(test_loader)
 
     return test_loss
+
+def hyperparameter_tuning(train_dataset, val_dataset, geometry) -> dict[str, Any]:
+    """
+    Performs hyperparameter tuning using optuna to find the best hyperparameters for the model.
+    This method can be called within the run method if self.hyperparameters is None to perform tuning.
+    """
+    def objective(trial):
+        hyperparameters = {}
+        for key, distribution in geometry.get_hyperparameter_search_space().items():
+            if isinstance(distribution, list):
+                hyperparameters[key] = trial.suggest_categorical(key, distribution)
+            elif isinstance(distribution, optuna.distributions.IntDistribution):
+                hyperparameters[key] = trial.suggest_int(key, distribution.low, distribution.high, step=distribution.step)
+            elif isinstance(distribution, optuna.distributions.FloatDistribution):
+                hyperparameters[key] = trial.suggest_float(key, distribution.low, distribution.high, step=distribution.step)
+            elif isinstance(distribution, optuna.distributions.CategoricalDistribution):
+                 hyperparameters[key] = trial.suggest_categorical(key, distribution.choices)
+        
+        # Instantiate model
+        try:
+            model = geometry.get_model(hyperparameters)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            raise optuna.exceptions.TrialPruned()
+
+        # Extract training parameters from hyperparameters
+        epochs = hyperparameters.get("epochs", 50)
+        batch_size = hyperparameters.get("batch_size", 32)
+        learning_rate = hyperparameters.get("learning_rate", 1e-3)
+
+        model, val_loss = train_model(
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
+            model=model,
+            epochs=epochs,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            progress_callback=None,
+            stage_name="Tuning",
+        )
+        return val_loss
+
+    study = optuna.create_study(direction="minimize")
+    study.optimize(objective, n_trials=50)
+
+    return study.best_params
+    

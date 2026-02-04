@@ -2,12 +2,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
-from orca.geometry.input_parameters import InputParameterIterator
-from orca.training.datasets.base_dataset import BaseDataset
-from orca.training.feature_transform import FeatureTransformPipeline
 import numpy as np
 import torch.nn as nn
 
+from orca.geometry.input_parameters import InputParameterIterator
+from orca.training.datasets.base_dataset import BaseDataset
+from orca.training.feature_transform import FeatureTransformPipeline
 
 @dataclass
 class BaseGeometry(ABC):
@@ -15,7 +15,6 @@ class BaseGeometry(ABC):
     stackup_xml: str
     simconfig_filename: str
     dataset: BaseDataset
-    model: nn.Module
     input_parameter_iterator: InputParameterIterator
     features: FeatureTransformPipeline | None = None
 
@@ -34,6 +33,30 @@ class BaseGeometry(ABC):
 
         Returns:
             str: Path to the created GDS file.
+        """
+
+    @abstractmethod
+    def get_model(self, hyperparameters: dict[str, Any]) -> nn.Module:
+        """
+        Returns a PyTorch model instance based on the provided hyperparameters.
+        This method should be implemented by subclasses to define the specific model architecture
+        and how it is configured based on the hyperparameters.
+
+        Args:
+            hyperparameters (dict[str, Any]): A dictionary of hyperparameters that can be used to configure the model.
+        Returns:
+            nn.Module: An instance of a PyTorch model configured according to the provided hyperparameters.
+        """
+
+    @abstractmethod
+    def get_hyperparameter_search_space(self) -> dict[str, Any]:
+        """
+        Returns the hyperparameter search space for optuna tuning.
+        This method should be implemented by subclasses to define the specific hyperparameters
+        and their distributions or choices for tuning.
+
+        Returns:
+            dict[str, Any]: A dictionary defining the hyperparameter search space.
         """
 
     def postprocess_outputs(

@@ -1,7 +1,8 @@
 from typing import Optional, Any, Dict, Callable
 import os
 import pandas as pd
-from orca.training.train import train_model
+import optuna
+from orca.training.train import hyperparameter_tuning, train_model
 
 from sklearn.model_selection import train_test_split
 
@@ -15,8 +16,14 @@ class ModelTrainer(PipelineStage):
     Pipeline stage for training AI/ML models based on simulation results.
     """
 
-    def __init__(self):
+    def __init__(self, hyperparameters: dict[str, Any] | None = None):
+        """
+        Initializes the ModelTrainer stage with optional hyperparameters for model training.
+        By default, optuna tuning is used to search for optimal hyperparameters, 
+        but specific hyperparameters can be provided to override the search space.
+        """
         super().__init__(name="Model Trainer", index=4)
+        self.hyperparameters = hyperparameters
 
     def run(
         self,
@@ -36,6 +43,8 @@ class ModelTrainer(PipelineStage):
 
         result_df = pd.read_csv(result_csv)  # Information
 
+        # Splitting at geometry-level ensure that all samples from a geometry go to either train or val
+        # This avoid data leakage when using frequency as a feature (i.e., same geometry at different frequencies)
         train_df, val_df = train_test_split(result_df, test_size=0.2, random_state=11)
 
         train_dataset = geometry.dataset.new_split(
@@ -47,17 +56,27 @@ class ModelTrainer(PipelineStage):
             f"Loaded {len(train_dataset)} training samples and {len(val_dataset)} validation samples for model training. Beginning training..."
         )
 
-        trained_model = train_model(
+        if self.hyperparameters is None or type(self.hyperparameters) != dict:
+            logger.info("No hyperparameters provided, starting hyperparameter tuning with optuna...")
+            self.hyperparameters = hyperparameter_tuning(train_dataset, val_dataset, geometry)
+            logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {self.hyperparameters}")
+        else:
+            logger.info(f"Using provided hyperparameters for training: {self.hyperparameters}")
+
+        trained_model, best_loss = train_model(
             train_dataset=train_dataset,
             val_dataset=val_dataset,
-            model=geometry.model,
-            epochs=15,
-            batch_size=32,
-            learning_rate=1e-3,
+            model=geometry.get_model(self.hyperparameters),
+            epochs=self.hyperparameters["epochs"],
+            batch_size=self.hyperparameters["batch_size"],
+            learning_rate=self.hyperparameters["learning_rate"],
             progress_callback=progress_callback,
             stage_name=self.name,
         )
 
         context["trained_model"] = trained_model
         context["dataset"] = train_dataset
+        context["hyperparameters"] = self.hyperparameters
+        context["final_val_loss"] = best_loss
         return context
+    
