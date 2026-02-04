@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QComboBox,
 )
 
-from orca.orca import ORCA
+from orca import ORCA, GDSGenerator, GDSConverter, PalaceSimulator, ModelTrainer, ModelTester
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.utils.class_finder import discover_classes
@@ -53,15 +53,21 @@ class SimulationWorkerThread(QThread):
             self.progress.emit("Initializing", 0, 0, "Initializing geometry...")
 
             # Create geometry instance
-            geometry = self.geometry_class(self.num_samples, **self.geometry_params)
+            geometry = self.geometry_class(**self.geometry_params)
 
-            orca_instance = ORCA(geometry)
+            orca_instance = ORCA(
+                [
+                    GDSGenerator(num_samples=self.num_samples),
+                    GDSConverter(),
+                    PalaceSimulator(palace_executable=self.palace_executable),
+                    ModelTrainer(),
+                    ModelTester(),
+                ]
+            )
 
             # Run with progress callback
             orca_instance.run(
-                cpu_cores=self.cpu_cores,
-                epochs=self.epochs,
-                palace_executable=self.palace_executable,
+                geometry=geometry,
                 progress_callback=self.on_progress_update,
             )
 
