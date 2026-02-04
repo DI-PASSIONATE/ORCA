@@ -48,7 +48,7 @@ train = [
 ]
 
 [project.scripts]
-orca = "orca.gui.main_gui:main"
+orca = "orca.__main__:main"
 
 [tool.setuptools]
 include-package-data = true
