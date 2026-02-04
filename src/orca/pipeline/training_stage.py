@@ -21,7 +21,7 @@ class ModelTrainer(PipelineStage):
     def run(
         self,
         context: Dict[str, Any],
-        progress_callback: Optional[Callable[[float, str], None]] = None,
+        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         base_dir: str = context.get("base_dir", os.getcwd())
@@ -54,7 +54,8 @@ class ModelTrainer(PipelineStage):
             epochs=15,
             batch_size=32,
             learning_rate=1e-3,
-            progress_callback=None,
+            progress_callback=progress_callback,
+            stage_name=self.name,
         )
 
         context["trained_model"] = trained_model

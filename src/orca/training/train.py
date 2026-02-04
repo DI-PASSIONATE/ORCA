@@ -36,6 +36,7 @@ def train_model(
     optimizer=AdamW,
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     progress_callback=None,
+    stage_name="Training",
 ):
     model.to(device)
 
@@ -53,7 +54,7 @@ def train_model(
     patience_counter = 2
 
     if progress_callback:
-        progress_callback("Training", 0, epochs, "Starting training")
+        progress_callback(stage_name, 0, epochs, "Starting training")
 
     for epoch in range(epochs):
         # ---- TRAIN ----
@@ -72,7 +73,7 @@ def train_model(
 
         if progress_callback:
             progress_callback(
-                "Training",
+                stage_name,
                 epoch + 1,
                 epochs,
                 f"Train: {train_loss:.4f} | Val: {val_loss:.4f}",

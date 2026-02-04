@@ -17,7 +17,7 @@ class ModelTester(PipelineStage):
     def run(
         self,
         context: Dict[str, Any],
-        progress_callback: Optional[Callable[[float, str], None]] = None,
+        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         base_dir: str = context.get("base_dir", os.getcwd())

@@ -1,5 +1,6 @@
 import os
 import multiprocessing
+from typing import Callable, Optional
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
@@ -19,7 +20,7 @@ class ORCA:
         self,
         geometry: BaseGeometry,
         cpu_cores: int = multiprocessing.cpu_count(),
-        progress_callback=None,
+        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ):
         """
         Runs the ORCA pipeline with the specified geometry and CPU cores.
@@ -47,9 +48,9 @@ class ORCA:
 
         for stage in self.stages:
 
-            def stage_callback(percentage: float, message: str):
+            def stage_callback(stage_name: str, current: int, total: int, message: str):
                 if progress_callback:
-                    progress_callback(stage.name, percentage, message)
+                    progress_callback(stage_name, current, total, message)
 
             context = stage.run(context, progress_callback=stage_callback)
 

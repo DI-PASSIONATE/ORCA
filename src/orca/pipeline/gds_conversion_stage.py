@@ -21,7 +21,7 @@ class GDSConverter(PipelineStage):
     def run(
         self,
         context: Dict[str, Any],
-        progress_callback: Optional[Callable[[float, str], None]] = None,
+        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
@@ -89,9 +89,10 @@ class GDSConverter(PipelineStage):
                     )
                 finally:  # and call progress_callback even on failure
                     if progress_callback:
-                        percentage = (i + 1) / len(futures) * 100
                         progress_callback(
-                            percentage,
+                            self.name,
+                            i + 1,
+                            len(futures),
                             f"Converted {i + 1} of {len(futures)} GDS files.",
                         )
 

@@ -20,7 +20,7 @@ class GDSGenerator(PipelineStage):
     def run(
         self,
         context: Dict[str, Any],
-        progress_callback: Optional[Callable[[float, str], None]] = None,
+        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
@@ -84,9 +84,11 @@ class GDSGenerator(PipelineStage):
                     logger.debug(f"Worker task failed: {e}")
                 finally:
                     if progress_callback:
-                        progress = (i + 1) / len(futures)
                         progress_callback(
-                            progress, f"GDS Generation Progress: {i + 1}/{len(futures)}"
+                            self.name,
+                            i + 1,
+                            len(futures),
+                            f"GDS Generation Progress: {i + 1}/{len(futures)}",
                         )
 
         logger.info("GDS generation completed.")

@@ -21,7 +21,7 @@ class PalaceSimulator(PipelineStage):
     def run(
         self,
         context: Dict[str, Any],
-        progress_callback: Optional[Callable[[float, str], None]] = None,
+        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
@@ -84,9 +84,11 @@ class PalaceSimulator(PipelineStage):
                 result_data.drop(index, inplace=True)
 
             if progress_callback:
-                percentage = (i + 1) / len(palace_data) * 100
                 progress_callback(
-                    percentage, f"Simulated {i + 1} of {len(palace_data)} models."
+                    self.name,
+                    i + 1,
+                    len(palace_data),
+                    f"Simulated {i + 1} of {len(palace_data)} models.",
                 )
 
         # Save updated results CSV
