@@ -39,6 +39,7 @@ def train_model(
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     progress_callback=None,
     stage_name="Training",
+    trial: optuna.trial.Trial|None = None,
 ):
     model.to(device)
 
@@ -63,7 +64,7 @@ def train_model(
         train_loss = _train(model, criterion, optimizer, device, train_loader)
 
         # ---- VALIDATION ----
-        val_loss = _val(model, criterion, device, val_loader, scheduler)
+        val_loss = _val(model, epoch, criterion, device, val_loader, scheduler, trial)
 
         # ---- EARLY STOPPING ----
         if val_loss < best_loss:
@@ -113,7 +114,7 @@ def _train(model, criterion, optimizer, device, train_loader):
     return train_loss
 
 
-def _val(model, criterion, device, val_loader, scheduler):
+def _val(model, epoch, criterion, device, val_loader, scheduler, trial: optuna.trial.Trial|None):
     model.eval()
     val_loss = 0.0
 
@@ -127,6 +128,12 @@ def _val(model, criterion, device, val_loader, scheduler):
     val_loss /= len(val_loader)
 
     scheduler.step(val_loss)
+
+    if trial:
+        trial.report(val_loss, epoch)
+        if trial.should_prune():
+            raise optuna.exceptions.TrialPruned()
+        
     return val_loss
 
 
@@ -198,10 +205,15 @@ def hyperparameter_tuning(train_dataset, val_dataset, geometry) -> dict[str, Any
             learning_rate=learning_rate,
             progress_callback=None,
             stage_name="Tuning",
+            trial=trial,
         )
         return val_loss
 
-    study = optuna.create_study(direction="minimize")
+    study = optuna.create_study(
+        direction="minimize",
+        sampler=optuna.samplers.TPESampler(),
+        pruner=optuna.pruners.MedianPruner(),
+    )
     study.optimize(objective, n_trials=50)
 
     return study.best_params
