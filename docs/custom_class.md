@@ -21,78 +21,82 @@ The Python class should extend the `orca.BaseGeometry` class and implement the f
 Example:
 
 ```python
-from orca import BaseGeometry
-from orca.geometry.input_parameters import InputParameterIterator
-from ihp import PDK
-
 @dataclass
 class TransformerOcta(BaseGeometry):
     """
     Represents a transformer geometry with octagonal shape.
     """
+
     name: str = "tf_octa_c_ports"
     stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml")
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
     params = None
-    n_samples: int = 1000
     input_parameter_iterator: InputParameterIterator = InputParameterIterator(
         picking_strategy="random",
-        n_samples=n_samples,
-        frequency = [1e8, 200e8],  # 1 GHz to 200 GHz in 1 GHz steps
-        input_winding_diameter = [x/10 for x in range(200, 1001, 1)], # 20.0 to 100.0 in 0.1 steps
-        output_winding_diameter = [x/10 for x in range(200, 1001, 1)], # 20.0 to 100.0 in 0.1 steps
-        center_displacement = [x/10 for x in range(0, 151, 1)], # 0.0 to 15.0 in 0.1 steps
-        bottom_linewidth = [x/10 for x in range(20, 81, 1)], # 2.0 to 10.0 in 0.1 steps
-        upper_linewidth = [x/10 for x in range(20, 81, 1)], # 2.0 to 10.0 in 0.1 steps
+        frequency=[1e8, 200e8],  # 1 GHz to 200 GHz
+        input_winding_diameter=[x / 10 for x in range(200, 1001, 1)],  # 20.0 to 100.0 in 0.1 steps
+        output_winding_diameter=[x / 10 for x in range(200, 1001, 1)],  # 20.0 to 100.0 in 0.1 steps
+        center_displacement=[x / 10 for x in range(0, 151, 1)],  # 0.0 to 15.0 in 0.1 steps
+        bottom_linewidth=[x / 10 for x in range(20, 81, 1)],  # 2.0 to 10.0 in 0.1 steps
+        upper_linewidth=[x / 10 for x in range(20, 81, 1)],  # 2.0 to 10.0 in 0.1 steps
     )
     features = FeatureTransformPipeline(
-        # You can implement manual feature engineering here (e.g. ratio between two input parameters, polynomial features, etc.)
+        RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
+        RatioFeature(i=3, j=4),  # bottom_linewidth / upper_linewidth
+        RatioFeature(i=5, j=0),  # frequency / input_winding_diameter
+        ChebyshevFeature(i=5, degree=3),  # Chebyshev features of frequency
     )
     dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(
-        data_dir=os.path.join(os.path.join(os.getcwd(), "results"), name), 
-        split="train",
         n_ports=6,
         features=features,
-        input_normalizer=MinMaxNormalizer(input_parameter_iterator, features),
-        output_normalizer=OutputMinMaxNormalizer(),
+        input_normalizer=OutputMinMaxNormalizer(),
+        output_normalizer=StandardNormalizer(),
     )
-    model: nn.Module = OrcaMLP(
-        input_dim=5+1+len(features),  # 5 original params + 1 frequency + features
-        hidden_sizes=[128, 256, 256, 128],
-        output_dim=72,  # 6-port S-parameters (Re/Im) -> 6*6*2=72
+    model: nn.Module = torchvision.ops.MLP(
+        in_channels=5 + 1 + len(features),  # 5 original params + 1 frequency + features
+        hidden_channels=[128,256,256,128,72,],  # 6-port S-parameters (Re/Im) -> 6*6*2=72
+        activation_layer=nn.SiLU,
     )
 
-    def create_gds_file(self, name:str, params: dict[str, any]) -> str:
-        output_path = os.path.join(
-            os.getcwd(),
-            "geometries",
-            name + ".gds"
-        )
-
-        if not os.path.exists(os.path.dirname(output_path)):
-            os.makedirs(os.path.dirname(output_path))
-
-        # CREATE YOUR COMPONENT HERE USING THE PARAMETERS IN THE 'params' DICTIONARY
-        
+    @staticmethod
+    def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:
+        # 
+        # < Put your actual GDS generation code here >
+        #
         c.write_gds(output_path, with_metadata=False)
         return output_path
 
+    # Example for a postprocessing method that plots the results and saves a Touchstone file
     def postprocess_outputs(self, output, frequency_points=None):
         """
-        Optional: Post-process the raw model outputs of GUI inference (e.g. plot results, save Touchstone files, etc.)
+        Converts model outputs (Re/Im) into a .sNp Touchstone file format.
+        Plots the S-parameters for visualization.
+
+        Parameters
+        ----------
+        output : dict
+            Dictionary containing S-parameters split into real and imaginary parts.
+            Example keys: 'S11_real', 'S11_imag', ..., 'SNN_real', 'SNN_imag'.
+            Each value is a 1D array of length equal to len(f).
+        f : array-like
+            1D array of frequencies corresponding to the S-parameters.
+        filename : str, optional
+            Name of the Touchstone file to save, default "output.sNp".
         """
         # Frequency points are just from 1 to 200 in 1 GHz steps
         if frequency_points is None:
             frequency_points = np.arange(1, 201)  # 1 GHz to 200 GHz
         N, ntwk, output_dict = s_param_dict_to_network(output, frequency_points)
         filename = f"{self.name}.s{N}p"
-
-        # Save Touchstone file
         ntwk.write_touchstone(filename)
 
-        # Plot coupling factor, s parameters, inductance, ...
+        # N, ntwk = single_ended_to_mixed_mode(ntwk)
         plot_rfic_transformer_metrics(ntwk)
-        
+        # plot_diff_s_params_and_k(ntwk)
+
+        # Write Touchstone
+        print(f"Touchstone file saved as {filename}")
+
         return output_dict
 ```
 
