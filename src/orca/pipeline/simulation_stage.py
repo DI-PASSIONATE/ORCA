@@ -7,6 +7,7 @@ from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.simulation.simulate import run_palace
+from orca.utils.folder_structure import OrcaFolderStructure
 
 
 class PalaceSimulator(PipelineStage):
@@ -23,17 +24,10 @@ class PalaceSimulator(PipelineStage):
         context: Dict[str, Any],
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
-        geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
-        base_dir: str = context.get("base_dir", os.getcwd())
-        output_dir = os.path.join(
-            base_dir, "results"
-        )  # Touchstone results get stored here
-        palace_csv = context.get(
-            "palace_csv", base_dir + f"/palace_sims/{geometry.name}.csv"
-        )
-        result_csv = os.path.join(output_dir, f"{geometry.name}.csv")
-
+        output_dir = OrcaFolderStructure.get_result_dir(context)
+        palace_csv = OrcaFolderStructure.get_palace_csv(context)
+        result_csv = OrcaFolderStructure.get_result_csv(context)
         palace_data = pd.read_csv(palace_csv)  # Information
 
         if os.path.exists(output_dir):

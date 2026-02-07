@@ -55,7 +55,12 @@ class ORCA:
             context = stage.run(context, progress_callback=stage_callback)
 
         logger.info("ORCA pipeline completed successfully.")
-        logger.info(f"Context: {context}")
+        # Save context to a file for debugging and reproducibility
+        import json
+        context_save_path = os.path.join(context["base_dir"], "context.json")
+        with open(context_save_path, "w") as f:
+            json.dump(context, f, default=str, indent=4)
+        logger.info(f"Context saved to {context_save_path}")
 
     def print_super_cool_logo_art(self):
         logger.info("##########################################")

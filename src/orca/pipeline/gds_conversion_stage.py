@@ -8,6 +8,7 @@ from orca.geometry.base_geometry import BaseGeometry
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger
 from orca.simulation.gds_converter import create_palace_model_from_gds
+from orca.utils.folder_structure import OrcaFolderStructure
 
 
 class GDSConverter(PipelineStage):
@@ -25,12 +26,10 @@ class GDSConverter(PipelineStage):
     ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
-        base_dir: str = context.get("base_dir", os.getcwd())
-        gds_csv = context.get("gds_csv", base_dir + f"/geometries/{geometry.name}.csv")
-        output_dir = os.path.join(
-            base_dir, "palace_sims"
-        )  # Palace simulations get stored here
-        palace_csv = os.path.join(output_dir, f"{geometry.name}.csv")
+        base_dir: str = OrcaFolderStructure.get_base_dir(context)
+        gds_csv = OrcaFolderStructure.get_gds_csv(context)
+        output_dir = OrcaFolderStructure.get_palace_sim_dir(context)
+        palace_csv = OrcaFolderStructure.get_palace_csv(context)
 
         if os.path.exists(output_dir):
             import shutil

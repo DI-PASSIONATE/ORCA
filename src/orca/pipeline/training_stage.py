@@ -2,6 +2,7 @@ from typing import Optional, Any, Dict, Callable
 import os
 import pandas as pd
 import optuna
+from orca.training.datasets.dataloader import train_val_test_dataset
 from orca.training.train import hyperparameter_tuning, train_model
 
 from sklearn.model_selection import train_test_split
@@ -9,6 +10,7 @@ from sklearn.model_selection import train_test_split
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
+from orca.utils.folder_structure import OrcaFolderStructure
 
 
 class ModelTrainer(PipelineStage):
@@ -31,11 +33,8 @@ class ModelTrainer(PipelineStage):
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
-        base_dir: str = context.get("base_dir", os.getcwd())
-        result_dir = context.get("result_dir", os.path.join(base_dir, "results"))
-        result_csv = context.get(
-            "result_csv", os.path.join(result_dir, f"{geometry.name}.csv")
-        )
+        result_dir = OrcaFolderStructure.get_result_dir(context)
+        result_csv = OrcaFolderStructure.get_result_csv(context)
 
         if not os.path.exists(result_csv):
             logger.error(f"No result CSV file found for training at {result_csv}.")
@@ -43,14 +42,7 @@ class ModelTrainer(PipelineStage):
 
         result_df = pd.read_csv(result_csv)  # Information
 
-        # Splitting at geometry-level ensure that all samples from a geometry go to either train or val
-        # This avoid data leakage when using frequency as a feature (i.e., same geometry at different frequencies)
-        train_df, val_df = train_test_split(result_df, test_size=0.2, random_state=11)
-
-        train_dataset = geometry.dataset.new_split(
-            directory=result_dir, data_df=train_df
-        )
-        val_dataset = geometry.dataset.new_split(directory=result_dir, data_df=val_df)
+        train_dataset, val_dataset, test_dataset = train_val_test_dataset(result_df, geometry, result_dir)
 
         logger.info(
             f"Loaded {len(train_dataset)} training samples and {len(val_dataset)} validation samples for model training. Beginning training..."
@@ -78,5 +70,8 @@ class ModelTrainer(PipelineStage):
         context["dataset"] = train_dataset
         context["hyperparameters"] = self.hyperparameters
         context["final_val_loss"] = best_loss
+        context["train_dataset"] = train_dataset
+        context["val_dataset"] = val_dataset
+        context["test_dataset"] = test_dataset
         return context
     

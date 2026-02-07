@@ -18,6 +18,8 @@ PLOT = False
 #     simconfig_filename = "/path/to/simconfig.simcfg" # Simulation configuration file generated manually or with setupEM
 # )
 
+hyperparameters = {'learning_rate': 0.0008166998266605425, 'batch_size': 128, 'epochs': 10, 'num_layers': 4, 'hidden_size': 512, 'activation_function': 'GELU'}
+
 
 # Use predefined geometry from examples
 np.random.seed(11)
@@ -25,10 +27,10 @@ geometry = TransformerOcta()
 
 orca_instance = ORCA(
     [
-        orca.GDSGenerator(num_samples=1000),
-        orca.GDSConverter(),
-        orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
-        orca.ModelTrainer(),
+        # orca.GDSGenerator(num_samples=1000),
+        # orca.GDSConverter(),
+        # orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
+        orca.ModelTrainer(hyperparameters=hyperparameters),
         orca.OnnxExporter(),
         orca.ModelTester(),
     ]

@@ -138,17 +138,14 @@ def _val(model, epoch, criterion, device, val_loader, scheduler, trial: optuna.t
 
 
 def test_model(
-    dataset,
+    test_dataset,
     model: nn.Module,
     batch_size=32,
 ):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    test_split = dataset.get_test_split()
-    test_split.load_samples_and_normalize()
-
-    test_loader = DataLoader(test_split, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
     criterion = complex_mse
 

@@ -19,7 +19,7 @@ class BaseGeometry(ABC):
     features: FeatureTransformPipeline | None = None
 
     @property
-    def input_iterator(self) -> InputParameterIterator | None:
+    def input_iterator(self) -> InputParameterIterator:
         # Return the input parameter iterator, ensuring it is initialized with iter()
         return iter(self.input_parameter_iterator)
 

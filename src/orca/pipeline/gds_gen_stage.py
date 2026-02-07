@@ -7,6 +7,8 @@ from orca.logger import logger
 import tqdm
 import os
 
+from orca.utils.folder_structure import OrcaFolderStructure
+
 
 class GDSGenerator(PipelineStage):
     """
@@ -24,9 +26,8 @@ class GDSGenerator(PipelineStage):
     ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
         cpu_cores: int = context.get("cpu_cores", 16)
-        base_dir: str = context.get("base_dir", os.getcwd())
-        output_dir = os.path.join(base_dir, "geometries")
-        gds_csv = os.path.join(output_dir, f"{geometry.name}.csv")
+        output_dir = OrcaFolderStructure.get_geometry_dir(context)
+        gds_csv = OrcaFolderStructure.get_gds_csv(context)
         logger.info(
             f"Starting GDS generation for {self.num_samples} samples using {cpu_cores} CPU cores."
         )

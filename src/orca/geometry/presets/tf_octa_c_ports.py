@@ -72,7 +72,7 @@ class TransformerOcta(BaseGeometry):
             "epochs": optuna.distributions.IntDistribution(5, 25, step=5),
             "num_layers": optuna.distributions.IntDistribution(1, 6, step=1),
             "hidden_size": [64, 128, 256, 512],
-            "dropout": optuna.distributions.FloatDistribution(0.0, 0.4, step=0.1),
+            #"dropout": optuna.distributions.FloatDistribution(0.0, 0.4, step=0.1),
             "activation_function": ["ReLU", "ELU", "GELU", "SiLU"],
         }
     
@@ -84,7 +84,7 @@ class TransformerOcta(BaseGeometry):
         print(f"Creating model with hyperparameters: {hyperparameters}")
         num_layers = hyperparameters["num_layers"]
         hidden_size = hyperparameters["hidden_size"]
-        dropout = hyperparameters["dropout"]
+        #dropout = hyperparameters["dropout"]
         activation_function = hyperparameters["activation_function"]
 
         hidden_channels = [hidden_size] * num_layers + [72]  # 72 output channels for 6 ports
@@ -92,7 +92,7 @@ class TransformerOcta(BaseGeometry):
             in_channels=5 + 1,# + len(self.features),
             hidden_channels=hidden_channels,
             activation_layer=getattr(nn, activation_function),
-            dropout=dropout,
+            #dropout=dropout,
         )
 
     @staticmethod
