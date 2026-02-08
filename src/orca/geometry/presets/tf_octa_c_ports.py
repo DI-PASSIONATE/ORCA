@@ -2,9 +2,13 @@ from dataclasses import dataclass
 from typing import Any
 import numpy as np
 import os
+import torch
 import torch.nn as nn
 import torchvision
 import optuna
+import skrf as rf
+import onnxruntime
+import onnx
 
 from orca import BaseGeometry
 from orca.geometry.cells.transformer import tf_octa_c
@@ -118,35 +122,94 @@ class TransformerOcta(BaseGeometry):
         # c.show()
         c.write_gds(output_path, with_metadata=False)
         return output_path
-
-    def postprocess_outputs(self, output, frequency_points=None):
+    
+    def inference_snp(self, onnx_session: onnxruntime.InferenceSession, input_params: np.ndarray) -> None:
         """
-        Converts model outputs (Re/Im) into a .sNp Touchstone file format.
-        Plots the S-parameters for visualization.
-
-        Parameters
-        ----------
-        output : dict
-            Dictionary containing S-parameters split into real and imaginary parts.
-            Example keys: 'S11_real', 'S11_imag', ..., 'SNN_real', 'SNN_imag'.
-            Each value is a 1D array of length equal to len(f).
-        f : array-like
-            1D array of frequencies corresponding to the S-parameters.
-        filename : str, optional
-            Name of the Touchstone file to save, default "output.sNp".
+        Runs inference on the model for the given geometry parameters and frequency points, and saves the predicted S-parameters to a Touchstone file.
         """
-        # Frequency points are just from 1 to 200 in 1 GHz steps
-        if frequency_points is None:
-            frequency_points = np.arange(1, 201)  # 1 GHz to 200 GHz
-        N, ntwk, output_dict = s_param_dict_to_network(output, frequency_points)
-        filename = f"{self.name}.s{N}p"
+        # Create frequency points from 1 GHz to 200 GHz in 1 GHz steps
+        frequency_points = np.arange(1e9, 201e9, 1e9)
+
+        filename = f"{self.name}.s{6}p"
+
+        # Create batched input by repeating the input parameters for each frequency point and adding the frequency as an additional feature
+        batched_input = np.repeat(input_params[np.newaxis, :], len(frequency_points), axis=0)
+
+        # Prepare inputs for ONNX
+        input_nodes = onnx_session.get_inputs()
+        input_names = [node.name for node in input_nodes]
+        
+        # Parameter names from iterator
+        param_names = list(self.input_parameter_iterator.input_values.keys())
+        
+        # Build feed_dict
+        feed_dict = {}
+        
+        # Process geometry parameters
+        for i, param_name in enumerate(param_names):
+            if param_name in input_names:
+                # Shape (BATCH, 1)
+                feed_dict[param_name] = batched_input[:, i].reshape(-1, 1).astype(np.float32)
+        
+        # Process frequency
+        freq_name = "frequency"
+        if freq_name in input_names:
+            feed_dict[freq_name] = (frequency_points).reshape(-1, 1).astype(np.float32)
+        
+        # Run inference
+        output_names = [node.name for node in onnx_session.get_outputs()]
+
+
+
+        import time
+        t = time.time()
+        outputs = onnx_session.run(output_names, feed_dict)
+        t2 = time.time()
+        print(f"Inference time in ms for {len(frequency_points)} frequency points: {(t2 - t) * 1000:.2f} ms")
+        output_dict = dict(zip(output_names, outputs))
+
+        N, ntwk, output_dict = s_param_dict_to_network(output_dict, frequency_points)
         ntwk.write_touchstone(filename)
 
-        # N, ntwk = single_ended_to_mixed_mode(ntwk)
         plot_rfic_transformer_metrics(ntwk)
-        # plot_diff_s_params_and_k(ntwk)
 
-        # Write Touchstone
         print(f"Touchstone file saved as {filename}")
 
-        return output_dict
+
+    # def postprocess_outputs(self, output, frequency_points=None):
+    #     """
+    #     Converts model outputs (Re/Im) into a .sNp Touchstone file format.
+    #     Plots the S-parameters for visualization.
+
+    #     Parameters
+    #     ----------
+    #     output : dict
+    #         Dictionary containing S-parameters split into real and imaginary parts.
+    #         Example keys: 'S11_real', 'S11_imag', ..., 'SNN_real', 'SNN_imag'.
+    #         Each value is a 1D array of length equal to len(f).
+    #     f : array-like
+    #         1D array of frequencies corresponding to the S-parameters.
+    #     filename : str, optional
+    #         Name of the Touchstone file to save, default "output.sNp".
+    #     """
+    #     # Frequency points are just from 1 to 200 in 1 GHz steps
+    #     if frequency_points is None:
+    #         frequency_points = np.arange(1, 201)  # 1 GHz to 200 GHz
+    #     N, ntwk, output_dict = s_param_dict_to_network(output, frequency_points)
+    #     filename = f"{self.name}.s{N}p"
+    #     ntwk.write_touchstone(filename)
+
+    #     # N, ntwk = single_ended_to_mixed_mode(ntwk)
+    #     plot_rfic_transformer_metrics(ntwk)
+    #     # plot_diff_s_params_and_k(ntwk)
+
+    #     # Write Touchstone
+    #     print(f"Touchstone file saved as {filename}")
+
+    #     return output_dict
+
+if __name__ == "__main__":
+    geometry = TransformerOcta()
+    input_params = np.array([70.6, 74.6, 13.2, 6.4, 5.4])  # Example input parameters
+    onnx_session = onnxruntime.InferenceSession("/home/david/Documents/git/ORCA/output/tf_octa_c_ports/models/tf_octa_c_ports.onnx")
+    geometry.inference_snp(onnx_session, input_params)

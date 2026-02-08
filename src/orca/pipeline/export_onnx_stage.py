@@ -40,20 +40,23 @@ class OnnxExporter(PipelineStage):
 
         logger.info(f"Exporting trained model to ONNX format at {output_path}.")
 
+
+        wrapped_model = ONNXWrapper(
+            trained_model.eval(),
+            features=dataset.features,
+            input_normalizer=dataset.input_normalizer,
+            output_denormalizer=dataset.output_normalizer,
+        ).eval()
+
+        batch = torch.export.Dim("batch_size")
+        
         # Export to ONNX with multiple inputs/outputs using ONNXWrapper
         torch.onnx.export(
-            ONNXWrapper(
-                trained_model,
-                features=dataset.features,
-                input_normalizer=dataset.input_normalizer,
-                output_denormalizer=dataset.output_normalizer,
-            ),
-            tuple(
-                torch.randn(1, 1, device=dataset.device)
-                for _ in dataset.input_param_names
-            ),
+            wrapped_model,
+            args=tuple(torch.randn(1, 1, device=dataset.device) for _ in dataset.input_param_names),
             input_names=dataset.input_param_names,
             output_names=dataset.output_param_names,
+            dynamic_shapes=(tuple({0: batch} for _ in dataset.input_param_names),),
             f=output_path,
             external_data=False,
             dynamo=True,

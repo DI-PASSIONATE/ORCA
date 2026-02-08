@@ -217,7 +217,7 @@ def plot_diff_s_params_and_k(ntwk: rf.Network):
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
     # Primary Y-Axis (S-parameters)
-    ax1.set_xlabel("Frequency (GHz)")
+    ax1.set_xlabel("Frequency")
     ax1.set_ylabel("S-Parameters (dB)")
     ntwk.plot_s_db(m=1, n=0, ax=ax1, label="Insertion Loss ($S_{d2d1}$)")
     ntwk.plot_s_db(m=0, n=0, ax=ax1, label="Return Loss ($S_{d1d1}$)")

@@ -39,7 +39,7 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
         ]
 
     def load_samples(self, directory: str, data_df: pd.DataFrame) -> None:
-        self.input_param_names = list(data_df.columns) + ["frequency (GHz)"]
+        self.input_param_names = list(data_df.columns) + ["frequency"]
         self.input_param_names.remove("name")  # Remove 'name' column
 
         for idx, row in tqdm.tqdm(

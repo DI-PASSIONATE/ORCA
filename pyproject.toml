@@ -43,8 +43,8 @@ train = [
     "gds2palace",
     "onnx",
     "onnxscript",
-    "torch",
-    "torchvision",
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
     "optuna",
 ]
 

@@ -32,7 +32,7 @@ orca_instance = ORCA(
         # orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
         orca.ModelTrainer(hyperparameters=hyperparameters),
         orca.OnnxExporter(),
-        orca.ModelTester(),
+        #orca.ModelTester(),
     ]
 )
 
