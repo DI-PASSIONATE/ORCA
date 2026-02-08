@@ -71,6 +71,7 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
 
         for i in range(len(freq)):
             f = freq[i]
+            print(f"Processing frequency: {f} Hz")
             sij = s[i]
 
             # Predict ALL S-parameters for 4-port network

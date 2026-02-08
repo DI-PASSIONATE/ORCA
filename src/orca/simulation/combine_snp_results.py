@@ -325,7 +325,12 @@ def port_deembedding(snp_filename, port_info_available, port_info_data):
         )
 
 
-def convert_to_touchstone(workdir, output_dir):
+def convert_to_touchstone(workdir, output_dir, touchstone_type: str):
+    if touchstone_type not in ["all", "normal", "deembedded", "dc", "dc_deembedded"]:
+        logger.error(
+            f"Invalid touchstone_type: {touchstone_type}. Must be one of 'all', 'normal', 'deembedded', 'dc', 'dc_deembedded'."
+        )
+        return
     found_datafiles = traverse_directories(workdir)
 
     # evaluate the found data files
@@ -485,9 +490,10 @@ def convert_to_touchstone(workdir, output_dir):
 
         # try port-deembedding of port geometry information is available
         if port_info_available:
-            port_deembedding(output_filename, port_info_available, port_info_data)
+            if touchstone_type in ["all", "deembedded"]:
+                port_deembedding(output_filename, port_info_available, port_info_data)
             if dc_extrapolated_filename != "":
                 # we need to add file extension
                 fn = dc_extrapolated_filename + ".s" + str(num_ports) + "p"
-                if os.path.isfile(fn):
+                if os.path.isfile(fn) and touchstone_type in ["all", "dc_deembedded"]:
                     port_deembedding(fn, port_info_available, port_info_data)

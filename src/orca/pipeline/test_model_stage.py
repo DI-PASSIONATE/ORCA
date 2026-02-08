@@ -2,6 +2,7 @@ from typing import Optional, Any, Dict, Callable
 import os
 import onnxruntime
 import pandas as pd
+import tqdm
 
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
@@ -58,21 +59,56 @@ class ModelTester(PipelineStage):
 
         return context
     
-    def test_model(self, test_dataset, geometry, onnx_path):
+    def test_model(self, test_dataset, geometry, onnx_path, plot=False):
         """
         Evaluates the trained model on the test dataset and returns the loss.
         """
         onnx_session = onnxruntime.InferenceSession(onnx_path)
-        total_loss = 0.0
         num_samples = len(test_dataset)
 
-        for i in range(num_samples):
+        param_errors =  {}
+
+        for i in tqdm.tqdm(range(num_samples), desc="Testing samples"):
             input_params, ntwk_gt = test_dataset[i]
             ntwk_pred = geometry.inference_snp(onnx_session, input_params)
             ntwk_pred.name = "Predicted"
             ntwk_gt.name = "Ground Truth"
 
-            plot_rfic_transformer_metrics(ntwk_pred)
-            plot_rfic_transformer_metrics(ntwk_gt)
+            ep1 = calculate_electrical_parameters(ntwk_pred)
+            ep2 = calculate_electrical_parameters(ntwk_gt)
+
+            if plot:
+                plot_rfic_transformer_metrics(ntwk_gt)
+                plot_rfic_transformer_metrics(ntwk_pred)
+                continue
+
+            # Calculate percentage error for each parameter and average them
+            for param in ep1.keys():
+                pred = ep1[param]
+                gt = ep2[param]
+
+                # Calculate mean error without NaN or inf values
+                try:
+                    logger.debug(f"pred: {pred}, gt: {gt}")
+                    error_per_freq_point = np.abs(pred - gt) / np.abs(gt)
+                    valid_mask = ~np.isinf(error_per_freq_point) & ~np.isnan(error_per_freq_point)
+                    error = np.mean(error_per_freq_point[valid_mask]) * 100  # Convert to percentage
+                    logger.debug(f"Sample {input_params}, Parameter {param}, Error per frequency point: {error_per_freq_point[valid_mask]}, Mean Error: {error:.2f}%")
+                    if not np.isinf(error) and not np.isnan(error):
+                        if param not in param_errors:
+                            param_errors[param] = []
+                        param_errors[param].append(error)
+                        
+                except Exception as e:
+                    logger.debug(f"Error calculating percentage error for sample {i}, parameter {param}: {e}")
+                
+        # Calculate average error for each parameter across all samples
+        average_errors = {param: np.mean(errors) for param, errors in param_errors.items()}
+        for param, avg_error in average_errors.items():
+            logger.info(f"Average percentage error for {param} across all test samples: {avg_error:.2f}%")
+        return average_errors
+        
+
+            
 
 

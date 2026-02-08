@@ -31,17 +31,15 @@ def calculate_electrical_parameters(ntwk):
     srf_f = freq_ghz[srf_idx[0]] if len(srf_idx) > 0 else None
 
     return {
-        "mm_ntwk": mm_ntwk,
-        "freq_ghz": freq_ghz,
-        "Lp": Lp,
-        "Ls": Ls,
-        "Rp": Rp,
-        "Rs": Rs,
-        "Qp": Qp,
-        "Qs": Qs,
-        "k": k,
-        "z_d11": z_d11,
-        "srf_f": srf_f,
+        "Lp": np.array(Lp),
+        "Ls": np.array(Ls),
+        "Rp": np.array(Rp),
+        "Rs": np.array(Rs),
+        "Qp": np.array(Qp),
+        "Qs": np.array(Qs),
+        "k": np.array(k),
+        "z_d11": np.array(z_d11),
+        "srf_f": np.array(srf_f),
     }
 
 
@@ -154,8 +152,7 @@ def s_param_dict_to_network(
             S[:, i, j] = real + 1j * imag  # note: frequency as first dimension
 
     # Create skrf Network object
-    ntwk = rf.Network(frequency=frequencies, s=S, f_unit="GHz")
-    ntwk.frequency.unit = "GHz"
+    ntwk = rf.Network(frequency=frequencies, s=S, f_unit="Hz")
 
     merged_output = {}
     for i in range(N):

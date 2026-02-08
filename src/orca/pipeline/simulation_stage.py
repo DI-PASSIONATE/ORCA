@@ -15,9 +15,17 @@ class PalaceSimulator(PipelineStage):
     Pipeline stage for running Palace EM simulations.
     """
 
-    def __init__(self, palace_executable: str = "palace"):
+    def __init__(self, palace_executable: str = "palace", touchstone_type: str = "dc_deembedded"):
+        """
+        Initializes the PalaceSimulator stage.
+
+        Args:
+            palace_executable (str): Path to the Palace executable. Default is "palace".
+            touchstone_type (str): Type of Touchstone file to generate. One of "all", "normal", "deembedded", "dc", "dc_deembedded". 
+        """
         super().__init__(name="Palace EM Simulator", index=2)
         self.palace_executable = palace_executable
+        self.touchstone_type = touchstone_type
 
     def run(
         self,
@@ -68,6 +76,7 @@ class PalaceSimulator(PipelineStage):
                 config_name=palace_config_name,
                 palace_executable=self.palace_executable,
                 cpu_cores=cpu_cores,
+                touchstone_type=self.touchstone_type,
             )
 
             if not success:

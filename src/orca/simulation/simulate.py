@@ -13,6 +13,7 @@ def run_palace(
     config_name: str,
     palace_executable: str,
     cpu_cores: int,
+    touchstone_type: str,
 ) -> bool:
     """
     Runs Palace simulation for the given model.
@@ -36,7 +37,7 @@ def run_palace(
         logger.error(f"Palace simulation failed: {ret.stderr.decode('utf-8')}")
         return False
 
-    convert_to_touchstone(workdir=data_dir, output_dir=result_dir)
+    convert_to_touchstone(workdir=data_dir, output_dir=result_dir, touchstone_type=touchstone_type)
     return True
 
 

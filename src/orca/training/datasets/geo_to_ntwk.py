@@ -53,7 +53,7 @@ class GeoToNtwkDataset(torch.utils.data.Dataset):
     ) -> list[tuple[np.ndarray, rf.Network]]:
         """Load S-parameter data from a Touchstone file."""
 
-        return [(geometry_params, rf.Network(sparam_path))]
+        return [(geometry_params, rf.Network(sparam_path, f_unit="Hz"))]
         
     def __len__(self):
         return len(self.samples)

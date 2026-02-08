@@ -11,6 +11,7 @@ import onnxruntime
 import onnx
 
 from orca import BaseGeometry
+from orca.logger import logger
 from orca.geometry.cells.transformer import tf_octa_c
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.training.datasets.base_dataset import BaseDataset
@@ -130,7 +131,7 @@ class TransformerOcta(BaseGeometry):
         # Create frequency points from 1 GHz to 200 GHz in 1 GHz steps
         import time
         t = time.time()
-        frequency_points = np.arange(1e9, 201e9, 1e9)
+        frequency_points = np.arange(0, 201e9, 1e9)
 
         # Create batched input by repeating the input parameters for each frequency point and adding the frequency as an additional feature
         batched_input = np.repeat(input_params[np.newaxis, :], len(frequency_points), axis=0)
@@ -153,11 +154,9 @@ class TransformerOcta(BaseGeometry):
         output_dict = dict(zip(output_names, outputs))
 
         t2 = time.time()
-        print(f"Inference time in ms for {len(frequency_points)} frequency points: {(t2 - t) * 1000:.2f} ms")
+        logger.debug(f"Inference time in ms for {len(frequency_points)} frequency points: {(t2 - t) * 1000:.2f} ms")
 
         N, ntwk, output_dict = s_param_dict_to_network(output_dict, frequency_points)
-
-        # plot_rfic_transformer_metrics(ntwk)
 
         return ntwk
 
@@ -197,4 +196,5 @@ class TransformerOcta(BaseGeometry):
 #     geometry = TransformerOcta()
 #     input_params = np.array([70.6, 74.6, 13.2, 6.4, 5.4])  # Example input parameters
 #     onnx_session = onnxruntime.InferenceSession("/home/david/Documents/git/ORCA/output/tf_octa_c_ports/models/tf_octa_c_ports.onnx")
-#     geometry.inference_snp(onnx_session, input_params)
+#     ntwk = geometry.inference_snp(onnx_session, input_params)
+#     plot_rfic_transformer_metrics(ntwk)
