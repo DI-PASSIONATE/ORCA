@@ -132,8 +132,6 @@ class TransformerOcta(BaseGeometry):
         t = time.time()
         frequency_points = np.arange(1e9, 201e9, 1e9)
 
-        filename = f"{self.name}.s{6}p"
-
         # Create batched input by repeating the input parameters for each frequency point and adding the frequency as an additional feature
         batched_input = np.repeat(input_params[np.newaxis, :], len(frequency_points), axis=0)
         

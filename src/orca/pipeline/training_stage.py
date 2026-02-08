@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import optuna
 from orca.training.datasets.dataloader import train_val_test_dataset
+from orca.training.datasets.geo_to_ntwk import GeoToNtwkDataset
 from orca.training.train import hyperparameter_tuning, train_model
 
 from sklearn.model_selection import train_test_split
@@ -42,7 +43,10 @@ class ModelTrainer(PipelineStage):
 
         result_df = pd.read_csv(result_csv)  # Information
 
-        train_dataset, val_dataset, test_dataset = train_val_test_dataset(result_df, geometry, result_dir)
+        train_df, val_df, test_df = train_val_test_dataset(result_df, geometry, result_dir)
+
+        train_dataset = geometry.dataset.new_split(directory=result_dir, data_df=train_df)
+        val_dataset = geometry.dataset.new_split(directory=result_dir, data_df=val_df)
 
         logger.info(
             f"Loaded {len(train_dataset)} training samples and {len(val_dataset)} validation samples for model training. Beginning training..."
@@ -70,8 +74,6 @@ class ModelTrainer(PipelineStage):
         context["dataset"] = train_dataset
         context["hyperparameters"] = self.hyperparameters
         context["final_val_loss"] = best_loss
-        context["train_dataset"] = train_dataset
-        context["val_dataset"] = val_dataset
-        context["test_dataset"] = test_dataset
+        context["test_df"] = test_df
         return context
     

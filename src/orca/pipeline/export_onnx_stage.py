@@ -6,6 +6,7 @@ from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.training.onnx_wrapper import ONNXWrapper
+from orca.utils.folder_structure import OrcaFolderStructure
 
 
 class OnnxExporter(PipelineStage):
@@ -33,13 +34,13 @@ class OnnxExporter(PipelineStage):
             )
             return context
 
-        output_dir = os.path.join(base_dir, "models")
-        output_path = os.path.join(output_dir, f"{geometry.name}.onnx")
+        output_dir = OrcaFolderStructure.get_model_dir(context)
+        output_path = OrcaFolderStructure.get_model_path(context)
+
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
         logger.info(f"Exporting trained model to ONNX format at {output_path}.")
-
 
         wrapped_model = ONNXWrapper(
             trained_model.eval(),
@@ -62,5 +63,5 @@ class OnnxExporter(PipelineStage):
             dynamo=True,
         )
 
-        context["onnx_model_path"] = output_path
+        context["model_path"] = output_path
         return context

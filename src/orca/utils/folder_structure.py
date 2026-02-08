@@ -46,3 +46,14 @@ class OrcaFolderStructure:
         result_dir = OrcaFolderStructure.get_result_dir(context)
         geometry_name = context["geometry"].name
         return context.get("result_csv", os.path.join(result_dir, f"{geometry_name}.csv"))
+    
+    @staticmethod
+    def get_model_dir(context: Dict[str, Any]) -> str:
+        base_dir = OrcaFolderStructure.get_base_dir(context)
+        return context.get("model_dir", os.path.join(base_dir, "models"))
+    
+    @staticmethod
+    def get_model_path(context: Dict[str, Any]) -> str:
+        model_dir = OrcaFolderStructure.get_model_dir(context)
+        geometry_name = context["geometry"].name
+        return context.get("model_path", os.path.join(model_dir, f"{geometry_name}.onnx"))
