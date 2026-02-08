@@ -46,7 +46,7 @@ class ModelTester(PipelineStage):
         test_dataset = GeoToNtwkDataset(directory=OrcaFolderStructure.get_result_dir(context), data_df=test_df)
 
 
-        trained_model = context.get("trained_model", None)
+        trained_model = OrcaFolderStructure.get_model_path(context)
 
         if trained_model is None:
             logger.error("No trained model found in context for testing.")
@@ -69,6 +69,8 @@ class ModelTester(PipelineStage):
         for i in range(num_samples):
             input_params, ntwk_gt = test_dataset[i]
             ntwk_pred = geometry.inference_snp(onnx_session, input_params)
+            ntwk_pred.name = "Predicted"
+            ntwk_gt.name = "Ground Truth"
 
             plot_rfic_transformer_metrics(ntwk_pred)
             plot_rfic_transformer_metrics(ntwk_gt)

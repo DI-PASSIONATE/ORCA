@@ -157,7 +157,7 @@ class TransformerOcta(BaseGeometry):
 
         N, ntwk, output_dict = s_param_dict_to_network(output_dict, frequency_points)
 
-        plot_rfic_transformer_metrics(ntwk)
+        # plot_rfic_transformer_metrics(ntwk)
 
         return ntwk
 
@@ -193,8 +193,8 @@ class TransformerOcta(BaseGeometry):
 
     #     return output_dict
 
-if __name__ == "__main__":
-    geometry = TransformerOcta()
-    input_params = np.array([70.6, 74.6, 13.2, 6.4, 5.4])  # Example input parameters
-    onnx_session = onnxruntime.InferenceSession("/home/david/Documents/git/ORCA/output/tf_octa_c_ports/models/tf_octa_c_ports.onnx")
-    geometry.inference_snp(onnx_session, input_params)
+# if __name__ == "__main__":
+#     geometry = TransformerOcta()
+#     input_params = np.array([70.6, 74.6, 13.2, 6.4, 5.4])  # Example input parameters
+#     onnx_session = onnxruntime.InferenceSession("/home/david/Documents/git/ORCA/output/tf_octa_c_ports/models/tf_octa_c_ports.onnx")
+#     geometry.inference_snp(onnx_session, input_params)
