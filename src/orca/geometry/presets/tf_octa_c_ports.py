@@ -123,58 +123,45 @@ class TransformerOcta(BaseGeometry):
         c.write_gds(output_path, with_metadata=False)
         return output_path
     
-    def inference_snp(self, onnx_session: onnxruntime.InferenceSession, input_params: np.ndarray) -> None:
+    def inference_snp(self, onnx_session: onnxruntime.InferenceSession, input_params: np.ndarray) -> rf.Network:
         """
         Runs inference on the model for the given geometry parameters and frequency points, and saves the predicted S-parameters to a Touchstone file.
         """
         # Create frequency points from 1 GHz to 200 GHz in 1 GHz steps
+        import time
+        t = time.time()
         frequency_points = np.arange(1e9, 201e9, 1e9)
 
         filename = f"{self.name}.s{6}p"
 
         # Create batched input by repeating the input parameters for each frequency point and adding the frequency as an additional feature
         batched_input = np.repeat(input_params[np.newaxis, :], len(frequency_points), axis=0)
-
-        # Prepare inputs for ONNX
-        input_nodes = onnx_session.get_inputs()
-        input_names = [node.name for node in input_nodes]
-        
-        # Parameter names from iterator
-        param_names = list(self.input_parameter_iterator.input_values.keys())
         
         # Build feed_dict
         feed_dict = {}
         
         # Process geometry parameters
-        for i, param_name in enumerate(param_names):
-            if param_name in input_names:
-                # Shape (BATCH, 1)
-                feed_dict[param_name] = batched_input[:, i].reshape(-1, 1).astype(np.float32)
+        for i, param_name in enumerate(self.input_parameter_iterator.input_values.keys()):
+            feed_dict[param_name] = batched_input[:, i].reshape(-1, 1).astype(np.float32)
         
         # Process frequency
-        freq_name = "frequency"
-        if freq_name in input_names:
-            feed_dict[freq_name] = (frequency_points).reshape(-1, 1).astype(np.float32)
+        feed_dict["frequency"] = (frequency_points).reshape(-1, 1).astype(np.float32)
         
         # Run inference
         output_names = [node.name for node in onnx_session.get_outputs()]
 
-
-
-        import time
-        t = time.time()
+        # Actual inference
         outputs = onnx_session.run(output_names, feed_dict)
-        t2 = time.time()
-        print(f"Inference time in ms for {len(frequency_points)} frequency points: {(t2 - t) * 1000:.2f} ms")
         output_dict = dict(zip(output_names, outputs))
 
+        t2 = time.time()
+        print(f"Inference time in ms for {len(frequency_points)} frequency points: {(t2 - t) * 1000:.2f} ms")
+
         N, ntwk, output_dict = s_param_dict_to_network(output_dict, frequency_points)
-        ntwk.write_touchstone(filename)
 
         plot_rfic_transformer_metrics(ntwk)
 
-        print(f"Touchstone file saved as {filename}")
-
+        return ntwk
 
     # def postprocess_outputs(self, output, frequency_points=None):
     #     """
