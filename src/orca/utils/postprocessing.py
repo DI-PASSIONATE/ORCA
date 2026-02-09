@@ -31,6 +31,8 @@ def calculate_electrical_parameters(ntwk):
     srf_f = freq_ghz[srf_idx[0]] if len(srf_idx) > 0 else None
 
     return {
+        #"mm_ntwk": mm_ntwk,
+        #"freq_ghz": freq_ghz,
         "Lp": np.array(Lp),
         "Ls": np.array(Ls),
         "Rp": np.array(Rp),

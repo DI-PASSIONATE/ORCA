@@ -74,25 +74,27 @@ class ModelTester(PipelineStage):
             ntwk_pred.name = "Predicted"
             ntwk_gt.name = "Ground Truth"
 
-            ep1 = calculate_electrical_parameters(ntwk_pred)
-            ep2 = calculate_electrical_parameters(ntwk_gt)
-
             if plot:
                 plot_rfic_transformer_metrics(ntwk_gt)
                 plot_rfic_transformer_metrics(ntwk_pred)
                 continue
+
+            ep1 = calculate_electrical_parameters(ntwk_pred)
+            ep2 = calculate_electrical_parameters(ntwk_gt)
+
 
             # Calculate percentage error for each parameter and average them
             for param in ep1.keys():
                 pred = ep1[param]
                 gt = ep2[param]
 
+
                 # Calculate mean error without NaN or inf values
                 try:
                     logger.debug(f"pred: {pred}, gt: {gt}")
-                    error_per_freq_point = np.abs(pred - gt) / np.abs(gt)
+                    error_per_freq_point = np.abs(pred - gt) / np.mean(np.abs(gt)) * 100  # Percentage error per frequency point
                     valid_mask = ~np.isinf(error_per_freq_point) & ~np.isnan(error_per_freq_point)
-                    error = np.mean(error_per_freq_point[valid_mask]) * 100  # Convert to percentage
+                    error = np.mean(error_per_freq_point[valid_mask])# * 100  # Convert to percentage
                     logger.debug(f"Sample {input_params}, Parameter {param}, Error per frequency point: {error_per_freq_point[valid_mask]}, Mean Error: {error:.2f}%")
                     if not np.isinf(error) and not np.isnan(error):
                         if param not in param_errors:
