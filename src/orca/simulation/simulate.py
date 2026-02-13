@@ -23,10 +23,12 @@ def run_palace(
         config_name (str): Name of the Palace configuration to run.
         palace_executable (str): Path to the Palace executable (e.g. "apptainer exec ~/path/to/palace.sif palace").
         cpu_cores (int): Number of CPU cores to use for the simulation.
+        touchstone_type (str): Type of Touchstone file to generate. One of "all", "normal", "deembedded", "dc", "dc_deembedded".
 
     Returns:
         bool: True if simulation was successful, False otherwise.
     """
+    prev_dir = os.getcwd()
     os.chdir(sim_path)
     cmd = f"{palace_executable} -np {cpu_cores} {config_name}"
 
@@ -35,9 +37,11 @@ def run_palace(
 
     if ret.returncode != 0:
         logger.error(f"Palace simulation failed: {ret.stderr.decode('utf-8')}")
+        os.chdir(prev_dir)
         return False
 
     convert_to_touchstone(workdir=data_dir, output_dir=result_dir, touchstone_type=touchstone_type)
+    os.chdir(prev_dir)
     return True
 
 
