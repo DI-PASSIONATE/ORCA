@@ -2,6 +2,7 @@ from orca import ORCA
 import skrf as rf
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 
 from orca.utils.postprocessing import (
     plot_rfic_transformer_metrics,
@@ -23,6 +24,7 @@ hyperparameters = {'learning_rate': 0.0008166998266605425, 'batch_size': 128, 'e
 
 # Use predefined geometry from examples
 np.random.seed(11)
+torch.manual_seed(11)
 geometry = TransformerOcta()
 
 orca_instance = ORCA(
@@ -30,8 +32,8 @@ orca_instance = ORCA(
         # orca.GDSGenerator(num_samples=1000),
         # orca.GDSConverter(),
         # orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
-        #orca.ModelTrainer(hyperparameters=hyperparameters),
-        #orca.OnnxExporter(),
+        # orca.ModelTrainer(hyperparameters=hyperparameters),
+        # orca.OnnxExporter(),
         orca.ModelTester(),
     ]
 )

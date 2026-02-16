@@ -92,7 +92,7 @@ class ModelTester(PipelineStage):
                 # Calculate mean error without NaN or inf values
                 try:
                     logger.debug(f"pred: {pred}, gt: {gt}")
-                    error_per_freq_point = np.abs(pred - gt) / np.mean(np.abs(gt)) * 100  # Percentage error per frequency point
+                    error_per_freq_point = np.abs(pred - gt) / (np.mean(np.abs(gt)) + 1e-10) * 100 
                     valid_mask = ~np.isinf(error_per_freq_point) & ~np.isnan(error_per_freq_point)
                     error = np.mean(error_per_freq_point[valid_mask])# * 100  # Convert to percentage
                     logger.debug(f"Sample {input_params}, Parameter {param}, Error per frequency point: {error_per_freq_point[valid_mask]}, Mean Error: {error:.2f}%")
