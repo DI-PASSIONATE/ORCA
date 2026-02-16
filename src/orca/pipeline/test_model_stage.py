@@ -42,7 +42,7 @@ class ModelTester(PipelineStage):
                 return context
 
             result_df = pd.read_csv(result_csv)  # Information
-            _, _, test_df = train_val_test_dataset(result_df, geometry, result_dir)
+            _, _, test_df = train_val_test_dataset(result_df)
 
         test_dataset = GeoToNtwkDataset(directory=OrcaFolderStructure.get_result_dir(context), data_df=test_df)
 

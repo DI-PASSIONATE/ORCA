@@ -1,12 +1,8 @@
 from typing import Optional, Any, Dict, Callable
 import os
 import pandas as pd
-import optuna
 from orca.training.datasets.dataloader import train_val_test_dataset
-from orca.training.datasets.geo_to_ntwk import GeoToNtwkDataset
 from orca.training.train import hyperparameter_tuning, train_model
-
-from sklearn.model_selection import train_test_split
 
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
@@ -43,7 +39,7 @@ class ModelTrainer(PipelineStage):
 
         result_df = pd.read_csv(result_csv)  # Information
 
-        train_df, val_df, test_df = train_val_test_dataset(result_df, geometry, result_dir)
+        train_df, val_df, test_df = train_val_test_dataset(result_df)
 
         train_dataset = geometry.dataset.new_split(directory=result_dir, data_df=train_df)
         val_dataset = geometry.dataset.new_split(directory=result_dir, data_df=val_df)
