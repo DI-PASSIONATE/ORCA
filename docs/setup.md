@@ -39,4 +39,4 @@ uv venv --python 3.13
 uv pip install -e .
 ```
 
-- If you plan to use Palace for EM simulations, install Palace on your system by following [the Palace installation instructions](https://awslabs.github.io/palace/stable/install/index.html).
+Install Palace on your system by following [the Palace installation instructions](https://awslabs.github.io/palace/stable/install/index.html).

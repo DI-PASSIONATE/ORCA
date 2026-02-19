@@ -1,3 +1,4 @@
+import json
 from typing import Optional, Any, Dict, Callable
 import os
 import torch
@@ -72,7 +73,7 @@ class OnnxExporter(PipelineStage):
         ranges = geometry.input_parameter_iterator.get_ranges()
         meta = onnx_model.metadata_props.add()
         meta.key = "input_parameter_ranges"
-        meta.value = str(ranges)
+        meta.value = json.dumps(ranges)
         onnx.save(onnx_model, output_path)
 
         context["model_path"] = output_path
