@@ -15,14 +15,17 @@ class ModelTrainer(PipelineStage):
     Pipeline stage for training AI/ML models based on simulation results.
     """
 
-    def __init__(self, hyperparameters: dict[str, Any] | None = None):
+    def __init__(self, hyperparameters: dict[str, Any] | None = None, val_frac: float = 0.15, test_frac: float = 0.15, n_samples: Optional[int] = None):
         """
         Initializes the ModelTrainer stage with optional hyperparameters for model training.
         By default, optuna tuning is used to search for optimal hyperparameters, 
         but specific hyperparameters can be provided to override the search space.
         """
         super().__init__(name="Model Trainer", index=4)
-        self.hyperparameters = hyperparameters
+        self.hyperparameters = hyperparameters,
+        self.val_frac = val_frac
+        self.test_frac = test_frac
+        self.n_samples = n_samples
 
     def run(
         self,
@@ -40,6 +43,12 @@ class ModelTrainer(PipelineStage):
         result_df = pd.read_csv(result_csv)  # Information
 
         train_df, val_df, test_df = train_val_test_dataset(result_df)
+
+        if self.n_samples is not None:
+            # Keep test_df size the same and reduce train_df and val_df 
+            train_df = train_df.head(int(self.n_samples * (1 - self.val_frac - self.test_frac)))
+            val_df = val_df.head(int(self.n_samples * self.val_frac))
+
 
         train_dataset = geometry.dataset.new_split(directory=result_dir, data_df=train_df)
         val_dataset = geometry.dataset.new_split(directory=result_dir, data_df=val_df)
