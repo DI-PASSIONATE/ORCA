@@ -70,17 +70,9 @@ class OnnxExporter(PipelineStage):
         # Add valid ranges as metadata to the ONNX model
         onnx_model = onnx.load(output_path)
         ranges = geometry.input_parameter_iterator.get_ranges()
-
-        for name in dataset.input_param_names:
-            if name in ranges:
-                min_val, max_val = ranges[name]
-                meta = onnx_model.metadata_props.add()
-                meta.key = f"{name}_min"
-                meta.value = f"{min_val}"
-                meta = onnx_model.metadata_props.add()
-                meta.key = f"{name}_max"
-                meta.value = f"{max_val}"
-
+        meta = onnx_model.metadata_props.add()
+        meta.key = "input_parameter_ranges"
+        meta.value = str(ranges)
         onnx.save(onnx_model, output_path)
 
         context["model_path"] = output_path
