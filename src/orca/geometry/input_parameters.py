@@ -100,6 +100,21 @@ class InputParameterIterator:
             + ([max(self.frequency)] if self.frequency is not None else []),
         )
 
+    def get_ranges(self) -> dict[str, tuple[float, float]]:
+        """
+        Returns a dictionary mapping parameter names to their (min, max) range.
+        """
+        ranges = {
+            name: (float(min(vals)), float(max(vals)))
+            for name, vals in self.input_values.items()
+        }
+        if self.frequency is not None:
+            ranges["frequency"] = (
+                float(min(self.frequency)),
+                float(max(self.frequency)),
+            )
+        return ranges
+
     def step_grid(self):
         """
         Generator that yields all combinations of input parameters using step grid strategy.

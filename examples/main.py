@@ -19,8 +19,15 @@ PLOT = False
 #     simconfig_filename = "/path/to/simconfig.simcfg" # Simulation configuration file generated manually or with setupEM
 # )
 
-hyperparameters = {'learning_rate': 0.0008166998266605425, 'batch_size': 128, 'epochs': 10, 'num_layers': 4, 'hidden_size': 512, 'activation_function': 'GELU'}
-
+# hyperparameters = {'learning_rate': 0.0008166998266605425, 'batch_size': 128, 'epochs': 10, 'num_layers': 4, 'hidden_size': 512, 'activation_function': 'GELU'}
+hyperparameters = {
+    "learning_rate": 0.0005,
+    "batch_size": 256,
+    "epochs": 15,
+    "num_layers": 5,
+    "hidden_size": 800,
+    "activation_function": "GELU"
+}
 
 # Use predefined geometry from examples
 np.random.seed(11)
@@ -32,27 +39,10 @@ orca_instance = ORCA(
         # orca.GDSGenerator(num_samples=1000),
         # orca.GDSConverter(),
         # orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
-        # orca.ModelTrainer(hyperparameters=hyperparameters),
-        # orca.OnnxExporter(),
+        orca.ModelTrainer(hyperparameters=hyperparameters),
+        orca.OnnxExporter(),
         orca.ModelTester(),
     ]
 )
 
 orca_instance.run(geometry=geometry, cpu_cores=16)
-
-
-if PLOT:
-    # # Load and plot the results
-    ntwk = rf.Network(
-        "/home/david/Documents/git/ORCA/results/tf_octa_c_ports/tf_octa_c_ports_110_dc_deembedded.s6p"
-    )
-    # Plot S-parameters
-    plot_rfic_transformer_metrics(ntwk)
-    # ntwk.plot_s_db()
-    # N, ntwk = single_ended_to_mixed_mode(ntwk)
-    print("Ground truth network S-parameters at position 10:")
-
-    ntwk2 = rf.Network("/home/david/Documents/git/ORCA/tf_octa_c_ports.s6p")
-    # N, ntwk2 = single_ended_to_mixed_mode(ntwk2)
-    plot_rfic_transformer_metrics(ntwk2)
-    plt.show()

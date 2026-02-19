@@ -1,6 +1,7 @@
 from typing import Optional, Any, Dict, Callable
 import os
 import torch
+import onnx
 
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
@@ -54,7 +55,10 @@ class OnnxExporter(PipelineStage):
         # Export to ONNX with multiple inputs/outputs using ONNXWrapper
         torch.onnx.export(
             wrapped_model,
-            args=tuple(torch.randn(1, 1, device=dataset.device) for _ in dataset.input_param_names),
+            args=tuple(
+                torch.randn(1, 1, device=dataset.device)
+                for _ in dataset.input_param_names
+            ),
             input_names=dataset.input_param_names,
             output_names=dataset.output_param_names,
             dynamic_shapes=(tuple({0: batch} for _ in dataset.input_param_names),),
@@ -62,6 +66,22 @@ class OnnxExporter(PipelineStage):
             external_data=False,
             dynamo=True,
         )
+
+        # Add valid ranges as metadata to the ONNX model
+        onnx_model = onnx.load(output_path)
+        ranges = geometry.input_parameter_iterator.get_ranges()
+
+        for name in dataset.input_param_names:
+            if name in ranges:
+                min_val, max_val = ranges[name]
+                meta = onnx_model.metadata_props.add()
+                meta.key = f"{name}_min"
+                meta.value = f"{min_val}"
+                meta = onnx_model.metadata_props.add()
+                meta.key = f"{name}_max"
+                meta.value = f"{max_val}"
+
+        onnx.save(onnx_model, output_path)
 
         context["model_path"] = output_path
         return context
