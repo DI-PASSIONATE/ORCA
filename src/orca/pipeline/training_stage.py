@@ -22,7 +22,7 @@ class ModelTrainer(PipelineStage):
         but specific hyperparameters can be provided to override the search space.
         """
         super().__init__(name="Model Trainer", index=4)
-        self.hyperparameters = hyperparameters,
+        self.hyperparameters = hyperparameters
         self.val_frac = val_frac
         self.test_frac = test_frac
         self.n_samples = n_samples
