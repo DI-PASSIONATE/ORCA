@@ -73,7 +73,7 @@ class TransformerOcta(BaseGeometry):
     def get_hyperparameter_search_space(self) -> dict[str, Any]:
         return {
             "learning_rate": optuna.distributions.FloatDistribution(1e-5, 1e-2, log=True),
-            "batch_size": [64, 128, 256, 512],
+            "batch_size": [32, 64, 128, 256, 512],
             "epochs": optuna.distributions.IntDistribution(5, 30, step=5),
             "num_layers": optuna.distributions.IntDistribution(3, 8, step=1),
             "hidden_size": [64, 128, 256, 512, 800, 1024],
