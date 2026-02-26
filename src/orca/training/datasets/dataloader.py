@@ -9,10 +9,16 @@ def train_val_test_dataset(result_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
     Args:
         result_df (pd.DataFrame): The input dataframe containing the simulation results and geometry information.
     """
-    # Since you can only split once with train_test_split, we first split into train and val_test, then split val_test into val and test
-    train_df, val_df, test_df = np.split(
-        result_df.sample(frac=1, random_state=11),  # Shuffle the dataframe
-        [int(0.7 * len(result_df)), int(0.85 * len(result_df))],  # 70% train, 15% val, 15% test
-    )
+    # Shuffle the dataframe
+    shuffled_df = result_df.sample(frac=1, random_state=11)
+
+    # Define split points
+    train_end = int(0.7 * len(shuffled_df))
+    val_end = int(0.85 * len(shuffled_df))
+
+    # Split using iloc to ensure we return DataFrames
+    train_df = shuffled_df.iloc[:train_end]
+    val_df = shuffled_df.iloc[train_end:val_end]
+    test_df = shuffled_df.iloc[val_end:]
 
     return train_df, val_df, test_df
