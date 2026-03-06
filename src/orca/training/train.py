@@ -211,7 +211,7 @@ def hyperparameter_tuning(train_dataset, val_dataset, geometry) -> dict[str, Any
         sampler=optuna.samplers.TPESampler(),
         pruner=optuna.pruners.MedianPruner(),
     )
-    study.optimize(objective, n_trials=50)
+    study.optimize(objective, n_trials=300)
 
     return study.best_params
     

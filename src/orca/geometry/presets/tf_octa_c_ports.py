@@ -74,11 +74,11 @@ class TransformerOcta(BaseGeometry):
         return {
             "learning_rate": optuna.distributions.FloatDistribution(1e-5, 1e-2, log=True),
             "batch_size": [32, 64, 128, 256, 512],
-            "epochs": optuna.distributions.IntDistribution(5, 30, step=5),
-            "num_layers": optuna.distributions.IntDistribution(3, 8, step=1),
-            "hidden_size": [64, 128, 256, 512, 800, 1024],
+            "epochs": optuna.distributions.IntDistribution(5, 50, step=5),
+            "num_layers": optuna.distributions.IntDistribution(3, 9, step=1),
+            "hidden_size": optuna.distributions.IntDistribution(64, 1024, step=64),
             #"dropout": optuna.distributions.FloatDistribution(0.0, 0.4, step=0.1),
-            "activation_function": ["ReLU", "ELU", "GELU", "SiLU"],
+            "activation_function": ["GELU", "SiLU"],
         }
     
     def get_model(self, hyperparameters: dict[str, Any]) -> nn.Module:
