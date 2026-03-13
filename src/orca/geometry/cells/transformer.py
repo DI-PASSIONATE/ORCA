@@ -5,13 +5,13 @@ from ihp import PDK
 
 def tf_octa_c(
     name: str = "tf_octa_c",
-    input_winding_diameter: float = 50.0,
-    output_winding_diameter: float = 50.0,
+    bottom_winding_diameter: float = 50.0,
+    top_winding_diameter: float = 50.0,
     center_displacement: float = 15.0,
     bottom_linewidth: float = 5.0,
     bottom_center_tap_width: float = 0.0,
     lower_feed_type: int = 1,
-    upper_linewidth: float = 5.0,
+    top_linewidth: float = 5.0,
     upper_center_tap_width: float = 0.0,
     upper_feed_type: int = 1,
     feedline_spacing: float = 6.0,
@@ -51,7 +51,7 @@ def tf_octa_c(
         bottom_center_tap_width if bottom_center_tap_width > 0.1 else bottom_linewidth
     )
     top_centertap_width = (
-        upper_center_tap_width if upper_center_tap_width > 0.1 else upper_linewidth
+        upper_center_tap_width if upper_center_tap_width > 0.1 else top_linewidth
     )
     fo_int = int(round(upper_feed_type))
     fi_int = int(round(lower_feed_type))
@@ -66,33 +66,33 @@ def tf_octa_c(
     fs_bot = max(feedline_spacing, top_centertap_width)
 
     # Geometry Limits
-    tf_y = max(output_winding_diameter, input_winding_diameter) / 2.0 + gnd_side_spacing
+    tf_y = max(top_winding_diameter, bottom_winding_diameter) / 2.0 + gnd_side_spacing
 
     # X Limits for Ports
     # Note: Winding edges are approx at center +/- diameter/2
-    top_right_x = (center_displacement / 2.0) + (output_winding_diameter / 2.0)
-    bot_right_x = (-center_displacement / 2.0) + (input_winding_diameter / 2.0)
+    top_right_x = (center_displacement / 2.0) + (top_winding_diameter / 2.0)
+    bot_right_x = (-center_displacement / 2.0) + (bottom_winding_diameter / 2.0)
     port_xr = max(top_right_x, bot_right_x) + gnd_upper_spacing
 
-    top_left_x = (center_displacement / 2.0) - (output_winding_diameter / 2.0)
-    bot_left_x = (-center_displacement / 2.0) - (input_winding_diameter / 2.0)
+    top_left_x = (center_displacement / 2.0) - (top_winding_diameter / 2.0)
+    bot_left_x = (-center_displacement / 2.0) - (bottom_winding_diameter / 2.0)
     port_xl = min(top_left_x, bot_left_x) - gnd_lower_spacing
 
     # Check if linewidth is too large for winding diameter
-    if bottom_linewidth > input_winding_diameter / 3.0:
+    if bottom_linewidth > bottom_winding_diameter / 3.0:
         raise ValueError("bottom_linewidth is too large for input_winding_diameter.")
-    elif upper_linewidth > output_winding_diameter / 3.0:
+    elif top_linewidth > top_winding_diameter / 3.0:
         raise ValueError("upper_linewidth is too large for output_winding_diameter.")
     # Check if center tap width is too large for winding diameter of the other winding
-    if bottom_centertap_width > output_winding_diameter / 3.0:
+    if bottom_centertap_width > top_winding_diameter / 3.0:
         raise ValueError(
             "bottom_center_tap_width is too large for output_winding_diameter."
         )
-    elif top_centertap_width > input_winding_diameter / 3.0:
+    elif top_centertap_width > bottom_winding_diameter / 3.0:
         raise ValueError(
             "upper_center_tap_width is too large for input_winding_diameter."
         )
-    elif abs(input_winding_diameter - output_winding_diameter) > 40.0:
+    elif abs(bottom_winding_diameter - top_winding_diameter) > 40.0:
         raise ValueError(
             "input_winding_diameter and output_winding_diameter difference is too large. No sufficient coupling."
         )
@@ -196,8 +196,8 @@ def tf_octa_c(
 
     # Top Winding (Rot 0, Gap Right -> connects to port_xr)
     create_octa_winding(
-        diameter=output_winding_diameter,
-        width=upper_linewidth,
+        diameter=top_winding_diameter,
+        width=top_linewidth,
         gap_size=fs_top,
         layer=LAYER_TOP,
         center_x=center_displacement / 2.0,
@@ -209,7 +209,7 @@ def tf_octa_c(
 
     # Bot Winding (Rot 180, Gap Left -> connects to port_xl)
     create_octa_winding(
-        diameter=input_winding_diameter,
+        diameter=bottom_winding_diameter,
         width=bottom_linewidth,
         gap_size=fs_bot,
         layer=LAYER_BOT,
@@ -224,8 +224,8 @@ def tf_octa_c(
     # 4. Main Ports (ip, in, op, on)
     # -------------------------------------------------
     # Calculated Y centers for ports based on adjusted gap sizes
-    y_top_p = fs_top / 2.0 + upper_linewidth / 2.0
-    y_top_n = -fs_top / 2.0 - upper_linewidth / 2.0
+    y_top_p = fs_top / 2.0 + top_linewidth / 2.0
+    y_top_n = -fs_top / 2.0 - top_linewidth / 2.0
     y_bot_p = (
         fs_bot / 2.0 + bottom_linewidth / 2.0
     )  # Bot is rotated 180, but Y logic is symmetric magnitude
@@ -252,26 +252,26 @@ def tf_octa_c(
     c.add_port(
         name="op",
         center=(round(port_xr - gnd_ring_width, 2), round(y_top_p, 2)),
-        width=upper_linewidth,
+        width=top_linewidth,
         orientation=0,
         layer=(201, 0),
     )
     add_port_marker(
         (round(port_xr - gnd_ring_width, 2), round(y_top_p, 2)),
-        upper_linewidth,
+        top_linewidth,
         (201, 0),
     )
     # ON (Top, Right, Lower)
     c.add_port(
         name="on",
         center=(round(port_xr - gnd_ring_width, 2), round(y_top_n, 2)),
-        width=upper_linewidth,
+        width=top_linewidth,
         orientation=0,
         layer=(202, 0),
     )
     add_port_marker(
         (round(port_xr - gnd_ring_width, 2), round(y_top_n, 2)),
-        upper_linewidth,
+        top_linewidth,
         (202, 0),
     )
     # Center Tap (Top, Center)

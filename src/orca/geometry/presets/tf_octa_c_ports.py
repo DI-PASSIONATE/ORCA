@@ -45,17 +45,17 @@ class TransformerOcta(BaseGeometry):
     input_parameter_iterator: InputParameterIterator = InputParameterIterator(
         picking_strategy="random",
         frequency=[1e8, 200e8],  # 1 GHz to 200 GHz
-        input_winding_diameter=[
+        bottom_winding_diameter=[
             x / 10 for x in range(200, 1001, 1)
         ],  # 20.0 to 100.0 in 0.1 steps
-        output_winding_diameter=[
+        top_winding_diameter=[
             x / 10 for x in range(200, 1001, 1)
         ],  # 20.0 to 100.0 in 0.1 steps
         center_displacement=[
             x / 10 for x in range(0, 151, 1)
         ],  # 0.0 to 15.0 in 0.1 steps
         bottom_linewidth=[x / 10 for x in range(20, 81, 1)],  # 2.0 to 10.0 in 0.1 steps
-        upper_linewidth=[x / 10 for x in range(20, 81, 1)],  # 2.0 to 10.0 in 0.1 steps
+        top_linewidth=[x / 10 for x in range(20, 81, 1)],  # 2.0 to 10.0 in 0.1 steps
     )
     features = FeatureTransformPipeline(
         # RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
@@ -104,16 +104,16 @@ class TransformerOcta(BaseGeometry):
     def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:
         c = tf_octa_c(
             name=name,
-            input_winding_diameter=params["input_winding_diameter"],
-            output_winding_diameter=params["output_winding_diameter"],
+            bottom_winding_diameter=params["bottom_winding_diameter"],
+            top_winding_diameter=params["top_winding_diameter"],
             center_displacement=params["center_displacement"],
             bottom_linewidth=params["bottom_linewidth"],
-            upper_linewidth=params["upper_linewidth"],
+            top_linewidth=params["top_linewidth"],
             bottom_center_tap_width=0,
             upper_center_tap_width=0,
             lower_feed_type=1,
             upper_feed_type=1,
-            feedline_spacing=max(params["bottom_linewidth"], params["upper_linewidth"])
+            feedline_spacing=max(params["bottom_linewidth"], params["top_linewidth"])
             + 0.1,
             gnd_upper_spacing=20,
             gnd_lower_spacing=20,
