@@ -27,8 +27,21 @@ def calculate_electrical_parameters(ntwk):
         Qs = np.imag(z_d22) / np.real(z_d22)
         k = np.abs(np.imag(z_d12)) / np.sqrt(np.abs(np.imag(z_d11) * np.imag(z_d22)))
 
-    srf_idx = np.where(np.diff(np.sign(np.imag(z_d11))))[0]
-    srf_f = freq_ghz[srf_idx[0]] if len(srf_idx) > 0 else None
+    #srf_idx = np.where(np.diff(np.sign(np.imag(z_d11))))[0]
+    #srf_f = freq_ghz[srf_idx[0]] if len(srf_idx) > 0 else None
+    im = np.imag(z_d11)
+    cross = np.where(im[:-1] * im[1:] < 0)[0]   # echte Vorzeichenwechsel
+
+    f_min = 20.0
+    cross = cross[freq_ghz[cross] >= f_min]
+
+    if cross.size == 0:
+        srf_f = None
+    else:
+        k = cross[0]
+        f0, f1 = freq_ghz[k], freq_ghz[k+1]
+        y0, y1 = im[k], im[k+1]
+        srf_f = float(f0 - y0 * (f1 - f0) / (y1 - y0))
 
     return {
         #"mm_ntwk": mm_ntwk,
