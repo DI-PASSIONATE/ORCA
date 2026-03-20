@@ -1,7 +1,7 @@
 from typing import Optional, Any, Dict, Callable
 import os
 import pandas as pd
-from orca.training.datasets.dataloader import train_val_test_dataset
+from sklearn.model_selection import train_test_split
 from orca.training.train import hyperparameter_tuning, train_model
 
 from orca.pipeline.pipeline_stage import PipelineStage
@@ -15,17 +15,24 @@ class ModelTrainer(PipelineStage):
     Pipeline stage for training AI/ML models based on simulation results.
     """
 
-    def __init__(self, hyperparameters: dict[str, Any] | None = None, val_frac: float = 0.15, test_frac: float = 0.15, n_samples: Optional[int] = None):
+    def __init__(self, hyperparameters: dict[str, Any] | None = None, test_frac: float = 0.15, n_train_samples: Optional[int] = None, n_fold_cv: int = 5):
         """
         Initializes the ModelTrainer stage with optional hyperparameters for model training.
         By default, optuna tuning is used to search for optimal hyperparameters, 
         but specific hyperparameters can be provided to override the search space.
+        
+        Args:
+            hyperparameters: Optional predefined hyperparameters. If None, hyperparameter tuning will be performed.
+            val_frac: Fraction of data to use for validation (default: 0.15).
+            test_frac: Fraction of data to use for testing (default: 0.15).
+            n_samples: Optional limit on the number of samples to use for training.
+            n_fold_cv: Number of folds for cross-validation during hyperparameter tuning (default: 5).
         """
         super().__init__(name="Model Trainer", index=4)
         self.hyperparameters = hyperparameters
-        self.val_frac = val_frac
         self.test_frac = test_frac
-        self.n_samples = n_samples
+        self.n_samples = n_train_samples
+        self.n_fold_cv = n_fold_cv
 
     def run(
         self,
@@ -40,15 +47,36 @@ class ModelTrainer(PipelineStage):
             logger.error(f"No result CSV file found for training at {result_csv}.")
             return context
 
-        result_df = pd.read_csv(result_csv)  # Information
+        result_df = pd.read_csv(result_csv)
 
-        train_df, val_df, test_df = train_val_test_dataset(result_df)
+        # Split into train_val and test using sklearn - train_val is used for n-fold-cross-validation during hyperparameter tuning
+        train_val_df, test_df = train_test_split(
+            result_df,
+            test_size=self.test_frac,
+            random_state=11
+        )
 
-        if self.n_samples is not None:
-            # Keep test_df size the same and reduce train_df and val_df 
-            train_df = train_df.head(int(self.n_samples * (1 - self.val_frac - self.test_frac)))
-            val_df = val_df.head(int(self.n_samples * self.val_frac))
+        if self.n_samples is not None and self.n_samples < len(train_val_df):
+            train_val_df = train_val_df.head(self.n_samples)
+            logger.info(f"Using only the first {self.n_samples} samples for training as specified in the ModelTrainer initialization.")
 
+
+        # Perform hyperparameter tuning if needed
+        if self.hyperparameters is None or type(self.hyperparameters) != dict:
+            logger.info("No hyperparameters provided, starting hyperparameter tuning with optuna...")
+            self.hyperparameters = hyperparameter_tuning(
+                train_val_df, result_dir, geometry, n_fold_cv=self.n_fold_cv
+            )
+            logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {self.hyperparameters}")
+        else:
+            logger.info(f"Using provided hyperparameters for training: {self.hyperparameters}")
+
+        # Split train_val_df into train and val for actual model training
+        train_df, val_df = train_test_split(
+            train_val_df,
+            test_size=self.test_frac,
+            random_state=11
+        )
 
         train_dataset = geometry.dataset.new_split(directory=result_dir, data_df=train_df)
         val_dataset = geometry.dataset.new_split(directory=result_dir, data_df=val_df)
@@ -56,13 +84,6 @@ class ModelTrainer(PipelineStage):
         logger.info(
             f"Loaded {len(train_dataset)} training samples and {len(val_dataset)} validation samples for model training. Beginning training..."
         )
-
-        if self.hyperparameters is None or type(self.hyperparameters) != dict:
-            logger.info("No hyperparameters provided, starting hyperparameter tuning with optuna...")
-            self.hyperparameters = hyperparameter_tuning(train_dataset, val_dataset, geometry)
-            logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {self.hyperparameters}")
-        else:
-            logger.info(f"Using provided hyperparameters for training: {self.hyperparameters}")
 
         trained_model, best_loss = train_model(
             train_dataset=train_dataset,

@@ -7,8 +7,7 @@ import tqdm
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
-from orca.training.datasets.dataloader import train_val_test_dataset
-from orca.training.train import test_model
+from sklearn.model_selection import train_test_split
 from orca.utils.folder_structure import OrcaFolderStructure
 from orca.training.datasets.geo_to_ntwk import GeoToNtwkDataset
 
@@ -42,7 +41,11 @@ class ModelTester(PipelineStage):
                 return context
 
             result_df = pd.read_csv(result_csv)  # Information
-            _, _, test_df = train_val_test_dataset(result_df)
+            train_val_df, test_df = train_test_split(
+                result_df,
+                test_size=0.15,  # Use the same test fraction as in training stage
+                random_state=11
+            )
 
         test_dataset = GeoToNtwkDataset(directory=OrcaFolderStructure.get_result_dir(context), data_df=test_df)
 

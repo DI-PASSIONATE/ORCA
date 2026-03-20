@@ -28,6 +28,7 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
     "scikit-rf",
+    "scikit-learn",
     "gdsfactory",
     "ihp-gdsfactory @ git+https://github.com/gdsfactory/IHP.git",
     "gds2palace",

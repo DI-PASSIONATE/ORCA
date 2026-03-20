@@ -3,9 +3,10 @@ from typing import Any
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 import tqdm
 import optuna
+from sklearn.model_selection import KFold
 
 
 def complex_mse(pred, target):
@@ -33,13 +34,12 @@ def train_model(
     epochs=100,
     batch_size=128,
     learning_rate=1e-3,
-    patience=20,
+    patience=10,
     criterion=nn.MSELoss(),
     optimizer=AdamW,
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     progress_callback=None,
     stage_name="Training",
-    trial: optuna.trial.Trial|None = None,
 ):
     model.to(device)
 
@@ -64,7 +64,7 @@ def train_model(
         train_loss = _train(model, criterion, optimizer, device, train_loader)
 
         # ---- VALIDATION ----
-        val_loss = _val(model, epoch, criterion, device, val_loader, scheduler, trial)
+        val_loss = _val(model, criterion, device, val_loader, scheduler)
 
         # ---- EARLY STOPPING ----
         if val_loss < best_loss:
@@ -114,7 +114,7 @@ def _train(model, criterion, optimizer, device, train_loader):
     return train_loss
 
 
-def _val(model, epoch, criterion, device, val_loader, scheduler, trial: optuna.trial.Trial|None):
+def _val(model, criterion, device, val_loader, scheduler):
     model.eval()
     val_loss = 0.0
 
@@ -128,11 +128,6 @@ def _val(model, epoch, criterion, device, val_loader, scheduler, trial: optuna.t
     val_loss /= len(val_loader)
 
     scheduler.step(val_loss)
-
-    if trial:
-        trial.report(val_loss, epoch)
-        if trial.should_prune():
-            raise optuna.exceptions.TrialPruned()
         
     return val_loss
 
@@ -163,11 +158,23 @@ def test_model(
 
     return test_loss
 
-def hyperparameter_tuning(train_dataset, val_dataset, geometry) -> dict[str, Any]:
+def hyperparameter_tuning(train_val_df, result_dir, geometry, n_fold_cv: int = 5) -> dict[str, Any]:
     """
     Performs hyperparameter tuning using optuna to find the best hyperparameters for the model.
-    This method can be called within the run method if self.hyperparameters is None to perform tuning.
+    Uses n-fold cross-validation on the provided train_val_df.
+    
+    Args:
+        train_val_df: The dataframe to use for training and validation.
+        result_dir: Directory path for dataset creation.
+        geometry: The geometry instance with get_model and get_hyperparameter_search_space methods.
+        n_fold_cv: Number of folds for cross-validation (default: 5).
+    
+    Returns:
+        A dictionary of the best hyperparameters found.
     """
+    # Create dataset from train_val_df to use for k-fold CV
+    train_val_dataset = geometry.dataset.new_split(directory=result_dir, data_df=train_val_df)
+    
     def objective(trial):
         hyperparameters = {}
         for key, distribution in geometry.get_hyperparameter_search_space().items():
@@ -180,38 +187,64 @@ def hyperparameter_tuning(train_dataset, val_dataset, geometry) -> dict[str, Any
             elif isinstance(distribution, optuna.distributions.CategoricalDistribution):
                  hyperparameters[key] = trial.suggest_categorical(key, distribution.choices)
         
-        # Instantiate model
-        try:
-            model = geometry.get_model(hyperparameters)
-        except Exception:
-            import traceback
-            traceback.print_exc()
-            raise optuna.exceptions.TrialPruned()
-
         # Extract training parameters from hyperparameters
         epochs = hyperparameters.get("epochs", 50)
         batch_size = hyperparameters.get("batch_size", 32)
         learning_rate = hyperparameters.get("learning_rate", 1e-3)
+        
+        # Perform k-fold cross-validation on train_val set only
+        kfold = KFold(n_splits=n_fold_cv, shuffle=True, random_state=42)
+        fold_losses = []
+        
+        for fold_idx, (train_indices, val_indices) in enumerate(kfold.split(train_val_dataset)):
+            # Create fold datasets (convert numpy arrays to lists)
+            fold_train_dataset = Subset(train_val_dataset, list(train_indices))
+            fold_val_dataset = Subset(train_val_dataset, list(val_indices))
+            
+            # Instantiate model for this fold
+            try:
+                model = geometry.get_model(hyperparameters)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                raise optuna.exceptions.TrialPruned()
+            
+            # Train model on this fold
+            try:
+                model, fold_val_loss = train_model(
+                    train_dataset=fold_train_dataset,
+                    val_dataset=fold_val_dataset,
+                    model=model,
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    learning_rate=learning_rate,
+                    progress_callback=None,
+                    stage_name=f"Tuning (Fold {fold_idx + 1}/{n_fold_cv})",
+                )
+                fold_losses.append(fold_val_loss)
 
-        model, val_loss = train_model(
-            train_dataset=train_dataset,
-            val_dataset=val_dataset,
-            model=model,
-            epochs=epochs,
-            batch_size=batch_size,
-            learning_rate=learning_rate,
-            progress_callback=None,
-            stage_name="Tuning",
-            trial=trial,
-        )
-        return val_loss
+                # Report once per fold using a unique step index for pruning.
+                trial.report(fold_val_loss, fold_idx)
+                print(f"Fold {fold_idx + 1}/{n_fold_cv} | Val Loss: {fold_val_loss:.4f}")
+                if trial.should_prune():
+                    raise optuna.exceptions.TrialPruned()
+            except optuna.exceptions.TrialPruned:
+                raise
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise optuna.exceptions.TrialPruned()
+        
+        # Return average validation loss across folds
+        avg_loss = sum(fold_losses) / len(fold_losses)
+        return avg_loss
 
     study = optuna.create_study(
         direction="minimize",
         sampler=optuna.samplers.TPESampler(),
         pruner=optuna.pruners.MedianPruner(),
     )
-    study.optimize(objective, n_trials=300)
+    study.optimize(objective, n_trials=100)
 
     return study.best_params
     
