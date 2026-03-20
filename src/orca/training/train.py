@@ -35,7 +35,7 @@ def train_model(
     batch_size=128,
     learning_rate=1e-3,
     patience=10,
-    criterion=nn.MSELoss(),
+    criterion=nn.L1Loss(),
     optimizer=AdamW,
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     progress_callback=None,
