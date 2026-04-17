@@ -244,7 +244,7 @@ def hyperparameter_tuning(train_val_df, result_dir, geometry, n_fold_cv: int = 5
         sampler=optuna.samplers.TPESampler(),
         pruner=optuna.pruners.MedianPruner(),
     )
-    study.optimize(objective, n_trials=100)
+    study.optimize(objective, n_trials=200)
 
     return study.best_params
     

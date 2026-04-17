@@ -22,6 +22,7 @@ class LogSignalHandler(logging.Handler):
 
 class PipelineWorker(QThread):
     progress = Signal(str, int, int, str)
+    confirm_overwrite = Signal(str)
     finished = Signal()
     error = Signal(str)
 
@@ -29,12 +30,15 @@ class PipelineWorker(QThread):
         super().__init__()
         self.orca = orca_instance
         self.geometry = geometry
+        self._overwrite_result = None
+        self._waiting_for_overwrite = False
 
     def run(self):
         try:
             self.orca.run(
                 geometry=self.geometry, 
-                progress_callback=self.progress_callback
+                progress_callback=self.progress_callback,
+                overwrite_callback=self.overwrite_callback
             )
             self.finished.emit()
         except Exception as e:
@@ -43,6 +47,20 @@ class PipelineWorker(QThread):
 
     def progress_callback(self, stage_name, current, total, message):
         self.progress.emit(stage_name, current, total, message)
+
+    def overwrite_callback(self, base_dir):
+        self._overwrite_result = None
+        self._waiting_for_overwrite = True
+        self.confirm_overwrite.emit(base_dir)
+        
+        while self._waiting_for_overwrite:
+            self.msleep(100)
+            
+        return self._overwrite_result
+
+    def set_overwrite_result(self, result):
+        self._overwrite_result = result
+        self._waiting_for_overwrite = False
 
 class PipelineWindow(QMainWindow):
     log_signal = Signal(str)
@@ -151,10 +169,21 @@ class PipelineWindow(QMainWindow):
         
         self.worker = PipelineWorker(orca_instance, geometry)
         self.worker.progress.connect(self.update_progress)
+        self.worker.confirm_overwrite.connect(self.handle_overwrite_confirmation)
         self.worker.finished.connect(self.pipeline_finished)
         self.worker.error.connect(self.pipeline_error)
         self.worker.start()
         
+    def handle_overwrite_confirmation(self, base_dir):
+        reply = QMessageBox.question(
+            self, 
+            "Overwrite Confirmation", 
+            f"Output directory {base_dir} already exists. Stages may overwrite existing files. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+            QMessageBox.StandardButton.No
+        )
+        self.worker.set_overwrite_result(reply == QMessageBox.StandardButton.Yes)
+
     def update_progress(self, stage_name, current, total, message):
         self.progress_label.setText(f"{stage_name}: {message}")
         if total > 0:

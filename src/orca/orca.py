@@ -21,6 +21,7 @@ class ORCA:
         geometry: BaseGeometry,
         cpu_cores: int = multiprocessing.cpu_count(),
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        overwrite_callback: Optional[Callable[[str], bool]] = None,
     ):
         """
         Runs the ORCA pipeline with the specified geometry and CPU cores.
@@ -39,12 +40,17 @@ class ORCA:
 
         if os.path.exists(context["base_dir"]):
             # Ask user to confirm overwriting existing output directory
-            response = input(
-                f"Output directory {context['base_dir']} already exists. Stages may overwrite existing files. Continue? (y/n): "
-            )
-            if response.lower() != "y":
-                logger.info("Aborting pipeline run.")
-                return
+            if overwrite_callback:
+                if not overwrite_callback(context["base_dir"]):
+                    logger.info("Aborting pipeline run.")
+                    return
+            else:
+                response = input(
+                    f"Output directory {context['base_dir']} already exists. Stages may overwrite existing files. Continue? (y/n): "
+                )
+                if response.lower() != "y":
+                    logger.info("Aborting pipeline run.")
+                    return
 
         for stage in self.stages:
 
