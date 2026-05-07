@@ -5,9 +5,9 @@ from orca.gui.pipeline_window import PipelineWindow
 
 def run_gui():
     app = QApplication(sys.argv)
-    apply_theme(app)
     
     window = PipelineWindow()
+    apply_theme(window)
     window.show()
     sys.exit(app.exec())
 
