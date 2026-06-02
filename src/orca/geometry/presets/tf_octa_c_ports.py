@@ -30,6 +30,20 @@ from orca.training.datasets.geo_to_s_param_single_f import (
     GeoToSParamDatasetSingleFrequency,
 )
 
+# import gdstk
+# def _snap_gds_inplace(path: str, grid_nm: int = 10) -> None:
+#     """Snap all polygon vertices in a GDS file to the nearest grid_nm grid.
+
+#     gf.Path.extrude() produces off-grid vertices for angled octagon segments
+#     (e.g. width/2 * sin(22.5°) = 0.957 µm is not on the 10 nm grid).
+#     gdstk is always available as a gdsfactory dependency.
+#     """
+#     grid_um = grid_nm / 1000.0
+#     lib = gdstk.read_gds(path)
+#     for cell in lib.cells:
+#         for poly in cell.polygons:
+#             poly.points = np.round(poly.points / grid_um) * grid_um
+#     lib.write_gds(path)
 
 @dataclass
 class TransformerOcta(BaseGeometry):

@@ -1,7 +1,35 @@
 import gdsfactory as gf
+import klayout.db as kdb
 import numpy as np
 from ihp import PDK
 
+GRID_NM = 10  # 10 nm manufacturing grid = 0.01 µm
+
+def _snap_inplace(c: gf.Component) -> None:
+    """Snap all polygon vertices to GRID_NM across the component hierarchy.
+
+    gf.Path.extrude() computes perpendicular offsets for angled segments
+    (e.g. the 22.5° octagon sides) that land off the 10 nm grid.
+    This iterates every cell in the component's call tree and snaps
+    each polygon vertex in-place — without flattening, so the cutout
+    geometry and all reference offsets stay untouched.
+    """
+    layout = c.layout()
+    all_cell_idxs = set(c.called_cells())
+    all_cell_idxs.add(c.cell_index())
+
+    for idx in all_cell_idxs:
+        cell = layout.cell(idx)
+        for layer_idx in layout.layer_indexes():
+            for shape in cell.shapes(layer_idx).each(kdb.Shapes.SPolygons):
+                pts = [
+                    kdb.Point(
+                        round(p.x / GRID_NM) * GRID_NM,
+                        round(p.y / GRID_NM) * GRID_NM,
+                    )
+                    for p in shape.polygon.each_point_hull()
+                ]
+                shape.polygon = kdb.Polygon(pts)
 
 def tf_octa_c(
     name: str = "tf_octa_c",
@@ -413,5 +441,11 @@ def tf_octa_c(
         raise ValueError(
             "Ground ring dimensions are invalid due to port spacing. Adjust parameters."
         )
+
+    # Snap all polygon vertices to the 10 nm manufacturing grid.
+    # gf.Path.extrude() produces off-grid vertices for angled segments.
+    # _snap_inplace iterates the component's cell hierarchy without flattening,
+    # so the cutout geometry and reference offsets stay untouched.
+    _snap_inplace(c)
 
     return c
