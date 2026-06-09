@@ -58,18 +58,18 @@ class TransformerOcta(BaseGeometry):
     )
     input_parameter_iterator: InputParameterIterator = InputParameterIterator(
         picking_strategy="random",
-        frequency=[1e8, 200e8],  # 1 GHz to 200 GHz
+        frequency=[1e8, 500e8],  # 1 GHz to 500 GHz
         bottom_winding_diameter=[
-            x / 10 for x in range(200, 1001, 1)
-        ],  # 20.0 to 100.0 in 0.1 steps
+            x / 10 for x in range(200, 1201, 1)
+        ],  # 20.0 to 120.0 in 0.1 steps
         top_winding_diameter=[
-            x / 10 for x in range(200, 1001, 1)
-        ],  # 20.0 to 100.0 in 0.1 steps
+            x / 10 for x in range(200, 1201, 1)
+        ],  # 20.0 to 120.0 in 0.1 steps
         center_displacement=[
             x / 10 for x in range(0, 151, 1)
         ],  # 0.0 to 15.0 in 0.1 steps
-        bottom_linewidth=[x / 10 for x in range(20, 81, 1)],  # 2.0 to 10.0 in 0.1 steps
-        top_linewidth=[x / 10 for x in range(20, 81, 1)],  # 2.0 to 10.0 in 0.1 steps
+        bottom_linewidth=[x / 10 for x in range(20, 121, 1)],  # 2.0 to 12.0 in 0.1 steps
+        top_linewidth=[x / 10 for x in range(20, 121, 1)],  # 2.0 to 12.0 in 0.1 steps
     )
     features = FeatureTransformPipeline(
         # RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
