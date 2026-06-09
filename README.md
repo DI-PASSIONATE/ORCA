@@ -8,10 +8,10 @@ Gianluca Simone\*, David Lurz\*, Martin Grund\*, Fabian Schneider°, Michael Loo
 
 ° Chair of Integrated Electronic Systems, Otto-von-Guericke-University Magdeburg, Germany
 
-[Paper (Coming Soon)](#cite-this-work) | [Documentation](https://davidl-11.github.io/ORCA/) | [BibTeX](#cite-this-work)
+[Paper (Coming Soon)](#cite-this-work) | [Documentation](https://DI-PASSIONATE.github.io/ORCA/) | [BibTeX](#cite-this-work)
 
 > [!NOTE]
-> ORCA is still under active development. The current codebase is functional and can be used for experimentation, but we keep adding features, improving documentation, and refining the API. If you encounter any issues or have questions, please [open an issue](https://github.com/DavidL-11/ORCA/issues) or reach out.
+> ORCA is still under active development. The current codebase is functional and can be used for experimentation, but we keep adding features, improving documentation, and refining the API. If you encounter any issues or have questions, please [open an issue](https://github.com/DI-PASSIONATE/ORCA/issues) or reach out.
 
 **ORCA** is an AI-assisted pipeline for building surrogate models of RF integrated circuit passives.
 It combines:
@@ -52,7 +52,7 @@ In short: **ORCA builds the model, COBRA uses it** to optimize circuits quickly 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/DavidL-11/ORCA
+git clone https://github.com/DI-PASSIONATE/ORCA
 cd ORCA
 ```
 
@@ -86,7 +86,7 @@ uv pip install -e .
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/DavidL-11/ORCA
+git clone https://github.com/DI-PASSIONATE/ORCA
 cd ORCA
 ```
 
@@ -155,7 +155,7 @@ You can omit any stage (e.g. skip `GDSGenerator` and `GDSConverter` if simulatio
 
 ### 3. OpenStack remote execution
 
-For large-scale simulation runs, we provide an OpenStack VM image and a CLI controller in the [ORCA-OpenStack repository](https://github.com/DavidL-11/ORCA-OpenStack). This lets you launch simulation and training jobs on a remote server without managing the environment manually.
+For large-scale simulation runs, we provide an OpenStack VM image and a CLI controller in the [ORCA-OpenStack repository](https://github.com/DI-PASSIONATE/ORCA-OpenStack). This lets you launch simulation and training jobs on a remote server without managing the environment manually.
 
 ## Pipeline Stages
 
