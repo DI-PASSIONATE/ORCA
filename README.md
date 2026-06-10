@@ -29,7 +29,7 @@ Given a geometry class with configurable parameters, ORCA automatically:
 4. exports the trained model to a portable ONNX file,
 5. and tests the model against held-out simulation data.
 
-The resulting ONNX model can then be loaded by [COBRA](https://github.com/DI-PASSIONATE/COBRA) for fast circuit-level optimization — no EM simulation required at optimization time.
+The resulting ONNX model can then be loaded by [COBRA](https://github.com/DI-PASSIONATE/COBRA) for fast circuit-level optimization — no EM simulation required at optimization time. Created models can easily be shared via Hugging Face Hub for others to use in their own design flows and reduce redundant EM simulations across the community.
 
 ## How ORCA Fits with COBRA
 
@@ -244,6 +244,58 @@ See the [Custom Classes documentation](docs/custom_class.md) for a full walkthro
 
 The built-in `TransformerOcta` preset (`src/orca/geometry/presets/tf_octa_c_ports.py`) is a good reference implementation.
 
+## Sharing Models on Hugging Face
+
+After training a surrogate model with ORCA, you can publish it to [Hugging Face](https://huggingface.co) so that COBRA — or anyone else — can discover and use it directly.
+
+### Requirements
+
+- A Hugging Face account
+- The `huggingface_hub` Python package: `pip install huggingface_hub`
+
+### File structure
+
+Each model repository must contain exactly two files named after the model:
+
+| File | Description |
+|------|-------------|
+| `<model_name>.onnx` | The exported ONNX surrogate model produced by `OnnxExporter` |
+| `<model_name>.py` | The Python geometry class (subclass of `BaseGeometry`) used to generate and train the model |
+
+The geometry class file is required so that COBRA can reconstruct the parameter space, call back into the geometry for EM verification, and correctly pre-process inference inputs.
+
+### Step-by-step upload
+
+1. **Create a new model repository** at [https://huggingface.co/new](https://huggingface.co/new).  
+   Set visibility to **Public** and note the repository ID (e.g. `your-username/tf-octa-c-ports`). Click on "Create model".
+
+2. Create a **Model Card** (essentially just a structured README) for your repository. Click on "Add Model Card". From there, add the tag "orca-surrogate" to make it discoverable by COBRA and other users looking for ORCA. The model card should then include this section:
+
+   ```markdown
+   ---
+   tags:
+   - orca-surrogate
+   ```
+
+3. **Upload the files** using the `huggingface_hub` library:
+   ```python
+   from huggingface_hub import HfApi
+
+   api = HfApi()
+   repo_id = "your-username/tf-octa-c-ports"  # replace with your repo
+
+   api.upload_file(path_or_fileobj="tf_octa_c_ports.onnx", path_in_repo="tf_octa_c_ports.onnx", repo_id=repo_id)
+   api.upload_file(path_or_fileobj="tf_octa_c_ports.py",   path_in_repo="tf_octa_c_ports.py",   repo_id=repo_id)
+   ```
+   Or via the Hugging Face web interface: go to your repository → **Files** → **Add file → Upload files**.
+
+4. **Verify** the repository contains both `<model_name>.onnx` and `<model_name>.py` and is tagged `orca-surrogate`.
+
+### Using a shared model in COBRA
+
+Once uploaded, COBRA can query all public `orca-surrogate` models or load a specific one directly by its Hugging Face repository ID. Refer to the [COBRA documentation](https://github.com/DI-PASSIONATE/COBRA) for details on how to point COBRA at a Hugging Face model repository.
+
+
 ## Troubleshooting
 
 - If the `orca` command is not found, ensure your virtual environment is activated and reinstall with `pip install -e .`.
@@ -267,10 +319,7 @@ If you use ORCA in your research, please cite our upcoming SBCCI 2026 paper:
 ```
 
 ## Acknowledgements
-
-This work was supported by the Bundesministerium für Forschung, Technologie und Raumfahrt (BMFTR) under the DI-PASSIONATE project. We thank our colleagues in the LITES institute for their feedback and support during development.
-
-Thank you to all the open-source projects that made this work possible:
+This work was supported by the Bundesministerium für Forschung, Technologie und Raumfahrt (BMFTR) under the DI-PASSIONATE project. We thank our colleagues in the LITES institute for their feedback and support during development. Special thanks to the open-source community for providing the tools and libraries that made this project possible, including but not limited to:
 
 - [gdsfactory](https://github.com/gdsfactory/gdsfactory)
 - [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2)
@@ -280,6 +329,7 @@ Thank you to all the open-source projects that made this work possible:
 - [ONNX](https://github.com/onnx/onnx)
 - [scikit-rf](https://github.com/scikit-rf/scikit-rf)
 - [OpenStack](https://opendev.org/openstack)
+- [Hugging Face Hub](https://github.com/huggingface/huggingface_hub)
 
 <table width="100%">
   <tr>
