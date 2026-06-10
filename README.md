@@ -1,4 +1,5 @@
 # ORCA — Open RF Integrated Circuit Automation
+[![pages-build-deployment](https://github.com/DI-PASSIONATE/ORCA/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/DI-PASSIONATE/ORCA/actions/workflows/pages/pages-build-deployment)
 
 ©2026
 
