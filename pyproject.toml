@@ -7,7 +7,7 @@ name = "orca"
 version = "1.0.0"
 description = "ORCA - Open RF Circuit Automation"
 readme = "README.md"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
     {name = "David Lurz", email = "david.lurz@fau.de"},
