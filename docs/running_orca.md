@@ -1,52 +1,100 @@
-## Running ORCA
+# Quickstart
 
-If you have followed the installation instructions (see [Setup](/docs/setup.md)), you are ready to run ORCA. There are currently three ways to run ORCA:
+Once you have completed installation (see **Getting Started -> Installation**), you are ready to run ORCA.
 
-### 1. Graphical User Interface (GUI)
+## 1. Prepare Inputs
 
-For an interactive experience with real-time progress visualization:
+You need:
+
+- A geometry class (`BaseGeometry` subclass) with parameter definitions.
+- A stackup XML file describing the physical layer stack.
+- A Palace simulation configuration file (`.simcfg`).
+- A Palace executable (local or via Apptainer container).
+
+For an immediate starting point, use the built-in `TransformerOcta` geometry from `examples/`.
+
+## 2. Run GUI Mode
 
 ```bash
 orca
 ```
 
-### 2. Python Script
+In GUI mode:
+
+1. Select a geometry class.
+2. Configure pipeline stages and parameters.
+3. Set Palace executable path.
+4. Start the pipeline.
+
+## 3. Run Script Mode
 
 For direct integration into scripts or custom workflows:
 
 ```python
+import orca
 from orca import ORCA
-
-### Example of using a custom geometry
-# geometry = MyCustomGeometry( # Python class that inherits from BaseGeometry
-#     name = "my_geometry",
-#     stackup_xml = "/path/to/stackup.xml", # XML file defining the physical layer stackup
-#     simconfig_filename = "/path/to/simconfig.simcfg" # Simulation configuration file generated manually or with setupEM
-# )
-
-# Use predefined geometry from examples
 from orca.geometry.examples.transformer.tf_octa_c_ports import TransformerOcta
+
 geometry = TransformerOcta()
 
-# Setup the pipeline stages
 orca_instance = ORCA(
     [
         orca.GDSGenerator(num_samples=1000),
         orca.GDSConverter(),
-        orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
-        orca.ModelTrainer(),
+        orca.PalaceSimulator(
+            palace_executable="apptainer exec ~/palace/palace.sif palace",
+            touchstone_type="dc_deembedded",  # "all", "normal", "deembedded", "dc", "dc_deembedded"
+        ),
+        orca.ModelTrainer(
+            # hyperparameters=None,   # If None, Optuna tunes automatically
+            # test_frac=0.15,         # Fraction of data held out for testing
+            # n_train_samples=None,   # Optional cap on training samples
+            # n_fold_cv=5,            # Cross-validation folds during tuning
+        ),
         orca.OnnxExporter(),
         orca.ModelTester(),
     ]
 )
 
-# Run the ORCA pipeline
 orca_instance.run(geometry=geometry, cpu_cores=16)
 ```
 
-This will create 1000 differently parameterized instances of the `tf_octa_c_ports` transformer geometry, run electromagnetic simulations using Palace, store the results in Touchstone format, train a machine learning model, export it to ONNX format, and finally test the model.
-If you only want to run specific stages of the pipeline, you can modify the list of stages passed to the `ORCA` constructor.
-Note that some stages may require additional parameters or depend on the outputs of previous stages.
+This will:
 
-### 3. OpenStack VM REST API
-OpenStack is an open-source cloud computing platform (like AWS), perfect for running large-scale simulations. We provide an OpenStack VM image and an API with the corresponding client CLI in our [ORCA-OpenStack repository](https://github.com/DavidL-11/ORCA-OpenStack).
+1. Generate 1000 parameterised GDS layout variants.
+2. Convert each to a Palace mesh and run full-wave EM simulation.
+3. Store results in Touchstone format under `output/<geometry_name>/`.
+4. Train a neural network on the simulation dataset.
+5. Export the trained model to ONNX format.
+6. Test prediction accuracy against held-out simulation data.
+
+!!! tip
+	You can run only a subset of pipeline stages by modifying the list passed to `ORCA(...)`. Stages are sorted by their internal index and some depend on outputs of earlier stages. Stage indices: `GDSGenerator=0`, `GDSConverter=1`, `PalaceSimulator=2`, `ModelTrainer=4`, `OnnxExporter=5`, `ModelTester=6`.
+
+## 4. Run at Scale with OpenStack
+
+For large-scale simulation campaigns, we provide an OpenStack VM image and a REST API with corresponding client CLI.
+See the [ORCA-OpenStack repository](https://github.com/DavidL-11/ORCA-OpenStack) for details.
+
+## 5. Inspect Results
+
+Each run stores artifacts under `output/<geometry_name>/`:
+
+```text
+output/<geometry_name>/
+    context.json
+    geometries/
+    models/
+    palace_sims/
+    results/
+```
+
+Typical contents include:
+
+- Touchstone `.sNp` files per simulated sample.
+- PyTorch model checkpoint.
+- Exported `.onnx` surrogate model.
+- Full run context JSON.
+
+!!! tip
+	The exported `.onnx` file can be used directly with COBRA for circuit-level RFIC optimization.

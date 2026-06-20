@@ -10,9 +10,11 @@ edit_uri: edit/main/docs/
 # Page tree
 nav:
   - Home: index.md
-  - Getting Started: setup.md
-  - Custom Classes: custom_class.md
-  - Running ORCA: running_orca.md
+  - Getting Started:
+    - Installation: setup.md
+    - Quickstart: running_orca.md
+  - User Guide:
+    - Custom Classes: custom_class.md
 
 
 # Configuration

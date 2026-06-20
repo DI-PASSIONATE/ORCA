@@ -14,6 +14,7 @@ import re
 import json
 import math
 import skrf as rf
+from skrf.network import connect
 import numpy as np
 from orca.logger import logger
 
@@ -304,7 +305,7 @@ def port_deembedding(snp_filename, port_info_available, port_info_data):
             # cascade with the main network
             # due to internal renumbering the new port always appears at the end
             # after iterating over all ports we have the correct order again
-            ntwk = rf.connect(inductor, 0, ntwk, 0)
+            ntwk = connect(inductor, 0, ntwk, 0)
 
         filename, file_extension = os.path.splitext(snp_filename)
         out_filename = filename + "_deembedded"  # without extension

@@ -1,5 +1,6 @@
-## Custom Classes
-If you want to simulate and predict your own geometry, you simply need to create three files:
+# Custom Classes
+
+If you want to simulate and predict your own geometry, you need to create three files:
 
 - A python file extending the `BaseGeometry` class and implementing the required methods.
 - A stackup XML file defining the layers of your geometry.
@@ -8,15 +9,29 @@ If you want to simulate and predict your own geometry, you simply need to create
 Once you have these three files, you can head over to [Running ORCA](/docs/running_orca.md) to see how to run ORCA with these files.
 
 ### Python Class
-The Python class should extend the `orca.BaseGeometry` class and implement the following properties/methods:
+The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must implement the following:
 
-- `name`: A string representing the name of your geometry.
-- `stackup_xml`: A string / path to your stackup XML file.
-- `simconfig_filename`: A string / path to your simulation configuration file.
-- `n_samples`: An integer defining the number of samples to generate for training.
-- `input_parameter_iterator`: An instance of `InputParameterIterator` defining the input parameters and their ranges.
-- `create_gds_file(name: str, params: dict[str, any]) -> str`: A method that creates the GDS file for the geometry given a name and a dictionary of input parameters. It should return the path to the created GDS file.
-- `postprocess_outputs(output, frequency_points=None)`: (Optional) A method that post-processes the raw model outputs after inference. This can be used to save Touchstone files, plot results, etc.
+**Required dataclass fields:**
+
+- `name: str` — Unique identifier for the geometry (used as directory name and file prefix).
+- `stackup_xml: str` — Path to the stackup XML file describing the physical layer stack.
+- `simconfig_filename: str` — Path to the Palace simulation configuration file (`.simcfg`).
+- `input_parameter_iterator: InputParameterIterator` — Defines geometry parameters and their sampling ranges.
+- `dataset: BaseDataset` — Dataset class instance (e.g. `GeoToSParamDatasetSingleFrequency`) used for training.
+
+**Optional dataclass fields:**
+
+- `features: FeatureTransformPipeline | None` — Optional pipeline of engineered features (ratios, Chebyshev polynomials, etc.) applied to inputs before the model.
+
+**Required abstract methods:**
+
+- `create_gds_file(name, output_path, params) -> str` — Generates a GDS layout file from geometry parameters. Returns the path to the created file.
+- `get_model(hyperparameters: dict) -> nn.Module` — Returns a PyTorch model instance configured from the given hyperparameters. Called during `ModelTrainer` hyperparameter search.
+- `get_hyperparameter_search_space() -> dict` — Returns an Optuna hyperparameter search space dictionary. Used by `ModelTrainer` to tune the model.
+
+**Optional override:**
+
+- `postprocess_outputs(output, frequency_points)` — Post-processes raw ONNX model outputs after inference. Default implementation returns outputs unchanged.
 
 Example:
 
@@ -30,21 +45,19 @@ class TransformerOcta(BaseGeometry):
     name: str = "tf_octa_c_ports"
     stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml")
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
-    params = None
     input_parameter_iterator: InputParameterIterator = InputParameterIterator(
         picking_strategy="random",
-        frequency=[1e8, 200e8],  # 1 GHz to 200 GHz
-        input_winding_diameter=[x / 10 for x in range(200, 1001, 1)],  # 20.0 to 100.0 in 0.1 steps
-        output_winding_diameter=[x / 10 for x in range(200, 1001, 1)],  # 20.0 to 100.0 in 0.1 steps
-        center_displacement=[x / 10 for x in range(0, 151, 1)],  # 0.0 to 15.0 in 0.1 steps
-        bottom_linewidth=[x / 10 for x in range(20, 81, 1)],  # 2.0 to 10.0 in 0.1 steps
-        upper_linewidth=[x / 10 for x in range(20, 81, 1)],  # 2.0 to 10.0 in 0.1 steps
+        frequency=[1e8, 500e8],  # 1 GHz to 500 GHz
+        bottom_winding_diameter=[x / 10 for x in range(200, 1201, 1)],  # 20.0 to 120.0 in 0.1 steps
+        top_winding_diameter=[x / 10 for x in range(200, 1201, 1)],  # 20.0 to 120.0 in 0.1 steps
+        center_displacement=[x / 10 for x in range(0, 151, 1)],   # 0.0 to 15.0 in 0.1 steps
+        bottom_linewidth=[x / 10 for x in range(20, 121, 1)],     # 2.0 to 12.0 in 0.1 steps
+        top_linewidth=[x / 10 for x in range(20, 121, 1)],        # 2.0 to 12.0 in 0.1 steps
     )
     features = FeatureTransformPipeline(
-        RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
-        RatioFeature(i=3, j=4),  # bottom_linewidth / upper_linewidth
-        RatioFeature(i=5, j=0),  # frequency / input_winding_diameter
-        ChebyshevFeature(i=5, degree=3),  # Chebyshev features of frequency
+        # Add RatioFeature or ChebyshevFeature transforms here if desired
+        # RatioFeature(i=0, j=1),         # bottom_winding_diameter / top_winding_diameter
+        # ChebyshevFeature(i=5, degree=3), # Chebyshev features of frequency
     )
     dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(
         n_ports=6,
@@ -52,11 +65,24 @@ class TransformerOcta(BaseGeometry):
         input_normalizer=OutputMinMaxNormalizer(),
         output_normalizer=StandardNormalizer(),
     )
-    model: nn.Module = torchvision.ops.MLP(
-        in_channels=5 + 1 + len(features),  # 5 original params + 1 frequency + features
-        hidden_channels=[128,256,256,128,72,],  # 6-port S-parameters (Re/Im) -> 6*6*2=72
-        activation_layer=nn.SiLU,
-    )
+
+    def get_hyperparameter_search_space(self) -> dict:
+        return {
+            "learning_rate": optuna.distributions.FloatDistribution(1e-5, 1e-2, log=True),
+            "batch_size": [32, 64, 128, 256, 512],
+            "epochs": optuna.distributions.IntDistribution(5, 50, step=5),
+            "num_layers": optuna.distributions.IntDistribution(3, 9),
+            "hidden_size": optuna.distributions.IntDistribution(128, 2048, step=128),
+            "activation_function": ["GELU", "SiLU"],
+        }
+
+    def get_model(self, hyperparameters: dict) -> nn.Module:
+        hidden_channels = [hyperparameters["hidden_size"]] * hyperparameters["num_layers"] + [72]
+        return torchvision.ops.MLP(
+            in_channels=5 + 1,  # 5 geometry params + 1 frequency
+            hidden_channels=hidden_channels,
+            activation_layer=getattr(nn, hyperparameters["activation_function"]),
+        )
 
     @staticmethod
     def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:
@@ -99,6 +125,58 @@ class TransformerOcta(BaseGeometry):
 
         return output_dict
 ```
+
+### Reference: InputParameterIterator
+
+`InputParameterIterator` defines the set of geometry parameters and how they are sampled during GDS generation.
+
+```python
+InputParameterIterator(
+    picking_strategy="random",  # "grid" / "uniform_grid", "step_grid", or "random"
+    frequency=[1e8, 500e8],     # Optional: frequency range included for normalisation (not iterated)
+    param_a=[...],              # List/range of possible values for each geometry parameter
+    param_b=[...],
+)
+```
+
+Picking strategies:
+
+| Strategy | Behaviour |
+|---|---|
+| `"grid"` / `"uniform_grid"` | Uniform grid across all parameter combinations |
+| `"step_grid"` | Grid using explicit step sizes |
+| `"random"` | Random sampling without replacement |
+
+### Reference: Dataset Types
+
+| Class | Description |
+|---|---|
+| `GeoToSParamDatasetSingleFrequency` | One training sample per frequency point per geometry (recommended) |
+| `GeoToSParamDataset` | One training sample per geometry (full frequency sweep as a vector) |
+
+### Reference: Feature Transforms
+
+Feature transforms are applied to geometry inputs before the model and baked into the exported ONNX.
+
+| Class | Description |
+|---|---|
+| `RatioFeature(i, j)` | Appends `params[i] / params[j]` as an extra input feature |
+| `ChebyshevFeature(i, degree)` | Appends Chebyshev polynomial features of `params[i]` up to `degree` |
+
+### Reference: Normalizers
+
+**Input normalizers** (passed as `input_normalizer` to the dataset):
+
+| Class | Description |
+|---|---|
+| `OutputMinMaxNormalizer` | Min-max normalisation derived from output statistics |
+
+**Output normalizers** (passed as `output_normalizer` to the dataset):
+
+| Class | Description |
+|---|---|
+| `StandardNormalizer` | Z-score normalisation (zero mean, unit variance) |
+| `OutputMinMaxNormalizer` | Min-max normalisation |
 
 ### Stackup XML File
 There are multiple examples of stackup XML files in the `src/orca/geometry/examples/` directory. Often these are sufficient to get started. You can also create your own stackup XML file or adjust [one of the examples here](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/tree/main/workflow) to fit your needs.

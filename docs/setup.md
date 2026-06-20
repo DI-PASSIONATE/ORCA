@@ -1,42 +1,78 @@
-## Setup
+## Installation
 
-Required tools:
+## Requirements
 
-- Python 3.11 or higher
-- Python package manager (Recommended: `uv`)
-- virtual environment tool (e.g., venv or conda)
-- Palace EM simulation software (open-source, available at https://github.com/awslabs/palace)
+- Python 3.11+
+- Palace EM simulation software
 
-### Installation Steps
+Optional:
 
-- Clone this repository
+- COBRA installed/importable if you use ORCA surrogate outputs in circuit optimization
 
-```bash
-git clone https://github.com/DavidL-11/ORCA && cd ORCA
-```
+!!! note
+	ORCA supports Python 3.11 to 3.14.
 
-- Install UV (https://docs.astral.sh/uv/getting-started/installation/)
+## Clone Repository
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+git clone https://github.com/DI-PASSIONATE/ORCA
+cd ORCA
 ```
 
-- Download Python 3.13
+## Install ORCA
+
+=== "Option A: uv (recommended)"
+
+	```bash
+	curl -LsSf https://astral.sh/uv/install.sh | sh
+	uv python install 3.13
+	uv venv --python 3.13
+	source .venv/bin/activate
+	uv pip install -e .
+	```
+
+=== "Option B: venv + pip"
+
+	```bash
+	python3 -m venv .venv
+	source .venv/bin/activate
+	pip install -U pip
+	pip install -e .
+	```
+
+## Verify Setup
+
+Run the following check in your activated environment:
 
 ```bash
-uv python install 3.13
+orca
 ```
 
-- Create and activate a virtual environment
+Expected behavior: ORCA GUI starts.
+
+To verify the script workflow:
 
 ```bash
-uv venv --python 3.13
+python examples/main.py
 ```
 
-- Install ORCA
+!!! warning
+	`examples/main.py` requires a working Palace installation and a valid geometry configuration.
 
-```bash
-uv pip install -e .
-```
+## External Tool Notes
 
-Install Palace on your system by following [the Palace installation instructions](https://awslabs.github.io/palace/stable/install/index.html).
+### Palace
+
+- ORCA uses Palace as the EM simulation backend.
+- Install Palace by following [the official Palace installation instructions](https://awslabs.github.io/palace/stable/install/index.html).
+- Palace can be run directly or via an Apptainer/Singularity container.
+
+### COBRA (Optional)
+
+- COBRA consumes ONNX surrogate models exported by ORCA for circuit-level optimization.
+- See [COBRA documentation](https://di-passionate.github.io/COBRA/) for details.
+
+## Next Steps
+
+- Continue with **Getting Started -> Quickstart** for a first run.
+- Use **User Guide -> Custom Classes** to bring your own geometry.
