@@ -1,10 +1,10 @@
 site_name: ORCA Documentation
 site_description: >-
-  Documentation for the ORCA (Open RF Circuit 
+  Documentation for the ORCA (Open RF Circuit Automation)
 
 # Repository
-repo_name: DavidL-11/ORCA
-repo_url: https://github.com/DavidL-11/ORCA
+repo_name: DI-PASSIONATE/ORCA
+repo_url: https://github.com/DI-PASSIONATE/ORCA
 edit_uri: edit/main/docs/
 
 # Page tree
@@ -71,7 +71,7 @@ plugins:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/DavidL-11/ORCA
+      link: https://github.com/DI-PASSIONATE/ORCA
 
 extra-css:
   - stylesheets/extra.css
