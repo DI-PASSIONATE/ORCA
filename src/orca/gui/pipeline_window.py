@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QScrollArea, QLabel, QProgressBar, QMessageBox, QPlainTextEdit
 )
-from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QFontDatabase
 
 from orca import ORCA

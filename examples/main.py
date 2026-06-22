@@ -1,12 +1,7 @@
 from orca import ORCA
-import skrf as rf
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 
-from orca.utils.postprocessing import (
-    plot_rfic_transformer_metrics,
-)
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 import orca
 

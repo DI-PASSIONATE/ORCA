@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QApplication
 from orca.gui.theme import apply_theme
 from orca.gui.pipeline_window import PipelineWindow
 

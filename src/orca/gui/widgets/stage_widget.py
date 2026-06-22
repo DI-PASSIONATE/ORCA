@@ -1,12 +1,11 @@
 import inspect
 import json
-from typing import Type, Any, Dict, get_origin, get_args
+from typing import Type
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QCheckBox, QLabel, QLineEdit, 
     QSpinBox, QDoubleSpinBox, QFormLayout, QGroupBox
 )
-from PySide6.QtCore import Qt
 
 from orca.pipeline.pipeline_stage import PipelineStage
 

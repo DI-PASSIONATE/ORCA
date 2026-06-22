@@ -4,7 +4,6 @@ import pandas as pd
 import tqdm
 
 from orca.pipeline.pipeline_stage import PipelineStage
-from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.simulation.simulate import run_palace
 from orca.utils.folder_structure import OrcaFolderStructure

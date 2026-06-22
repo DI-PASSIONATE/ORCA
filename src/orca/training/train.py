@@ -230,7 +230,7 @@ def hyperparameter_tuning(train_val_df, result_dir, geometry, n_fold_cv: int = 5
                     raise optuna.exceptions.TrialPruned()
             except optuna.exceptions.TrialPruned:
                 raise
-            except Exception as e:
+            except Exception:
                 import traceback
                 traceback.print_exc()
                 raise optuna.exceptions.TrialPruned()

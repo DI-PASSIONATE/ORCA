@@ -3,6 +3,7 @@ import os
 import onnxruntime
 import pandas as pd
 import tqdm
+import numpy as np
 
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
