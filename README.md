@@ -31,6 +31,8 @@ Given a geometry class with configurable parameters, ORCA automatically:
 
 The resulting ONNX model can then be loaded by [COBRA](https://github.com/DI-PASSIONATE/COBRA) for fast circuit-level optimization — no EM simulation required at optimization time. Created models can easily be shared via Hugging Face Hub for others to use in their own design flows and reduce redundant EM simulations across the community.
 
+![](docs/orca.png)
+
 ## How ORCA Fits with COBRA
 
 ORCA is the model-building side of the flow.

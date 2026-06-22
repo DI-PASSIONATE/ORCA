@@ -1,8 +1,9 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QPushButton, QScrollArea, QLabel, QProgressBar, QMessageBox, QTextEdit
+    QPushButton, QScrollArea, QLabel, QProgressBar, QMessageBox, QPlainTextEdit
 )
 from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtGui import QFontDatabase
 
 from orca import ORCA
 from orca.gui.utils import get_available_stages
@@ -71,6 +72,7 @@ class PipelineWindow(QMainWindow):
         self.resize(1000, 800)
         
         self.stages_widgets = []
+        self._log_handler = None
         self.init_ui()
         self.setup_logging()
         
@@ -112,9 +114,11 @@ class PipelineWindow(QMainWindow):
         right_panel.setLayout(right_layout)
         
         # Log output
-        self.log_output = QTextEdit()
+        self.log_output = QPlainTextEdit()
         self.log_output.setReadOnly(True)
         self.log_output.setPlaceholderText("Logs will appear here...")
+        self.log_output.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.log_output.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
         
         # Progress bar that uses the callbacks
         self.progress_bar = QProgressBar()
@@ -140,8 +144,13 @@ class PipelineWindow(QMainWindow):
     def setup_logging(self):
         handler = LogSignalHandler(self.log_signal)
         handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s >> %(message)s", datefmt="%H:%M:%S"))
-        logger.addHandler(handler) # Add a custom handler to the ORCA logger to avoid duplicate logs
-        self.log_signal.connect(self.log_output.append)
+        logger.addHandler(handler)
+        self._log_handler = handler
+        # Fixes ORCA ASCII art being printed in a messed up way in the GUI
+        self.log_signal.connect(self.append_log_line)
+
+    def append_log_line(self, msg):
+        self.log_output.appendPlainText(msg)
 
     def run_pipeline(self):
         geometry = self.geometry_selector.get_geometry()
@@ -165,7 +174,7 @@ class PipelineWindow(QMainWindow):
         # Disable button
         self.btn_run.setEnabled(False)
         self.log_output.clear()
-        self.log_output.append("Starting pipeline...")
+        self.log_output.appendPlainText("Starting pipeline...")
         
         self.worker = PipelineWorker(orca_instance, geometry)
         self.worker.progress.connect(self.update_progress)
@@ -200,10 +209,11 @@ class PipelineWindow(QMainWindow):
     def pipeline_error(self, error_msg):
         self.btn_run.setEnabled(True)
         self.progress_label.setText("Error Occurred")
-        self.log_output.append(f"ERROR: {error_msg}")
+        self.log_output.appendPlainText(f"ERROR: {error_msg}")
         QMessageBox.critical(self, "Pipeline Error", f"An error occurred:\n{error_msg}")
         
     def closeEvent(self, event):
-        # Clean up logger handler
-        logging.getLogger().handlers = [h for h in logging.getLogger().handlers if not isinstance(h, LogSignalHandler)]
+        if self._log_handler is not None:
+            logger.removeHandler(self._log_handler)
+            self._log_handler = None
         event.accept()
