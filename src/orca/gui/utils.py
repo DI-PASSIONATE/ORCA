@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Type, Any
 
 from orca.geometry.base_geometry import BaseGeometry
+from orca.geometry.presets.inductor_octa import InductorOcta
 from orca.pipeline.pipeline_stage import PipelineStage
 
 # Import all pipeline stages
@@ -65,4 +66,4 @@ def get_preset_geometries() -> List[Type[BaseGeometry]]:
     """
     Returns a list of preset BaseGeometry subclasses.
     """
-    return [TransformerOcta]
+    return [TransformerOcta, InductorOcta]
