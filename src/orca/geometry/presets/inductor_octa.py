@@ -49,7 +49,7 @@ class InductorOcta(BaseGeometry):
     )
     input_parameter_iterator: InputParameterIterator = InputParameterIterator(
         picking_strategy="random",
-        frequency=[1e9, 200e9],  # 1 GHz to 200 GHz
+        frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
         turns=[2, 3, 4, 5],
         width=[x / 100 for x in range(201, 1501, 1)],   # 2.01 .. 15.00 µm
         space=[x / 100 for x in range(201, 601, 1)],    # 2.01 ..  6.00 µm

@@ -8,7 +8,7 @@
             0
         ],
         "fstart": 1.0,
-        "fstop": 200.0,
+        "fstop": 500.0,
         "fstep": 1.0,
         "refined_cellsize": 2.0,
         "order": 2,
