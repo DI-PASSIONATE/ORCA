@@ -90,9 +90,14 @@ MU0 = 4 * math.pi * 1e-7
 
 # --- utility functions ---
 
-def gridsnap(x):
-    grid = 0.01   # grid in micron
-    return round(x / grid) * grid
+GRID = 0.01   # grid in micron = 10 nm (= 2 Nachkommastellen)
+
+
+def gridsnap(x, grid=GRID):
+    # snap to the manufacturing grid and clean up float noise
+    # (same approach as the transformer's _snap: round(x/grid)*grid, then
+    # round again to drop residual floating-point noise)
+    return round(round(x / grid) * grid, 3)
 
 
 def is_even(x):
