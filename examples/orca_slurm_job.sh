@@ -13,6 +13,7 @@ unset SLURM_EXPORT_ENV
 
 ###### START YOUR ACTUAL JOB SCRIPT BELOW THIS LINE ######
 
+module load user-spack
 module load openmpi
 module load palace
 module load python
