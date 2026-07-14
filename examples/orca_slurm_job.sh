@@ -1,7 +1,6 @@
 #!/bin/bash -l
 #
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=72
 #SBATCH --time=00:30:00
 #SBATCH --job-name=ORCA-FEM-SIM
 #SBATCH --export=NONE
