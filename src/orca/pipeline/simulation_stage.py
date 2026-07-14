@@ -31,7 +31,7 @@ class PalaceSimulator(PipelineStage):
         context: Dict[str, Any],
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
-        cpu_cores: int = context.get("cpu_cores", 16)
+        cpu_cores: int = context.get("cpu_cores", 1)
         output_dir = OrcaFolderStructure.get_result_dir(context)
         palace_csv = OrcaFolderStructure.get_palace_csv(context)
         result_csv = OrcaFolderStructure.get_result_csv(context)
