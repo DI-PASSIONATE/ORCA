@@ -22,4 +22,4 @@ module load python
 conda activate orca
 
 # Calls palace internally, which calls mpirun. Make sure to use srun to launch the job, otherwise it will not work properly.
-srun python ./ORCA/examples/main.py
+srun python ./main.py
