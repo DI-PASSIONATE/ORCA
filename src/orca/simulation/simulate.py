@@ -33,7 +33,7 @@ def run_palace(
     cmd = f"{palace_executable} -np {cpu_cores} {config_name}"
 
     # execute the command, hide output and save return code
-    ret = subprocess.run(cmd, shell=True, capture_output=True)
+    ret = subprocess.run(cmd, shell=True) # USUALLY: SET capture_output=True to avoid palace output, only for debugging
 
     if ret.returncode != 0:
         logger.error(f"Palace simulation failed: {ret.stderr.decode('utf-8')}")
