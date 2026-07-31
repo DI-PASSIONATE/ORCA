@@ -1,25 +1,24 @@
 #!/bin/bash -l
 #
 #SBATCH --nodes=1
+#SBATCH --ntasks-per-node=72
 #SBATCH --time=00:30:00
 #SBATCH --job-name=ORCA-FEM-SIM
 #SBATCH --export=NONE
-#
-# first non-empty non-comment line ends SBATCH options
-# nodes: number of nodes to use
-# ntasks-per-node: number of MPI processes to launch per node, should be equal to the number of physical cores on the node (72 for Fritz Ice Lake nodes)
 
 unset SLURM_EXPORT_ENV
+
+srun hostname
 
 ###### START YOUR ACTUAL JOB SCRIPT BELOW THIS LINE ######
 
 module load user-spack
-module load openmpi
+module load openmpi/5.0.8-gcc11.5.0
 module load palace
 module load python
 
 # Activate the conda environment
 conda activate orca
 
-# Calls palace internally, which calls mpirun. Make sure to use srun to launch the job, otherwise it will not work properly.
-srun python ./main.py
+# Run Python directly (Palace internally manages mpirun across the 72 allocated Slurm slots)
+python ./main.py
