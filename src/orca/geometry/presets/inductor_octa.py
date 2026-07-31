@@ -29,7 +29,7 @@ from orca.utils.postprocessing import s_param_dict_to_network
 # symmetric_octa_IHP: N == 1 feeds on TopMetal2 instead).
 GROUND_LAYER = 67       # Metal5
 RING_SPACING = 20.0     # µm, gap between inductor outer edge and ground ring
-RING_WIDTH = 10.0       # µm, ground-ring thickness
+RING_WIDTH = 20.0       # µm, ground-ring thickness
 
 
 @dataclass
