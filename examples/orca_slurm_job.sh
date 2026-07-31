@@ -8,8 +8,6 @@
 
 unset SLURM_EXPORT_ENV
 
-srun hostname
-
 ###### START YOUR ACTUAL JOB SCRIPT BELOW THIS LINE ######
 
 module load user-spack
