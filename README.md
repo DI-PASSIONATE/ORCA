@@ -50,6 +50,9 @@ In short: **ORCA builds the model, COBRA uses it** to optimize circuits quickly 
 - Python 3.11+
 - [Palace](https://awslabs.github.io/palace/stable/) (for running EM simulations)
 
+Install Palace separately by following [the Palace installation instructions](https://awslabs.github.io/palace/stable/install/index.html). Recommendations: apptainer for local installation / testing, spack for HPC clusters.
+
+
 ### Option A: Using `uv` (recommended)
 
 1. Clone the repository:
@@ -78,7 +81,14 @@ uv venv --python 3.13
 source .venv/bin/activate
 ```
 
-5. Install ORCA in editable mode:
+5. Locate and install your preferred PyTorch version (CPU or GPU) from [PyTorch.org](https://pytorch.org/get-started/locally/). For example, for CPU-only:
+
+```bash
+# Example only, replace with the command from PyTorch.org for your system!
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+```
+
+6. Install ORCA in editable mode:
 
 ```bash
 uv pip install -e .
@@ -100,14 +110,19 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-3. Install ORCA:
+3. Locate and install your preferred PyTorch version (CPU or GPU) from [PyTorch.org](https://pytorch.org/get-started/locally/). For example, for CPU-only:
+
+```bash
+# Example only, replace with the command from PyTorch.org for your system!
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+```
+
+4. Install ORCA:
 
 ```bash
 pip install -U pip
 pip install -e .
 ```
-
-Install Palace separately by following [the Palace installation instructions](https://awslabs.github.io/palace/stable/install/index.html).
 
 ## Running ORCA
 
