@@ -1,9 +1,8 @@
-from orca import ORCA
+import orca
 import numpy as np
 import torch
 
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
-import orca
 
 PLOT = False
 
@@ -29,7 +28,7 @@ np.random.seed(40)
 torch.manual_seed(40)
 geometry = TransformerOcta()
 
-orca_instance = ORCA(
+orca_instance = orca.ORCA(
     [
         orca.GDSGenerator(num_samples=1),
         orca.GDSConverter(),
@@ -40,4 +39,4 @@ orca_instance = ORCA(
     ]
 )
 
-orca_instance.run(geometry=geometry, cpu_cores=72)
+orca_instance.run(geometry=geometry, cpu_cores=72, force_overwrite=True)

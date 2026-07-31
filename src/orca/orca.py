@@ -20,6 +20,7 @@ class ORCA:
         self,
         geometry: BaseGeometry,
         cpu_cores: int = multiprocessing.cpu_count(),
+        force_overwrite: bool = False,
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
         overwrite_callback: Optional[Callable[[str], bool]] = None,
     ):
@@ -38,7 +39,7 @@ class ORCA:
             "base_dir": os.path.join(os.getcwd(), "output", geometry.name),
         }
 
-        if os.path.exists(context["base_dir"]):
+        if os.path.exists(context["base_dir"]) and not force_overwrite:
             # Ask user to confirm overwriting existing output directory
             if overwrite_callback:
                 if not overwrite_callback(context["base_dir"]):
@@ -53,7 +54,6 @@ class ORCA:
                     return
 
         for stage in self.stages:
-
             def stage_callback(stage_name: str, current: int, total: int, message: str):
                 if progress_callback:
                     progress_callback(stage_name, current, total, message)
