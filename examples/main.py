@@ -39,4 +39,4 @@ orca_instance = orca.ORCA(
     ]
 )
 
-orca_instance.run(geometry=geometry, cpu_cores=72, force_overwrite=True)
+orca_instance.run(geometry=geometry, cpu_cores=72*4, force_overwrite=True)

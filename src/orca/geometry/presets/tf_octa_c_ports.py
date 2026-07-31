@@ -129,10 +129,10 @@ class TransformerOcta(BaseGeometry):
             upper_feed_type=1,
             feedline_spacing=max(params["bottom_linewidth"], params["top_linewidth"])
             + 0.1,
-            gnd_upper_spacing=20,
-            gnd_lower_spacing=20,
-            gnd_side_spacing=20,
-            gnd_ring_width=10,
+            gnd_upper_spacing=40,
+            gnd_lower_spacing=40,
+            gnd_side_spacing=40,
+            gnd_ring_width=20,
         )
         # c.show()
         c.write_gds(output_path, with_metadata=False)
