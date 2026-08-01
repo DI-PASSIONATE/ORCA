@@ -65,7 +65,7 @@ class GDSConverter(PipelineStage):
                     gds_filename=gds_path,
                     stackup_xml=geometry.stackup_xml,
                     simconfig_filename=geometry.simconfig_filename,
-                    show_mesh_results=True,
+                    show_mesh_results=False,
                 )
                 futures.append(future)
 
