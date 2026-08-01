@@ -20,7 +20,6 @@ class ORCA:
         self,
         geometry: BaseGeometry,
         num_processes: int = multiprocessing.cpu_count(),
-        num_cores: int = 1,
         force_overwrite: bool = False,
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
         overwrite_callback: Optional[Callable[[str], bool]] = None,
@@ -31,7 +30,6 @@ class ORCA:
         Args:
             geometry (BaseGeometry): The geometry to be used in the pipeline.
             num_processes (int): Number of MPI processes to use for parallel execution. Default is the number of available CPU cores.
-            num_cores (int): Number of OpenMP CPU cores to use for each MPI process. Requires that the Palace executable is built with OpenMP support. Default is 1.
         """
         self.print_super_cool_logo_art()
 
@@ -40,10 +38,6 @@ class ORCA:
             "num_processes": num_processes,
             "base_dir": os.path.join(os.getcwd(), "output", geometry.name),
         }
-
-        # If num_cores is specified and not equal to 1, add it to the context (other stages check for both num_cores and num_processes)
-        if num_cores != 1:
-            context["num_cores"] = num_cores
 
         if os.path.exists(context["base_dir"]) and not force_overwrite:
             # Ask user to confirm overwriting existing output directory

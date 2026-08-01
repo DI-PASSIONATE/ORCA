@@ -15,15 +15,8 @@ module load python
 module load intel/2025.2.0
 module load openmpi/5.0.8-intel2025.2.0
 
-# Set the number of threads for OpenMP
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 # for Slurm version >22.05: cpus-per-task has to be set again for srun
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
-
-# Pin OpenMP threads to cores and close them together to avoid thread migration
-export OMP_PLACES=cores
-export OMP_PROC_BIND=close
-
 
 # Activate the conda environment
 conda activate orca

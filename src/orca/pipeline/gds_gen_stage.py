@@ -25,7 +25,7 @@ class GDSGenerator(PipelineStage):
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
-        cpu_cores: int = context.get("num_cores", context.get("num_processes", 1))  # Default to 1 if not specified
+        cpu_cores: int = context.get("num_processes", 1)  # Default to 1 if not specified
         output_dir = OrcaFolderStructure.get_geometry_dir(context)
         gds_csv = OrcaFolderStructure.get_gds_csv(context)
         logger.info(
