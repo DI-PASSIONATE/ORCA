@@ -63,12 +63,14 @@ def run_palace(
         num_processes (int): Number of MPI processes to use for the simulation.
         use_srun (bool): If True, bypass the Palace wrapper script's own `mpirun` call and instead
             resolve the real `palace-*.bin` binary and launch it directly via
-            `srun --exclusive --nodes=1 --ntasks=num_processes`, so Slurm's own PMI/PMIx becomes the
-            MPI launcher for this simulation, pinned to a single, dedicated node. Running several
-            simulations like this in parallel (e.g. via a thread pool) lets Slurm pack each one onto
-            its own free node within a multi-node allocation (e.g. `sbatch --nodes=N`). Requires
-            `palace_executable` to be a direct filesystem path to the wrapper script (see
-            `_resolve_palace_binary`), not a container-wrapped compound command.
+            `srun --exclusive --nodes=1 --ntasks=num_processes --mpi=pmi2`, so Slurm's own PMI2
+            becomes the MPI launcher for this simulation, pinned to a single, dedicated node. Running
+            several simulations like this in parallel (e.g. via a thread pool) lets Slurm pack each
+            one onto its own free node within a multi-node allocation (e.g. `sbatch --nodes=N`).
+            Requires `palace_executable` to be a direct filesystem path to the wrapper script (see
+            `_resolve_palace_binary`), not a container-wrapped compound command. Pass
+            `extra_srun_args="--mpi=pmix"` (or another value) to override the default PMI type if a
+            given cluster needs a different one.
         extra_srun_args (str): Additional arguments appended to the `srun` command when `use_srun` is
             True (e.g. "--cpu-bind=cores"). Ignored otherwise.
         touchstone_type (str): Type of Touchstone file to generate. One of "all", "normal", "deembedded", "dc", "dc_deembedded".
@@ -78,7 +80,11 @@ def run_palace(
     """
     if use_srun:
         palace_bin = _resolve_palace_binary(palace_executable)
-        cmd = f"srun --exclusive --nodes=1 --ntasks={num_processes} --cpu-bind=cores"
+        # --mpi=pmi2 is required so Open MPI can rendezvous through Slurm's PMI2 server; without it,
+        # if no PMIx server is reachable, Open MPI silently launches num_processes independent
+        # single-rank "singleton" processes instead of one coordinated job, which then race each
+        # other (e.g. concurrently creating/checking the output directory) and fail unpredictably.
+        cmd = f"srun --exclusive --nodes=1 --ntasks={num_processes} --cpu-bind=cores --mpi=pmi2"
         if extra_srun_args:
             cmd += f" {extra_srun_args}"
         cmd += f" {palace_bin} {config_name}"
