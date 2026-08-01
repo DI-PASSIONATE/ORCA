@@ -84,8 +84,11 @@ class PalaceSimulator(PipelineStage):
 
         # When multiple nodes are available in a Slurm allocation, pin each concurrent simulation to
         # its own dedicated node so that one node runs exactly one whole (MPI-parallel) simulation.
+        # --mpi=none stops srun from setting up its PMIx server for this step; without it, mpirun
+        # inside would still connect to Slurm's PMIx and see only the 1 task/slot this step
+        # requested (regardless of stripping SLURM_* env vars), causing "not enough slots" errors.
         command_prefix = (
-            "srun --exclusive --nodes=1 --ntasks=1 --cpu-bind=none"
+            "srun --exclusive --nodes=1 --ntasks=1 --cpu-bind=none --mpi=none"
             if parallel_sims > 1 and running_under_slurm
             else ""
         )
