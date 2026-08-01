@@ -31,7 +31,8 @@ class PalaceSimulator(PipelineStage):
         context: Dict[str, Any],
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
-        cpu_cores: int = context.get("cpu_cores", 1)
+        num_cores: int = context.get("num_cores", 1)
+        num_processes: int = context.get("num_processes", 1)
         output_dir = OrcaFolderStructure.get_result_dir(context)
         palace_csv = OrcaFolderStructure.get_palace_csv(context)
         result_csv = OrcaFolderStructure.get_result_csv(context)
@@ -53,7 +54,7 @@ class PalaceSimulator(PipelineStage):
         )
 
         logger.info(
-            f"Starting Palace EM simulations for {len(palace_data)} models using {cpu_cores} CPU cores."
+            f"Starting Palace EM simulations for {len(palace_data)} models using {num_cores} CPU cores."
         )
 
         for i, (index, row) in tqdm.tqdm(
@@ -74,8 +75,9 @@ class PalaceSimulator(PipelineStage):
                 result_dir=output_dir,
                 config_name=palace_config_name,
                 palace_executable=self.palace_executable,
-                cpu_cores=cpu_cores,
                 touchstone_type=self.touchstone_type,
+                num_processes=num_processes,
+                num_cores=num_cores,
             )
 
             if not success:

@@ -12,8 +12,9 @@ def run_palace(
     result_dir: str,
     config_name: str,
     palace_executable: str,
-    cpu_cores: int,
     touchstone_type: str,
+    num_processes: int,
+    num_cores: int=1,
 ) -> bool:
     """
     Runs Palace simulation for the given model.
@@ -22,7 +23,8 @@ def run_palace(
         data_dir (str): Directory where the Palace model is stored.
         config_name (str): Name of the Palace configuration to run.
         palace_executable (str): Path to the Palace executable (e.g. "apptainer exec ~/path/to/palace.sif palace").
-        cpu_cores (int): Number of CPU cores to use for the simulation.
+        num_cores (int): Number of OpenMP CPU cores to use for the simulation. Requires that the Palace executable is built with OpenMP support!
+
         touchstone_type (str): Type of Touchstone file to generate. One of "all", "normal", "deembedded", "dc", "dc_deembedded".
 
     Returns:
@@ -30,7 +32,7 @@ def run_palace(
     """
     prev_dir = os.getcwd()
     os.chdir(sim_path)
-    cmd = f"{palace_executable} -np {cpu_cores} {config_name}"
+    cmd = f"{palace_executable} -np {num_processes} -nt {num_cores} {config_name}"
 
     # execute the command, hide output and save return code
     ret = subprocess.run(cmd, shell=True) # USUALLY: SET capture_output=True to avoid palace output, only for debugging

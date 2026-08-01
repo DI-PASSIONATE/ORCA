@@ -23,6 +23,8 @@ export https_proxy=http://proxy.nhr.fau.de:80
 
 ```sh
 module load user-spack
+module load intel/2025.2.0
+module load openmpi/5.0.8-intel2025.2.0
 ```
 
 5. Download and add the newest spack repository to get a palace version more recent than from 2023

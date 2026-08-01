@@ -165,7 +165,7 @@ orca_instance = ORCA(
     ]
 )
 
-orca_instance.run(geometry=geometry, cpu_cores=16)
+orca_instance.run(geometry=geometry, num_processes=16)
 ```
 
 This generates 1000 parameterized layout variants, runs EM simulations, trains a model, exports it to ONNX, and evaluates its accuracy.

@@ -10,10 +10,9 @@ unset SLURM_EXPORT_ENV
 
 ###### START YOUR ACTUAL JOB SCRIPT BELOW THIS LINE ######
 
-module load user-spack
-module load openmpi/5.0.8-gcc11.5.0
-module load palace
 module load python
+module load intel/2025.2.0
+module load openmpi/5.0.8-intel2025.2.0
 
 # Activate the conda environment
 conda activate orca

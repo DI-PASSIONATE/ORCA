@@ -56,7 +56,7 @@ orca_instance = ORCA(
     ]
 )
 
-orca_instance.run(geometry=geometry, cpu_cores=16)
+orca_instance.run(geometry=geometry, num_processes=16)
 ```
 
 This will:
