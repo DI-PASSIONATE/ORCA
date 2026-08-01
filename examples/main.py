@@ -39,4 +39,4 @@ orca_instance = orca.ORCA(
     ]
 )
 
-orca_instance.run(geometry=geometry, num_processes=72)
+orca_instance.run(geometry=geometry, num_processes=16)

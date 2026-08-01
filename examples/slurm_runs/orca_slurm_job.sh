@@ -1,8 +1,8 @@
 #!/bin/bash -l
 #
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
-#SBATCH --cpus-per-task=36
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=72
 #SBATCH --time=01:00:00
 #SBATCH --job-name=ORCA-FEM-SIM
 #SBATCH --export=NONE
