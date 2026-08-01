@@ -108,7 +108,12 @@ def run_palace(
         logger.error(f"Palace simulation failed with return code {ret.returncode} for command: {cmd}")
         return False
 
-    convert_to_touchstone(workdir=data_dir, output_dir=result_dir, touchstone_type=touchstone_type)
+    # data_dir (from gds2palace) is relative to sim_path (matching Palace's own relative
+    # Problem.Output config, written while its cwd was set to sim_path above), so resolve it to an
+    # absolute path here since this process's own cwd was never changed (unlike the subprocess).
+    convert_to_touchstone(
+        workdir=os.path.join(sim_path, data_dir), output_dir=result_dir, touchstone_type=touchstone_type
+    )
     return True
 
 

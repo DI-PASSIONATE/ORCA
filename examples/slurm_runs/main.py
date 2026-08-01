@@ -30,12 +30,12 @@ geometry = TransformerOcta()
 
 orca_instance = orca.ORCA(
     [
-        orca.GDSGenerator(num_samples=10),
+        orca.GDSGenerator(num_samples=40),
         orca.GDSConverter(),
         # num_parallel_palace_sims runs that many simulations in parallel, each pinned to its own
         # Slurm node via srun (requires #SBATCH --nodes=<num_parallel_palace_sims> in the job script).
         # Set to 1 (default) to run sequentially on the current node, with or without Slurm.
-        orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace", num_parallel_palace_sims=5),
+        orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace", num_parallel_palace_sims=10),
         # orca.ModelTrainer(n_train_samples=1000),
         # orca.OnnxExporter(),
         # orca.ModelTester(),
