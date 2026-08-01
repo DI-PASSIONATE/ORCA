@@ -19,7 +19,8 @@ module load openmpi/5.0.8-intel2025.2.0
 # Activate the conda environment
 conda activate orca
 
-# Run Python directly. With num_parallel_palace_sims > 1, PalaceSimulator uses `srun --exclusive
-# --nodes=1 --ntasks=1` internally to pin each simulation to its own node within this allocation,
-# and Palace manages mpirun across the 72 cores of that node.
+# Run Python directly. With num_parallel_palace_sims > 1, PalaceSimulator bypasses the Palace
+# wrapper's own mpirun call and launches the resolved palace-*.bin binary directly via
+# `srun --exclusive --nodes=1 --ntasks=<num_processes>`, so Slurm packs each simulation onto its
+# own node within this allocation.
 python ./main.py

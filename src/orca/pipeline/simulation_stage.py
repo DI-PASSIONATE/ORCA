@@ -21,6 +21,7 @@ class PalaceSimulator(PipelineStage):
         palace_executable: str = "palace",
         touchstone_type: str = "dc_deembedded",
         num_parallel_palace_sims: int = 1,
+        extra_srun_args: str = "",
     ):
         """
         Initializes the PalaceSimulator stage.
@@ -28,11 +29,17 @@ class PalaceSimulator(PipelineStage):
         Args:
             palace_executable (str): Path to the Palace executable. Default is "palace".
             touchstone_type (str): Type of Touchstone file to generate. One of "all", "normal", "deembedded", "dc", "dc_deembedded". 
-            num_parallel_palace_sims (int): Number of Palace simulations to run in parallel, each one
-                pinned to its own Slurm node via `srun --exclusive --nodes=1 --ntasks=1`, with MPI
-                (`mpirun -np num_processes`) running inside that node as usual. Requires running inside
-                a Slurm allocation with at least this many nodes (e.g. `sbatch --nodes=<num_parallel_palace_sims>`).
-                Default is 1, which runs simulations sequentially on the current node without Slurm.
+            num_parallel_palace_sims (int): Number of Palace simulations to run in parallel. When > 1,
+                each simulation bypasses the Palace wrapper script's own `mpirun` call and is instead
+                launched directly as `srun --exclusive --nodes=1 --ntasks=num_processes <palace-bin> config`,
+                so Slurm packs each simulation onto its own dedicated node (see `run_palace` in
+                simulate.py for details). Requires running inside a Slurm allocation with at least this
+                many nodes (e.g. `sbatch --nodes=<num_parallel_palace_sims>`), and `palace_executable`
+                to be a direct filesystem path to the Palace wrapper script (not a container-wrapped
+                compound command). Default is 1, which runs simulations sequentially on the current
+                node without Slurm, using `palace_executable` as-is.
+            extra_srun_args (str): Additional arguments appended to the `srun` command used when
+                `num_parallel_palace_sims` > 1 (e.g. "--cpu-bind=cores"). Ignored otherwise.
         """
         super().__init__(name="Palace EM Simulator", index=2)
         self.palace_executable = palace_executable
@@ -40,6 +47,7 @@ class PalaceSimulator(PipelineStage):
         if num_parallel_palace_sims < 1:
             raise ValueError("num_parallel_palace_sims must be at least 1.")
         self.num_parallel_palace_sims = num_parallel_palace_sims
+        self.extra_srun_args = extra_srun_args
 
     def run(
         self,
@@ -183,6 +191,7 @@ class PalaceSimulator(PipelineStage):
             touchstone_type=self.touchstone_type,
             num_processes=num_processes,
             use_srun=use_srun,
+            extra_srun_args=self.extra_srun_args,
         )
 
         return index, palace_config_name, success
