@@ -1,4 +1,3 @@
-import os
 import subprocess
 import json
 
@@ -14,6 +13,7 @@ def run_palace(
     palace_executable: str,
     touchstone_type: str,
     num_processes: int,
+    command_prefix: str = "",
 ) -> bool:
     """
     Runs Palace simulation for the given model.
@@ -24,24 +24,25 @@ def run_palace(
         palace_executable (str): Path to the Palace executable (e.g. "apptainer exec ~/path/to/palace.sif palace").
         num_processes (int): Number of MPI processes to use for the simulation.
         touchstone_type (str): Type of Touchstone file to generate. One of "all", "normal", "deembedded", "dc", "dc_deembedded".
+        command_prefix (str): Optional command prefix, prepended before the Palace executable
+            (e.g. "srun --exclusive --nodes=1 --ntasks=1" to pin this simulation to a single
+            Slurm node when running several simulations in parallel across a cluster).
 
     Returns:
         bool: True if simulation was successful, False otherwise.
     """
-    prev_dir = os.getcwd()
-    os.chdir(sim_path)
-    cmd = f"{palace_executable} -np {num_processes} {config_name}"
+    prefix = f"{command_prefix} " if command_prefix else ""
+    cmd = f"{prefix}{palace_executable} -np {num_processes} {config_name}"
 
     # execute the command, hide output and save return code
-    ret = subprocess.run(cmd, shell=True) # USUALLY: SET capture_output=True to avoid palace output, only for debugging
+    # cwd is used instead of os.chdir so this remains safe when run concurrently from multiple threads
+    ret = subprocess.run(cmd, shell=True, cwd=sim_path) # USUALLY: SET capture_output=True to avoid palace output, only for debugging
 
     if ret.returncode != 0:
         logger.error(f"Palace simulation failed: {ret.stderr.decode('utf-8')}")
-        os.chdir(prev_dir)
         return False
 
     convert_to_touchstone(workdir=data_dir, output_dir=result_dir, touchstone_type=touchstone_type)
-    os.chdir(prev_dir)
     return True
 
 

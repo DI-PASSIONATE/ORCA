@@ -30,7 +30,7 @@ geometry = TransformerOcta()
 
 orca_instance = orca.ORCA(
     [
-        orca.GDSGenerator(num_samples=1),
+        orca.GDSGenerator(num_samples=10),
         orca.GDSConverter(),
         orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace"),
         orca.ModelTrainer(n_train_samples=1000),
