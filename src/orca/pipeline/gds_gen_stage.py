@@ -1,5 +1,4 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import multiprocessing as mp
 import pandas as pd
 from typing import Any, Dict, Callable, Optional
 from orca.geometry.base_geometry import BaseGeometry
@@ -55,9 +54,7 @@ class GDSGenerator(PipelineStage):
         geometry.input_parameter_iterator.set_sample_count(self.num_samples)
 
         futures = []
-        # Use spawn context to avoid forking a multithreaded parent process (e.g. when JAX is imported).
-        mp_context = mp.get_context("spawn")
-        with ProcessPoolExecutor(max_workers=cpu_cores, mp_context=mp_context) as executor:
+        with ProcessPoolExecutor(max_workers=cpu_cores) as executor:
             # Create cpu_cores processes to generate GDS files in parallel
             for i, input_params in enumerate(geometry.input_iterator):
                 if i >= self.num_samples:

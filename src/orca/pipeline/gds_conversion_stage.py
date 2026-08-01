@@ -1,5 +1,4 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import multiprocessing as mp
 import pandas as pd
 import os
 import tqdm
@@ -45,9 +44,7 @@ class GDSConverter(PipelineStage):
             f"Starting GDS conversion for {len(gds_data)} files using {cpu_cores} CPU cores."
         )
 
-        # Use spawn context to avoid forking a multithreaded parent process (e.g. when JAX is imported).
-        mp_context = mp.get_context("spawn")
-        with ProcessPoolExecutor(max_workers=cpu_cores, mp_context=mp_context) as executor:
+        with ProcessPoolExecutor(max_workers=cpu_cores) as executor:
             futures = []
             gds_dir = os.path.dirname(gds_csv)
             for i, row in gds_data.iterrows():
@@ -56,7 +53,7 @@ class GDSConverter(PipelineStage):
                 # everything after name is input parameters
                 name = row["name"]  # GDS path
                 gds_path = os.path.join(gds_dir, name)
-                params: dict[str, Any] = {str(k): v for k, v in row.to_dict().items()}
+                params = row.to_dict()
                 del params["name"]
 
                 # Submit GDS conversion tasks
