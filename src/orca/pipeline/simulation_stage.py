@@ -120,6 +120,7 @@ class PalaceSimulator(PipelineStage):
         solver = config.setdefault("Solver", {})
         solver["PartialAssemblyOrder"] = 3
         solver.setdefault("Linear", {})["Type"] = "SuperLU"
+        config.setdefault("Problem", {})["Verbose"] = 1
 
         with open(config_path, "w") as f:
             json.dump(config, f, indent=4)
