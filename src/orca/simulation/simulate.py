@@ -31,15 +31,27 @@ def run_palace(
     Returns:
         bool: True if simulation was successful, False otherwise.
     """
-    prefix = f"{command_prefix} " if command_prefix else ""
-    cmd = f"{prefix}{palace_executable} -np {num_processes} {config_name}"
+    inner_cmd = f"{palace_executable} -np {num_processes} {config_name}"
+
+    if command_prefix:
+        # Palace's own launcher script builds its MPI hostfile straight from $SLURM_JOB_NODELIST
+        # (the whole job's node list), and Open MPI's Slurm integration also reads Slurm env vars
+        # to size the resource allocation. Since command_prefix (an `srun --nodes=1 --ntasks=1 ...`
+        # step) only owns a single task/node from Slurm's point of view, both of those would think
+        # far fewer than `num_processes` slots are available. Stripping all SLURM_* variables
+        # inside the step forces Palace/MPI to treat it as a plain local run on the one (exclusive)
+        # node srun placed it on, using all of that node's cores.
+        escaped_inner_cmd = inner_cmd.replace("'", "'\\''")
+        cmd = f"{command_prefix} bash -c 'unset ${{!SLURM_@}}; exec {escaped_inner_cmd}'"
+    else:
+        cmd = inner_cmd
 
     # execute the command, hide output and save return code
     # cwd is used instead of os.chdir so this remains safe when run concurrently from multiple threads
     ret = subprocess.run(cmd, shell=True, cwd=sim_path) # USUALLY: SET capture_output=True to avoid palace output, only for debugging
 
     if ret.returncode != 0:
-        logger.error(f"Palace simulation failed: {ret.stderr.decode('utf-8')}")
+        logger.error(f"Palace simulation failed with exit code {ret.returncode}: {cmd}")
         return False
 
     convert_to_touchstone(workdir=data_dir, output_dir=result_dir, touchstone_type=touchstone_type)
