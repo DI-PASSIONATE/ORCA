@@ -259,17 +259,21 @@ def tf_octa_c(
     )  # Bot is rotated 180, but Y logic is symmetric magnitude
     y_bot_n = -fs_bot / 2.0 - bottom_linewidth / 2.0
 
-    # Visual/meshing markers for ports: draw a line at each port center on the
-    # source_layernum layers (201-206), with no finite marker length in X.
-    def add_port_marker(center, width, layer, thin_ports=False):
-        marker_span = width / 2.0 if thin_ports else width
-        x = round(center[0], 2)
-        y0 = round(center[1] - marker_span / 2.0, 2)
-        y1 = round(center[1] + marker_span / 2.0, 2)
+    # Visual/meshing markers for ports: small rectangles on port layers so GDS contains geometry for source_layernum 201-204
+    port_len = 1.0  # Length of port marker rectangles
 
-        # Use a minimum manufacturable thickness to represent a top-view line.
-        marker = gf.Path([(x, y0), (x, y1)])
-        c << marker.extrude(width=GRID_NM / 1000.0, layer=layer)
+    def add_port_marker(center, width, layer, thin_ports=False):
+        rect = gf.components.rectangle(
+            size=(port_len, width / 2.0 if thin_ports else width), layer=layer
+        )
+        ref = c << rect
+        # ref.move((center[0], center[1] - width / 4.0))
+        ref.move(
+            (
+                round(center[0], 2),
+                round(center[1] - (width / 4.0 if thin_ports else width / 2.0), 2),
+            )
+        )
 
     ### TOP LAYER (ports on the RIGHT) -> Port 1 and 2 -> Layer 201, 202
     # OP (Top, Right, Upper)
