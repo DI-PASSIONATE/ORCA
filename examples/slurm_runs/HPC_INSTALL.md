@@ -6,11 +6,13 @@
 ssh <username>@fritz.nhr.fau.de
 ```
 
-2. Allocate an interactive node
+2. Allocate an interactive node and wait until you are granted access
 
 ```sh
 salloc -N 1 --partition=singlenode --time=01:00:00
 ```
+
+Now you have two options: Either perform the following steps by hand on the 
 
 3. Make the internet accessible from the allocated node by running:
 
@@ -19,35 +21,48 @@ export http_proxy=http://proxy.nhr.fau.de:80
 export https_proxy=http://proxy.nhr.fau.de:80
 ```
 
-4. Load spack user installation
+4. Load compilers and MPI modules
 
 ```sh
-module load user-spack
+module load cmake
 module load intel/2025.2.0
 module load openmpi/5.0.8-intel2025.2.0
 ```
 
-5. Download and add the newest spack repository to get a palace version more recent than from 2023
+5. Set the MKLROOT environment variable (Intel Math Kernel Library). Palace uses MKL as a dependency for some of its linear algebra operations (Alternative to OpenBLAS and LAPACK libraries optimized for Intel CPUs).
 
 ```sh
-mkdir -p ~/spack-repos
-cd ~/spack-repos
-git clone https://github.com/spack/spack-packages.git
-spack repo add ~/spack-repos/spack-packages/repos/spack_repo/builtin/
-cd ..
+export MKLROOT=/apps/spack/1.0.2/opt/linux-almalinux9-icelake/none-none/intel-oneapi-mkl-2024.2.2-bdh2w4w5yar6xnpkwig2qb6i3i6vbxuz/mkl/2024.2
 ```
 
-6. Install palace using spack (this make take a very long time, spack is very very slow sometimes, so be patient).
+6. Clone the Palace repository from GitHub
 
 ```sh
-spack install palace@0.16.0 target=icelake ^openmpi ^openblas ^gcc
+git clone https://github.com/awslabs/palace.git
+cd palace
+mkdir build && cd build
 ```
 
-7. Load MPI and palace
+7. Build Palace using CMake and Make
+
+You have more configuration options available (see https://awslabs.github.io/palace/stable/install/#Build-from-source), e.g. if you want to build for GPU support, but the following is a simple example for building Palace with Intel compilers and MPI support for Fritz HPC cluster.
 
 ```sh
-module load openmpi
-module load palace
+cmake \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=icx \
+  -DCMAKE_CXX_COMPILER=icpx \
+  -DCMAKE_Fortran_COMPILER=ifx \
+  -DCMAKE_C_FLAGS="-O3 -xHost" \
+  -DCMAKE_CXX_FLAGS="-O3 -xHost" \
+  -DCMAKE_Fortran_FLAGS="-O3 -xHost" \
+  -DPALACE_WITH_LIBXSMM=ON \
+  -DPALACE_WITH_MUMPS=ON \
+  ..
+```
+
+```sh
+make -j 72
 ```
 
 8. Check if palace is working by running:
@@ -105,49 +120,4 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 which palace
 which python
 python --version
-```
-
-### Run a job
-
-To run a job, you need to create a job script. Here is an example of a job script for ORCA:
-
-```bash
-#!/bin/bash -l
-#
-#SBATCH --nodes=1
-#SBATCH --time=01:00:00
-#SBATCH --job-name=ORCA-FEM-SIM
-#SBATCH --export=NONE
-#
-# first non-empty non-comment line ends SBATCH options
-
-unset SLURM_EXPORT_ENV
-
-###### START YOUR ACTUAL JOB SCRIPT BELOW THIS LINE ######
-
-module load openmpi
-module load palace
-module load python
-
-# Activate the conda environment
-conda activate orca
-
-# Calls palace internally, which calls mpirun
-srun python ./ORCA/examples/main.py
-```
-
-## New install from source
-Work in Progress
-
-```bash
-export http_proxy=http://proxy.nhr.fau.de:80
-export https_proxy=http://proxy.nhr.fau.de:80
-module load intel/2025.2.0
-module load openmpi/5.0.8-intel2025.2.0
-export MKLROOT=/apps/spack/1.0.2/opt/linux-almalinux9-icelake/none-none/intel-oneapi-mkl-2024.2.2-bdh2w4w5yar6xnpkwig2qb6i3i6vbxuz/mkl/2024.2
-# TODO git clone palace
-cd palace
-mkdir build && cd build
-cmake   -DCMAKE_BUILD_TYPE=Release   -DCMAKE_C_COMPILER=icx   -DCMAKE_CXX_COMPILER=icpx   -DCMAKE_Fortran_COMPILER=ifx   -DCMAKE_C_FLAGS="-O3 -xHost -qopt-zmm-usage=high"   -DCMAKE_CXX_FLAGS="-O3 -xHost -qopt-zmm-usage=high"   -DCMAKE_Fortran_FLAGS="-O3 -xHost -qopt-zmm-usage=high"   -DPALACE_WITH_OPENMP=OFF   -DPALACE_WITH_LIBXSMM=ON   -DPALACE_WITH_MUMPS=ON   ..
-make -j 72
 ```
