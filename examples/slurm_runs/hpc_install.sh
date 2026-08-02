@@ -54,7 +54,7 @@ cmake \
 make -j "$(nproc)"
 
 # --- Check that Palace is working ---
-palace --version
+./bin/palace --version
 
 cd ../..
 
@@ -90,6 +90,5 @@ pip install -e ./ORCA/
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # --- Make sure everything is set up correctly ---
-which palace
 which python
 python --version

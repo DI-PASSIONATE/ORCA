@@ -68,7 +68,7 @@ make -j 72
 8. Check if palace is working by running:
 
 ```sh
-palace --version
+./bin/palace --version
 ```
 
 ### Install ORCA
