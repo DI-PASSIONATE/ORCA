@@ -12,7 +12,7 @@ ssh <username>@fritz.nhr.fau.de
 salloc -N 1 --partition=singlenode --time=01:00:00
 ```
 
-Now you have two options: Either perform the following steps by hand on the 
+Now you have two options: Either perform the following steps by hand on the allocated node, or try out the hpc_install.sh script on the allocated node.
 
 3. Make the internet accessible from the allocated node by running:
 

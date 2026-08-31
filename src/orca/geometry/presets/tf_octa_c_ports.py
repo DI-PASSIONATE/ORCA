@@ -128,7 +128,7 @@ class TransformerOcta(BaseGeometry):
             lower_feed_type=1,
             upper_feed_type=1,
             feedline_spacing=max(params["bottom_linewidth"], params["top_linewidth"])
-            + 0.1,
+            + 5,
             gnd_upper_spacing=40,
             gnd_lower_spacing=40,
             gnd_side_spacing=40,
