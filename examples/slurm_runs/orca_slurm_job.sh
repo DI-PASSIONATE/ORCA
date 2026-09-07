@@ -2,9 +2,9 @@
 #
 # Request one node per parallel Palace simulation (Fritz icelake nodes have 72 cores/2 sockets each).
 # Must match the `num_parallel_palace_sims` passed to orca.PalaceSimulator(...) in main.py.
-#SBATCH --nodes=10
+#SBATCH --nodes=25
 #SBATCH --ntasks-per-node=72
-#SBATCH --time=02:00:00
+#SBATCH --time=24:00:00
 #SBATCH --job-name=ORCA-FEM-SIM
 #SBATCH --export=NONE
 

@@ -58,7 +58,7 @@ class TransformerOcta(BaseGeometry):
     )
     input_parameter_iterator: InputParameterIterator = InputParameterIterator(
         picking_strategy="random",
-        frequency=[1e8, 500e8],  # 1 GHz to 500 GHz
+        frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
         bottom_winding_diameter=[
             x / 10 for x in range(200, 1201, 1)
         ],  # 20.0 to 120.0 in 0.1 steps

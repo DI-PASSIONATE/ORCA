@@ -26,16 +26,16 @@ hyperparameters = {
 # Use predefined geometry from examples
 np.random.seed(40)
 torch.manual_seed(40)
-geometry = TransformerOcta()
+geometry = TransformerOcta(name="tf_octa_c_ports")
 
 orca_instance = orca.ORCA(
     [
-        orca.GDSGenerator(num_samples=100),
+        orca.GDSGenerator(num_samples=4300),
         orca.GDSConverter(),
         # num_parallel_palace_sims runs that many simulations in parallel, each pinned to its own
         # Slurm node via srun (requires #SBATCH --nodes=<num_parallel_palace_sims> in the job script).
         # Set to 1 (default) to run sequentially on the current node, with or without Slurm.
-        orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace", num_parallel_palace_sims=10),
+        orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace", num_parallel_palace_sims=25),
         # orca.ModelTrainer(n_train_samples=1000),
         # orca.OnnxExporter(),
         # orca.ModelTester(),

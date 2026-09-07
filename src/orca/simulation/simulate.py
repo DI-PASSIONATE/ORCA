@@ -102,7 +102,7 @@ def run_palace(
     # execute the command, hide output and save return code
     # cwd is passed explicitly (instead of os.chdir) so this is safe to call concurrently from
     # multiple threads when running several simulations in parallel across Slurm nodes.
-    ret = subprocess.run(cmd, shell=True, cwd=sim_path) # USUALLY: SET capture_output=True to avoid palace output, only for debugging
+    ret = subprocess.run(cmd, shell=True, cwd=sim_path, capture_output=True) # USUALLY: SET capture_output=True to avoid palace output, only for debugging
 
     if ret.returncode != 0:
         logger.error(f"Palace simulation failed with return code {ret.returncode} for command: {cmd}")
