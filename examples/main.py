@@ -1,9 +1,8 @@
-from orca import ORCA
+import orca
 import numpy as np
 import torch
 
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
-import orca
 
 PLOT = False
 
@@ -25,19 +24,19 @@ hyperparameters = {
 }
 
 # Use predefined geometry from examples
-np.random.seed(11)
-torch.manual_seed(11)
+np.random.seed(40)
+torch.manual_seed(40)
 geometry = TransformerOcta()
 
-orca_instance = ORCA(
+orca_instance = orca.ORCA(
     [
-        # orca.GDSGenerator(num_samples=1000),
-        # orca.GDSConverter(),
-        # orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
+        orca.GDSGenerator(num_samples=10),
+        orca.GDSConverter(),
+        orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace"),
         orca.ModelTrainer(n_train_samples=1000),
         orca.OnnxExporter(),
         orca.ModelTester(),
     ]
 )
 
-orca_instance.run(geometry=geometry, cpu_cores=16)
+orca_instance.run(geometry=geometry, num_processes=16)

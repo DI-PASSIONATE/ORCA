@@ -259,21 +259,21 @@ def tf_octa_c(
     )  # Bot is rotated 180, but Y logic is symmetric magnitude
     y_bot_n = -fs_bot / 2.0 - bottom_linewidth / 2.0
 
-    # Visual/meshing markers for ports: small rectangles on port layers so GDS contains geometry for source_layernum 201-204
-    port_len = 1.0  # Length of port marker rectangles
+    # Zero-width paths on port layers create Palace's 2D vertical port sheets.
 
-    def add_port_marker(center, width, layer, thin_ports=False):
-        rect = gf.components.rectangle(
-            size=(port_len, width / 2.0 if thin_ports else width), layer=layer
+    def add_port_marker(center, width, layer, orientation):
+        dbu = c.layout().dbu
+        layer_index = c.layout().layer(*layer)
+        angle = np.radians(orientation + 90.0)
+        dx = width * np.cos(angle) / 2.0
+        dy = width * np.sin(angle) / 2.0
+        start = kdb.Point(
+            round((center[0] - dx) / dbu), round((center[1] - dy) / dbu)
         )
-        ref = c << rect
-        # ref.move((center[0], center[1] - width / 4.0))
-        ref.move(
-            (
-                round(center[0], 2),
-                round(center[1] - (width / 4.0 if thin_ports else width / 2.0), 2),
-            )
+        end = kdb.Point(
+            round((center[0] + dx) / dbu), round((center[1] + dy) / dbu)
         )
+        c.shapes(layer_index).insert(kdb.Path([start, end], 0))
 
     ### TOP LAYER (ports on the RIGHT) -> Port 1 and 2 -> Layer 201, 202
     # OP (Top, Right, Upper)
@@ -288,6 +288,7 @@ def tf_octa_c(
         (round(port_xr - gnd_ring_width, 2), round(y_top_p, 2)),
         top_linewidth,
         (201, 0),
+        0,
     )
     # ON (Top, Right, Lower)
     c.add_port(
@@ -301,6 +302,7 @@ def tf_octa_c(
         (round(port_xr - gnd_ring_width, 2), round(y_top_n, 2)),
         top_linewidth,
         (202, 0),
+        0,
     )
     # Center Tap (Top, Center)
     c.add_port(
@@ -311,7 +313,7 @@ def tf_octa_c(
         layer=(205, 0),
     )
     add_port_marker(
-        (round(port_xl + gnd_ring_width, 2), 0.0), top_centertap_width, (205, 0)
+        (round(port_xl + gnd_ring_width, 2), 0.0), top_centertap_width, (205, 0), 180
     )
 
     ### BOT LAYER (ports on the LEFT) -> Port 3 and 4 -> Layer 203, 204
@@ -327,6 +329,7 @@ def tf_octa_c(
         (round(port_xl + gnd_ring_width, 2), round(y_bot_p, 2)),
         bottom_linewidth,
         (203, 0),
+        180,
     )
     # IN (Bot, Left, Lower)
     c.add_port(
@@ -340,6 +343,7 @@ def tf_octa_c(
         (round(port_xl + gnd_ring_width, 2), round(y_bot_n, 2)),
         bottom_linewidth,
         (204, 0),
+        180,
     )
     # Center Tap (Bot, Center)
     c.add_port(
@@ -350,7 +354,7 @@ def tf_octa_c(
         layer=(206, 0),
     )
     add_port_marker(
-        (round(port_xr - gnd_ring_width, 2), 0.0), bottom_centertap_width, (206, 0)
+        (round(port_xr - gnd_ring_width, 2), 0.0), bottom_centertap_width, (206, 0), 0
     )
 
     # -------------------------------------------------

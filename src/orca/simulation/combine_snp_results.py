@@ -206,9 +206,9 @@ def traverse_directories(path, level=0):
                 found_datafiles.append(item_path)
 
     except PermissionError:
-        logger.debug(item + "[Permission Denied]")
+        logger.debug(path + "[Permission Denied]")
     except FileNotFoundError:
-        logger.debug(item + "[Not Found]")
+        logger.debug(path + "[Not Found]")
     return found_datafiles
 
 

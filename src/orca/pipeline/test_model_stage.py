@@ -11,6 +11,7 @@ from orca.logger import logger
 from sklearn.model_selection import train_test_split
 from orca.utils.folder_structure import OrcaFolderStructure
 from orca.training.datasets.geo_to_ntwk import GeoToNtwkDataset
+from orca.utils.postprocessing import calculate_electrical_parameters, plot_rfic_transformer_metrics
 
 from orca.utils.postprocessing import *
 

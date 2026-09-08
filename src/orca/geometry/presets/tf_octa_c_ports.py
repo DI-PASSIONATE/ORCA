@@ -52,13 +52,13 @@ class TransformerOcta(BaseGeometry):
     """
 
     name: str = "tf_octa_c_ports"
-    stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml")
+    stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_200um.xml")
     simconfig_filename: str = os.path.join(
         os.path.dirname(__file__), "tf_octa_c_ports.simcfg"
     )
     input_parameter_iterator: InputParameterIterator = InputParameterIterator(
         picking_strategy="random",
-        frequency=[1e8, 500e8],  # 1 GHz to 500 GHz
+        frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
         bottom_winding_diameter=[
             x / 10 for x in range(200, 1201, 1)
         ],  # 20.0 to 120.0 in 0.1 steps
@@ -128,11 +128,11 @@ class TransformerOcta(BaseGeometry):
             lower_feed_type=1,
             upper_feed_type=1,
             feedline_spacing=max(params["bottom_linewidth"], params["top_linewidth"])
-            + 0.1,
-            gnd_upper_spacing=20,
-            gnd_lower_spacing=20,
-            gnd_side_spacing=20,
-            gnd_ring_width=10,
+            + 5,
+            gnd_upper_spacing=40,
+            gnd_lower_spacing=40,
+            gnd_side_spacing=40,
+            gnd_ring_width=20,
         )
         # c.show()
         c.write_gds(output_path, with_metadata=False)

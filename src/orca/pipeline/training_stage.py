@@ -62,7 +62,7 @@ class ModelTrainer(PipelineStage):
 
 
         # Perform hyperparameter tuning if needed
-        if self.hyperparameters is None or type(self.hyperparameters) != dict:
+        if self.hyperparameters is None or type(self.hyperparameters) is not dict:
             logger.info("No hyperparameters provided, starting hyperparameter tuning with optuna...")
             self.hyperparameters = hyperparameter_tuning(
                 train_val_df, result_dir, geometry, n_fold_cv=self.n_fold_cv

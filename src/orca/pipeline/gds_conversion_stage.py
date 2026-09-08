@@ -25,7 +25,7 @@ class GDSConverter(PipelineStage):
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ) -> Dict[str, Any]:
         geometry: BaseGeometry = context["geometry"]
-        cpu_cores: int = context.get("cpu_cores", 16)
+        cpu_cores: int = context.get("num_processes", 1)  # Default to 1 if not specified
         base_dir: str = OrcaFolderStructure.get_base_dir(context)
         gds_csv = OrcaFolderStructure.get_gds_csv(context)
         output_dir = OrcaFolderStructure.get_palace_sim_dir(context)

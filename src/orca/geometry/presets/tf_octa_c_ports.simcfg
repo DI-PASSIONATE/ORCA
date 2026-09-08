@@ -8,7 +8,7 @@
             0
         ],
         "fstart": 1.0,
-        "fstop": 200.0,
+        "fstop": 500.0,
         "fstep": 1.0,
         "refined_cellsize": 2.0,
         "order": 2,
@@ -17,15 +17,15 @@
         "adaptive_mesh_iterations": 0,
         "iterative": false,
         "boundary": [
-            "PEC",
-            "PEC",
-            "PEC",
-            "PEC",
-            "PEC",
-            "PEC"
+            "ABC",
+            "ABC",
+            "ABC",
+            "ABC",
+            "ABC",
+            "ABC"
         ],
-        "margin": 100.0,
-        "air_around": 100.0,
+        "margin": 50.0,
+        "air_around": 50.0,
         "ELMER_MPI_THREADS": 4,
         "model_basename": "tf_octa_c_ports"
     },
