@@ -1,6 +1,8 @@
 # Import stuff here so that they are available at the package level (i.e. from orca import ORCA, BaseGeometry, InputParameters)
 
 from .orca import ORCA
+from .pipeline.context import PipelineContext
+from .pipeline.pipeline_stage import PipelineStage
 from .pipeline.gds_gen_stage import GDSGenerator
 from .pipeline.gds_conversion_stage import GDSConverter
 from .pipeline.simulation_stage import PalaceSimulator

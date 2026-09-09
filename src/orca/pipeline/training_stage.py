@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict, Callable
+from typing import Optional, Any, Callable, TYPE_CHECKING
 import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -10,7 +10,9 @@ from orca.training.datasets.base_dataset import BaseDataset
 from orca.training.models.base_model import OrcaModel, get_model_class
 from orca.training.trainer import Trainer, TrainingConfig
 from orca.training.tuner import HyperparameterTuner
-from orca.utils.folder_structure import OrcaFolderStructure
+
+if TYPE_CHECKING:
+    from orca.pipeline.context import PipelineContext
 
 
 class ModelTrainer(PipelineStage):
@@ -53,12 +55,12 @@ class ModelTrainer(PipelineStage):
 
     def run(
         self,
-        context: Dict[str, Any],
+        context: "PipelineContext",
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-    ) -> Dict[str, Any]:
-        geometry: BaseGeometry = context["geometry"]
-        result_dir = OrcaFolderStructure.get_result_dir(context)
-        result_csv = OrcaFolderStructure.get_result_csv(context)
+    ) -> "PipelineContext":
+        geometry: BaseGeometry = context.geometry
+        result_dir = context.result_dir
+        result_csv = context.result_csv
 
         if not os.path.exists(result_csv):
             logger.error(f"No result CSV file found for training at {result_csv}.")
@@ -77,10 +79,17 @@ class ModelTrainer(PipelineStage):
             train_val_df = train_val_df.head(self.n_samples)
             logger.info(f"Using only the first {self.n_samples} samples for training as specified in the ModelTrainer initialization.")
 
-        # Perform hyperparameter tuning if needed
-        if self.hyperparameters is None or type(self.hyperparameters) is not dict:
+        # Perform hyperparameter tuning if needed. The result stays local rather than
+        # being stored on the stage, so re-running the same ModelTrainer tunes again
+        # instead of silently reusing the previous run's best parameters.
+        if isinstance(self.hyperparameters, dict):
+            hyperparameters = self.hyperparameters
+            logger.info(f"Using provided hyperparameters for training: {hyperparameters}")
+        else:
             logger.info("No hyperparameters provided, starting hyperparameter tuning with optuna...")
-            train_val_dataset = geometry.dataset.new_split(directory=result_dir, data_df=train_val_df)
+            train_val_dataset = geometry.dataset.new_split(
+                directory=result_dir, data_df=train_val_df, fit_normalizers=True
+            )
             self._check_compatibility(train_val_dataset)
             tuner = HyperparameterTuner(
                 model_cls=self.model_cls,
@@ -88,10 +97,8 @@ class ModelTrainer(PipelineStage):
                 n_fold_cv=self.n_fold_cv,
                 n_trials=self.n_trials,
             )
-            self.hyperparameters = tuner.tune()
-            logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {self.hyperparameters}")
-        else:
-            logger.info(f"Using provided hyperparameters for training: {self.hyperparameters}")
+            hyperparameters = tuner.tune()
+            logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {hyperparameters}")
 
         # Split train_val_df into train and val for actual model training
         train_df, val_df = train_test_split(
@@ -100,7 +107,11 @@ class ModelTrainer(PipelineStage):
             random_state=11
         )
 
-        train_dataset = geometry.dataset.new_split(directory=result_dir, data_df=train_df)
+        # The training split owns the normalization statistics; validation reuses them,
+        # so no validation data leaks into the normalization of the training data.
+        train_dataset = geometry.dataset.new_split(
+            directory=result_dir, data_df=train_df, fit_normalizers=True
+        )
         val_dataset = geometry.dataset.new_split(directory=result_dir, data_df=val_df)
         self._check_compatibility(train_dataset)
 
@@ -109,22 +120,22 @@ class ModelTrainer(PipelineStage):
         )
 
         trainer = Trainer(
-            config=TrainingConfig.from_hyperparameters(self.hyperparameters),
+            config=TrainingConfig.from_hyperparameters(hyperparameters),
             progress_callback=progress_callback,
             stage_name=self.name,
         )
         result = trainer.fit(
-            model=self.model_cls.from_spec(train_dataset.io_spec, self.hyperparameters),
+            model=self.model_cls.from_spec(train_dataset.io_spec, hyperparameters),
             train_dataset=train_dataset,
             val_dataset=val_dataset,
         )
 
-        context["trained_model"] = result.model
-        context["dataset"] = train_dataset
-        context["hyperparameters"] = self.hyperparameters
-        context["final_val_loss"] = result.best_loss
-        context["training_history"] = result.history
-        context["test_df"] = test_df
+        context.trained_model = result.model
+        context.dataset = train_dataset
+        context.hyperparameters = hyperparameters
+        context.final_val_loss = result.best_loss
+        context.training_history = result.history
+        context.test_df = test_df
         return context
 
     def _check_compatibility(self, dataset: BaseDataset) -> None:

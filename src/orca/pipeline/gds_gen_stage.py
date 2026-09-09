@@ -1,13 +1,14 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import pandas as pd
-from typing import Any, Dict, Callable, Optional
+from typing import Any, Callable, Optional, TYPE_CHECKING
 from orca.geometry.base_geometry import BaseGeometry
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger
 import tqdm
 import os
 
-from orca.utils.folder_structure import OrcaFolderStructure
+if TYPE_CHECKING:
+    from orca.pipeline.context import PipelineContext
 
 
 class GDSGenerator(PipelineStage):
@@ -21,13 +22,13 @@ class GDSGenerator(PipelineStage):
 
     def run(
         self,
-        context: Dict[str, Any],
+        context: "PipelineContext",
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-    ) -> Dict[str, Any]:
-        geometry: BaseGeometry = context["geometry"]
-        cpu_cores: int = context.get("num_processes", 1)  # Default to 1 if not specified
-        output_dir = OrcaFolderStructure.get_geometry_dir(context)
-        gds_csv = OrcaFolderStructure.get_gds_csv(context)
+    ) -> "PipelineContext":
+        geometry: BaseGeometry = context.geometry
+        cpu_cores: int = context.num_processes
+        output_dir = context.geometry_dir
+        gds_csv = context.gds_csv_path
         logger.info(
             f"Starting GDS generation for {self.num_samples} samples using {cpu_cores} CPU cores."
         )
@@ -93,7 +94,7 @@ class GDSGenerator(PipelineStage):
                         )
 
         logger.info("GDS generation completed.")
-        context["gds_csv"] = gds_csv
+        context.gds_csv = gds_csv
         return context
 
     @staticmethod

@@ -80,29 +80,51 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         )
 
     def _load_samples_and_normalize(
-        self, directory: str, data_df: pd.DataFrame
+        self, directory: str, data_df: pd.DataFrame, fit_normalizers: bool = False
     ) -> None:
         """
         Load features and apply normalization to the dataset samples.
         This method should be called after loading samples.
+
+        Args:
+            directory (str): Directory containing the Touchstone files.
+            data_df (pd.DataFrame): Parameter table describing them.
+            fit_normalizers (bool): Whether this split owns the normalization
+                statistics. Exactly one split per training run should set this;
+                the others reuse what it fitted, so no validation or test data
+                leaks into the statistics.
         """
         self.load_samples(directory, data_df)
+
+        if not self.samples:
+            raise ValueError(
+                f"No samples could be loaded from {directory}: none of the {len(data_df)} "
+                "files listed in the parameter table exist. Check that the result "
+                "directory and the CSV describe the same set of simulations."
+            )
 
         if self.features is not None:
             self.samples = list(
                 map(lambda s: (self.features(s[0]), s[1]), self.samples)
             )
 
-        # Set the samples here. Since the normalizer is passed to all dataset splits,
-        # and the mean/std should only be computed once, the normalizer checks if samples have already been set.
-        # The first time set_samples is called (meaning for the 'train' split), it computes and stores the statistics.
-        # This way, the 'val' and 'test' splits will use the same normalization parameters, but no data leakage occurs.
         inputs, outputs = zip(*self.samples)
 
-        if self.input_normalizer is not None:
-            self.input_normalizer.set_samples(list(inputs))
-        if self.output_normalizer is not None:
-            self.output_normalizer.set_samples(list(outputs))
+        # The normalizers are shared across the splits of a run, so only the split
+        # that owns them fits; the rest reuse those statistics unchanged.
+        for normalizer, split_samples in (
+            (self.input_normalizer, inputs),
+            (self.output_normalizer, outputs),
+        ):
+            if normalizer is None:
+                continue
+            if fit_normalizers:
+                normalizer.fit(list(split_samples))
+            elif not normalizer.is_fitted:
+                raise RuntimeError(
+                    f"{type(normalizer).__name__} has not been fitted. Load the "
+                    "training split first with new_split(..., fit_normalizers=True)."
+                )
 
         self.samples = list(
             map(
@@ -132,7 +154,9 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
     def __len__(self):
         return len(self.samples)
 
-    def new_split(self, directory: str, data_df: pd.DataFrame) -> "BaseDataset":
+    def new_split(
+        self, directory: str, data_df: pd.DataFrame, fit_normalizers: bool = False
+    ) -> "BaseDataset":
         """
         Create a new dataset split (train/val/test) with the same codec, normalizers
         and feature pipeline. The new split will load its own samples from the provided data_df.
@@ -140,6 +164,10 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         Args:
             directory (str): Directory containing the dataset files for the new split.
             data_df (pd.DataFrame): DataFrame containing the data for the new split.
+            fit_normalizers (bool): Whether this split should fit the shared
+                normalizers. Pass True for the training split and False for the
+                validation and test splits, which must reuse the training
+                statistics.
         Returns:
             BaseDataset: New dataset split instance.
         """
@@ -149,5 +177,5 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
             input_normalizer=self.input_normalizer,
             output_normalizer=self.output_normalizer,
         )
-        new_dataset._load_samples_and_normalize(directory, data_df)
+        new_dataset._load_samples_and_normalize(directory, data_df, fit_normalizers)
         return new_dataset

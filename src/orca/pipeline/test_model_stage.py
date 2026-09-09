@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict, Callable
+from typing import Optional, Any, Dict, Callable, TYPE_CHECKING
 import os
 
 import numpy as np
@@ -15,12 +15,14 @@ from orca.training.predictors import (
     OnnxNetworkPredictor,
     TorchNetworkPredictor,
 )
-from orca.utils.folder_structure import OrcaFolderStructure
 from orca.utils.postprocessing import (
     calculate_electrical_parameters,
     median_relative_error,
     plot_rfic_transformer_metrics,
 )
+
+if TYPE_CHECKING:
+    from orca.pipeline.context import PipelineContext
 
 
 class ModelTester(PipelineStage):
@@ -46,15 +48,15 @@ class ModelTester(PipelineStage):
 
     def run(
         self,
-        context: Dict[str, Any],
+        context: "PipelineContext",
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-    ) -> Dict[str, Any]:
-        result_dir = OrcaFolderStructure.get_result_dir(context)
-        test_df = context.get("test_df", None)
+    ) -> "PipelineContext":
+        result_dir = context.result_dir
+        test_df = context.test_df
 
         # If the training stage was skipped, the test split has to be reproduced from the CSV
         if test_df is None:
-            result_csv = OrcaFolderStructure.get_result_csv(context)
+            result_csv = context.result_csv
 
             if not os.path.exists(result_csv):
                 logger.error(f"No result CSV file found for testing at {result_csv}.")
@@ -87,22 +89,22 @@ class ModelTester(PipelineStage):
             for param, error in results["electrical_parameters"].items():
                 logger.info(f"Median relative error for {param}: {error:.2f}%")
 
-        context["test_results"] = results
+        context.test_results = results
         return context
 
-    def _build_predictor(self, context: Dict[str, Any]) -> NetworkPredictor:
+    def _build_predictor(self, context: "PipelineContext") -> NetworkPredictor:
         """
         Predict with the trained model if the training stage ran in this pipeline,
         otherwise fall back to the exported ONNX model on disk.
         """
-        trained_model = context.get("trained_model", None)
-        dataset = context.get("dataset", None)
+        trained_model = context.trained_model
+        dataset = context.dataset
 
         if trained_model is not None and dataset is not None:
             logger.info("Testing the trained model directly (no ONNX round-trip).")
             return TorchNetworkPredictor(trained_model, dataset)
 
-        model_path = OrcaFolderStructure.get_model_path(context)
+        model_path = context.onnx_path
         if not os.path.exists(model_path):
             raise FileNotFoundError(
                 f"No trained model in the pipeline context and no exported model at {model_path}. "
@@ -112,7 +114,7 @@ class ModelTester(PipelineStage):
         import onnxruntime
 
         logger.info(f"Testing the exported ONNX model at {model_path}.")
-        geometry: BaseGeometry = context["geometry"]
+        geometry: BaseGeometry = context.geometry
         return OnnxNetworkPredictor(
             onnxruntime.InferenceSession(model_path), geometry.dataset.codec
         )

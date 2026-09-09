@@ -3,12 +3,14 @@ import pandas as pd
 import os
 import tqdm
 
-from typing import Any, Dict, Callable, Optional
+from typing import Any, Callable, Optional, TYPE_CHECKING
 from orca.geometry.base_geometry import BaseGeometry
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger
 from orca.simulation.gds_converter import create_palace_model_from_gds
-from orca.utils.folder_structure import OrcaFolderStructure
+
+if TYPE_CHECKING:
+    from orca.pipeline.context import PipelineContext
 
 
 class GDSConverter(PipelineStage):
@@ -21,15 +23,15 @@ class GDSConverter(PipelineStage):
 
     def run(
         self,
-        context: Dict[str, Any],
+        context: "PipelineContext",
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-    ) -> Dict[str, Any]:
-        geometry: BaseGeometry = context["geometry"]
-        cpu_cores: int = context.get("num_processes", 1)  # Default to 1 if not specified
-        base_dir: str = OrcaFolderStructure.get_base_dir(context)
-        gds_csv = OrcaFolderStructure.get_gds_csv(context)
-        output_dir = OrcaFolderStructure.get_palace_sim_dir(context)
-        palace_csv = OrcaFolderStructure.get_palace_csv(context)
+    ) -> "PipelineContext":
+        geometry: BaseGeometry = context.geometry
+        cpu_cores: int = context.num_processes
+        base_dir: str = context.base_dir
+        gds_csv = context.gds_csv_path
+        output_dir = context.palace_sim_dir
+        palace_csv = context.palace_csv_path
 
         if os.path.exists(output_dir):
             import shutil
@@ -97,7 +99,7 @@ class GDSConverter(PipelineStage):
 
             logger.info("GDS conversion completed.")
 
-        context["palace_csv"] = palace_csv
+        context.palace_csv = palace_csv
         return context
 
     def _save_csv(

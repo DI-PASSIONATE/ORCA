@@ -48,38 +48,63 @@ class Normalizer(nn.Module, ABC):
         """
         return self.forward(x)
 
+    def fit(self, samples: list) -> None:
+        """
+        Compute the normalization statistics from a training split.
+
+        The default does nothing, for normalizers that are already parameterised
+        at construction time (from a parameter range, say) and have no statistics
+        to estimate. Sample-driven normalizers override this.
+
+        Args:
+            samples (list): Tensors of the split to estimate statistics from.
+        """
+
+    @property
+    def is_fitted(self) -> bool:
+        """Whether this normalizer is ready to use."""
+        return True
+
 
 class InputNormalizer(Normalizer):
     """
     A normalizer that applies normalization to input parameters.
-    """
 
-    @abstractmethod
-    def __init__(
-        self,
-        input_parameter_iterator: InputParameterIterator,
-        features: FeatureTransformPipeline | None = None,
-    ):
-        pass
+    Subclasses are parameterised from the geometry's declared parameter ranges
+    rather than from data, so they are usable the moment they are constructed and
+    inherit the no-op :meth:`~Normalizer.fit`. The expected constructor is
+    ``(input_parameter_iterator, features=None)``; it is not declared as an
+    abstract ``__init__`` here, because that stub would sit between a subclass and
+    ``nn.Module`` in the MRO and swallow the ``super().__init__()`` every
+    ``nn.Module`` subclass has to make.
+    """
 
 
 class OutputNormalizer(Normalizer):
     """
-    A normalizer that applies normalization to output parameters.
+    A normalizer whose statistics are estimated from a training split.
+
+    Fitting is explicit and belongs to the caller: the split that owns the
+    statistics calls :meth:`fit`, and every other split reuses them untouched.
+    Deciding this here - rather than latching onto whichever split happened to
+    be loaded first - is what keeps a second training run in the same process
+    from silently normalizing with the previous run's statistics.
     """
 
-    def set_samples(self, samples: list):
+    def fit(self, samples: list) -> None:
         """
-        Sets the samples used to compute normalization statistics.
-        Must be called before using the normalizer.
+        Estimate the normalization statistics from ``samples``, replacing any
+        statistics estimated earlier.
 
         Args:
             samples (list): List of output parameter samples.
         """
-        # Makes sure samples are only set once
-        if not hasattr(self, "samples"):
-            self.samples = samples
-            self.process_samples(samples)
+        self.process_samples(samples)
+        self._fitted = True
+
+    @property
+    def is_fitted(self) -> bool:
+        return getattr(self, "_fitted", False)
 
     @abstractmethod
     def process_samples(self, samples: list):
@@ -109,29 +134,18 @@ class MinMaxNormalizer(InputNormalizer):
             input_mins (list of float): Minimum values for each input parameter.
             input_maxs (list of float): Maximum values for each input parameter.
         """
-        super(InputNormalizer, self).__init__()
+        super().__init__()
 
         input_mins, input_maxs = input_parameter_iterator.get_min_max_values()
 
         if features is not None:
             input_mins, input_maxs = features.transform_min_max(input_mins, input_maxs)
 
-        self.register_buffer(
-            "input_mins",
-            torch.tensor(
-                input_mins,
-                dtype=torch.float32,
-                device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-            ),
-        )
-        self.register_buffer(
-            "input_maxs",
-            torch.tensor(
-                input_maxs,
-                dtype=torch.float32,
-                device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-            ),
-        )
+        # Registered on the CPU: `.to(device)` moves buffers along with the model,
+        # so pinning them to cuda:0 here would only fight whatever device the
+        # trainer was configured with.
+        self.register_buffer("input_mins", torch.tensor(input_mins, dtype=torch.float32))
+        self.register_buffer("input_maxs", torch.tensor(input_maxs, dtype=torch.float32))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return (x - self.input_mins) / (self.input_maxs - self.input_mins)
