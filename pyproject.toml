@@ -38,7 +38,7 @@ dependencies = [
     "optuna",
     "onnx",
     "onnxruntime",
-    "onnxscript",
+    "onnxscript>=0.7.1",
 ]
 
 [project.scripts]
