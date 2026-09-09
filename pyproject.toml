@@ -31,6 +31,8 @@ dependencies = [
     "ihp-gdsfactory @ git+https://github.com/gdsfactory/IHP.git",
     "gds2palace",
     "numpy",
+    "tqdm",
+    "torch",
     "pandas",
     "PySide6",
     "colorlog",

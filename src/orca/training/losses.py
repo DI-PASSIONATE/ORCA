@@ -7,6 +7,8 @@ like any other torch loss.
 
 from __future__ import annotations
 
+import math
+
 import torch
 import torch.nn as nn
 
@@ -43,5 +45,9 @@ class MSEPlusLogCoshLoss(nn.Module):
         self.mse = ComplexMSELoss()
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        log_cosh = torch.mean(torch.log(torch.cosh(pred - target)))
+        error = pred - target
+        abs_error = torch.abs(error)
+        log_cosh = torch.mean(
+            abs_error + torch.nn.functional.softplus(-2.0 * abs_error) - math.log(2.0)
+        )
         return self.log_cosh_weight * log_cosh + self.mse_weight * self.mse(pred, target)

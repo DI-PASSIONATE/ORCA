@@ -37,11 +37,19 @@ def suggest_hyperparameters(trial: optuna.Trial, search_space: dict[str, Any]) -
             values[key] = trial.suggest_categorical(key, distribution)
         elif isinstance(distribution, optuna.distributions.IntDistribution):
             values[key] = trial.suggest_int(
-                key, distribution.low, distribution.high, step=distribution.step
+                key,
+                distribution.low,
+                distribution.high,
+                step=distribution.step,
+                log=distribution.log,
             )
-        elif isinstance(distribution, optuna.distributions.FloatDistribution):
+        elif isinstance(distribution, optuna.distributions.FloatDistribution): 
             values[key] = trial.suggest_float(
-                key, distribution.low, distribution.high, step=distribution.step
+                key,
+                distribution.low,
+                distribution.high,
+                step=distribution.step,
+                log=distribution.log,
             )
         elif isinstance(distribution, optuna.distributions.CategoricalDistribution):
             values[key] = trial.suggest_categorical(key, distribution.choices)
