@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 import numpy as np
 import os
@@ -25,6 +25,37 @@ RING_SPACING = 20.0     # µm, gap between inductor outer edge and ground ring
 RING_WIDTH = 20.0       # µm, ground-ring thickness
 
 
+# Built per instance rather than shared as class attributes - see the note in
+# tf_octa_c_ports.py: a shared dataset would carry one run's fitted normalizer
+# statistics into the next.
+
+
+def _input_parameters() -> InputParameterIterator:
+    return InputParameterIterator(
+        picking_strategy="random",
+        frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
+        turns=[2, 3, 4, 5],
+        width=[x / 100 for x in range(201, 1501, 1)],   # 2.01 .. 15.00 µm
+        space=[x / 100 for x in range(201, 601, 1)],    # 2.01 ..  6.00 µm
+        diameter=[float(x) for x in range(30, 301, 1)],  # 30 .. 300 µm
+    )
+
+
+def _features() -> FeatureTransformPipeline:
+    return FeatureTransformPipeline(
+        # RatioFeature(i=0, j=1),  # turns / width
+        # ChebyshevFeature(i=4, degree=3),  # Chebyshev features of frequency
+    )
+
+
+def _dataset() -> BaseDataset:
+    return GeoToSParamDatasetSingleFrequency(
+        codec=FlatReImCodec(n_ports=2),
+        input_normalizer=OutputMinMaxNormalizer(),
+        output_normalizer=StandardNormalizer(),
+    )
+
+
 @dataclass
 class InductorOcta(BaseGeometry):
     """
@@ -40,24 +71,11 @@ class InductorOcta(BaseGeometry):
     simconfig_filename: str = os.path.join(
         os.path.dirname(__file__), "inductor_octa.simcfg"
     )
-    input_parameter_iterator: InputParameterIterator = InputParameterIterator(
-        picking_strategy="random",
-        frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
-        turns=[2, 3, 4, 5],
-        width=[x / 100 for x in range(201, 1501, 1)],   # 2.01 .. 15.00 µm
-        space=[x / 100 for x in range(201, 601, 1)],    # 2.01 ..  6.00 µm
-        diameter=[float(x) for x in range(30, 301, 1)],  # 30 .. 300 µm
+    input_parameter_iterator: InputParameterIterator = field(
+        default_factory=_input_parameters
     )
-    features = FeatureTransformPipeline(
-        # RatioFeature(i=0, j=1),  # turns / width
-        # ChebyshevFeature(i=4, degree=3),  # Chebyshev features of frequency
-    )
-    dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(
-        codec=FlatReImCodec(n_ports=2),
-        features=features,
-        input_normalizer=OutputMinMaxNormalizer(),
-        output_normalizer=StandardNormalizer(),
-    )
+    features: FeatureTransformPipeline | None = field(default_factory=_features)
+    dataset: BaseDataset = field(default_factory=_dataset)
 
     @staticmethod
     def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:

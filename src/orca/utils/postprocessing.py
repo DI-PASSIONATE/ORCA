@@ -3,11 +3,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def calculate_electrical_parameters(ntwk):
-    # 1. Single-ended to Mixed-Mode Conversion
+def to_mixed_mode(ntwk):
+    """Mixed-mode view of a single-ended network, as a copy.
+
+    Returned separately rather than alongside the electrical parameters: callers
+    iterate over that dict computing per-curve errors, and a Network is not a
+    curve.
+    """
     mm_ntwk = ntwk.copy()
     if ntwk.nports >= 4:
-        mm_ntwk.se2gmm(p=2)
+        mm_ntwk.se2gmm(p=ntwk.nports // 2)
+    return mm_ntwk
+
+
+def calculate_electrical_parameters(ntwk):
+    # 1. Single-ended to Mixed-Mode Conversion
+    mm_ntwk = to_mixed_mode(ntwk)
 
     freq_ghz = ntwk.f / 1e9
     omega = 2 * np.pi * ntwk.f
@@ -95,8 +106,8 @@ def median_relative_error(pred, gt) -> float:
 
 def plot_rfic_transformer_metrics(ntwk):
     metrics = calculate_electrical_parameters(ntwk)
-    mm_ntwk = metrics["mm_ntwk"]
-    freq = metrics["freq_ghz"]
+    mm_ntwk = to_mixed_mode(ntwk)
+    freq = ntwk.f / 1e9
     Lp, Ls = metrics["Lp"], metrics["Ls"]
     Rp, Rs = metrics["Rp"], metrics["Rs"]
     Qp, Qs = metrics["Qp"], metrics["Qs"]

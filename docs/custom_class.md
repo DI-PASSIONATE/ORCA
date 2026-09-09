@@ -21,7 +21,16 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 
 **Optional dataclass fields:**
 
-- `features: FeatureTransformPipeline | None` — Optional pipeline of engineered features (ratios, Chebyshev polynomials, etc.) applied to inputs before the model.
+- `features: FeatureTransformPipeline | None` — Optional pipeline of engineered features (ratios, Chebyshev polynomials, etc.) applied to inputs before the model. The geometry owns them and hands them to its dataset, so set them here rather than on the dataset.
+
+!!! warning "Give the object-valued fields a `default_factory`"
+
+    `input_parameter_iterator`, `dataset` and `features` must be declared with
+    `field(default_factory=...)`, as in the example below. Writing
+    `dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(...)` instead builds
+    **one** object shared by every instance of the class, so two geometries share a
+    dataset and a pair of normalizers — and the normalization statistics fitted
+    during one training run are silently reused by the next.
 
 **Required abstract methods:**
 
@@ -36,6 +45,36 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 Example:
 
 ```python
+# Each of these builds a fresh object per geometry instance. See the warning above:
+# a bare `= InputParameterIterator(...)` default would be shared by every instance.
+def _input_parameters() -> InputParameterIterator:
+    return InputParameterIterator(
+        picking_strategy="random",
+        frequency=[1e8, 500e8],  # 1 GHz to 500 GHz
+        bottom_winding_diameter=[x / 10 for x in range(200, 1201, 1)],  # 20.0 to 120.0 in 0.1 steps
+        top_winding_diameter=[x / 10 for x in range(200, 1201, 1)],  # 20.0 to 120.0 in 0.1 steps
+        center_displacement=[x / 10 for x in range(0, 151, 1)],   # 0.0 to 15.0 in 0.1 steps
+        bottom_linewidth=[x / 10 for x in range(20, 121, 1)],     # 2.0 to 12.0 in 0.1 steps
+        top_linewidth=[x / 10 for x in range(20, 121, 1)],        # 2.0 to 12.0 in 0.1 steps
+    )
+
+
+def _features() -> FeatureTransformPipeline:
+    return FeatureTransformPipeline(
+        # Add RatioFeature or ChebyshevFeature transforms here if desired
+        # RatioFeature(i=0, j=1),         # bottom_winding_diameter / top_winding_diameter
+        # ChebyshevFeature(i=5, degree=3), # Chebyshev features of frequency
+    )
+
+
+def _dataset() -> BaseDataset:
+    return GeoToSParamDatasetSingleFrequency(
+        codec=FlatReImCodec(n_ports=6),
+        input_normalizer=OutputMinMaxNormalizer(),
+        output_normalizer=StandardNormalizer(),
+    )
+
+
 @dataclass
 class TransformerOcta(BaseGeometry):
     """
@@ -45,26 +84,9 @@ class TransformerOcta(BaseGeometry):
     name: str = "tf_octa_c_ports"
     stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml")
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
-    input_parameter_iterator: InputParameterIterator = InputParameterIterator(
-        picking_strategy="random",
-        frequency=[1e8, 500e8],  # 1 GHz to 500 GHz
-        bottom_winding_diameter=[x / 10 for x in range(200, 1201, 1)],  # 20.0 to 120.0 in 0.1 steps
-        top_winding_diameter=[x / 10 for x in range(200, 1201, 1)],  # 20.0 to 120.0 in 0.1 steps
-        center_displacement=[x / 10 for x in range(0, 151, 1)],   # 0.0 to 15.0 in 0.1 steps
-        bottom_linewidth=[x / 10 for x in range(20, 121, 1)],     # 2.0 to 12.0 in 0.1 steps
-        top_linewidth=[x / 10 for x in range(20, 121, 1)],        # 2.0 to 12.0 in 0.1 steps
-    )
-    features = FeatureTransformPipeline(
-        # Add RatioFeature or ChebyshevFeature transforms here if desired
-        # RatioFeature(i=0, j=1),         # bottom_winding_diameter / top_winding_diameter
-        # ChebyshevFeature(i=5, degree=3), # Chebyshev features of frequency
-    )
-    dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(
-        n_ports=6,
-        features=features,
-        input_normalizer=OutputMinMaxNormalizer(),
-        output_normalizer=StandardNormalizer(),
-    )
+    input_parameter_iterator: InputParameterIterator = field(default_factory=_input_parameters)
+    features: FeatureTransformPipeline | None = field(default_factory=_features)
+    dataset: BaseDataset = field(default_factory=_dataset)
 
     def get_hyperparameter_search_space(self) -> dict:
         return {

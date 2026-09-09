@@ -44,7 +44,7 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
             snp_path = os.path.join(directory, row["name"])
 
             if not os.path.exists(snp_path):
-                logger.debug(f"S-parameter file not found: {snp_path}")
+                logger.warning(f"S-parameter file not found, skipping: {snp_path}")
                 continue
 
             geometry_params = np.array(row.drop("name"), dtype=np.float32)

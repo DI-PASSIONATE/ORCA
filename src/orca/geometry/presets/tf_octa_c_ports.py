@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 import numpy as np
 import os
@@ -38,18 +38,14 @@ from orca.training.datasets.geo_to_s_param_single_f import (
 #             poly.points = np.round(poly.points / grid_um) * grid_um
 #     lib.write_gds(path)
 
-@dataclass
-class TransformerOcta(BaseGeometry):
-    """
-    Represents a transformer geometry with octagonal shape.
-    """
+# These are built per instance rather than shared as class attributes: a dataclass
+# default holds one object for every instance of the class, so two geometries would
+# share one dataset and one pair of normalizers - and the statistics fitted during
+# the first training run would silently be reused by the next one.
 
-    name: str = "tf_octa_c_ports"
-    stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_200um.xml")
-    simconfig_filename: str = os.path.join(
-        os.path.dirname(__file__), "tf_octa_c_ports.simcfg"
-    )
-    input_parameter_iterator: InputParameterIterator = InputParameterIterator(
+
+def _input_parameters() -> InputParameterIterator:
+    return InputParameterIterator(
         picking_strategy="random",
         frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
         bottom_winding_diameter=[
@@ -64,18 +60,42 @@ class TransformerOcta(BaseGeometry):
         bottom_linewidth=[x / 10 for x in range(20, 121, 1)],  # 2.0 to 12.0 in 0.1 steps
         top_linewidth=[x / 10 for x in range(20, 121, 1)],  # 2.0 to 12.0 in 0.1 steps
     )
-    features = FeatureTransformPipeline(
+
+
+def _features() -> FeatureTransformPipeline:
+    return FeatureTransformPipeline(
         # RatioFeature(i=0, j=1),  # input_winding_diameter / output_winding_diameter
         # RatioFeature(i=3, j=4),  # bottom_linewidth / upper_linewidth
         # RatioFeature(i=5, j=0),  # frequency / input_winding_diameter
         # ChebyshevFeature(i=5, degree=3),  # Chebyshev features of frequency
     )
-    dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(
+
+
+def _dataset() -> BaseDataset:
+    return GeoToSParamDatasetSingleFrequency(
         codec=FlatReImCodec(n_ports=6),
-        features=features,
         input_normalizer=OutputMinMaxNormalizer(),
         output_normalizer=StandardNormalizer(),
     )
+
+
+@dataclass
+class TransformerOcta(BaseGeometry):
+    """
+    Represents a transformer geometry with octagonal shape.
+    """
+
+    name: str = "tf_octa_c_ports"
+    stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_200um.xml")
+    simconfig_filename: str = os.path.join(
+        os.path.dirname(__file__), "tf_octa_c_ports.simcfg"
+    )
+    input_parameter_iterator: InputParameterIterator = field(
+        default_factory=_input_parameters
+    )
+    features: FeatureTransformPipeline | None = field(default_factory=_features)
+    dataset: BaseDataset = field(default_factory=_dataset)
+
     
     @staticmethod
     def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:
