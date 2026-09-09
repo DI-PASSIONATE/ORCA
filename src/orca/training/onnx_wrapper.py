@@ -1,5 +1,4 @@
 import torch
-from orca.training.feature_transform import FeatureTransformPipeline
 from orca.training.normalize import Normalizer
 
 
@@ -20,13 +19,11 @@ class ONNXWrapper(torch.nn.Module):
     def __init__(
         self,
         model,
-        features: FeatureTransformPipeline | None,
         input_normalizer: Normalizer,
         output_denormalizer: Normalizer,
     ):
         super().__init__()
         self.model = model
-        self.features = features
         self.input_normalizer = input_normalizer
         self.output_denormalizer = output_denormalizer
 
@@ -34,15 +31,12 @@ class ONNXWrapper(torch.nn.Module):
         # Convert input tuple to single tensor
         input_tensor = torch.cat(x, dim=1)
 
-        # Apply feature transformations if any
-        if self.features is not None:
-            input_tensor = self.features(input_tensor)
-
         # Normalizing the input
         if self.input_normalizer is not None:
             input_tensor = self.input_normalizer(input_tensor)
 
-        # Perform inference
+        # Perform inference. Any basis expansion lives inside the model, so it is
+        # traced into the exported graph here rather than applied separately.
         output = self.model(input_tensor)
 
         # De-normalize output

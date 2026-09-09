@@ -7,6 +7,7 @@ from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.training.datasets.base_dataset import BaseDataset
+from orca.training.basis_expansion import BasisExpansion, get_basis_class
 from orca.training.models.base_model import OrcaModel, get_model_class
 from orca.training.trainer import Trainer, TrainingConfig
 from orca.training.tuner import HyperparameterTuner
@@ -23,6 +24,7 @@ class ModelTrainer(PipelineStage):
     def __init__(
         self,
         model: str | type[OrcaModel] = "mlp",
+        basis: str | type[BasisExpansion] | None = None,
         hyperparameters: dict[str, Any] | None = None,
         test_frac: float = 0.15,
         n_train_samples: Optional[int] = None,
@@ -39,6 +41,8 @@ class ModelTrainer(PipelineStage):
 
         Args:
             model: An OrcaModel subclass or a registered model name (default: "mlp").
+            basis: Optional basis expansion of the model inputs, as a
+                BasisExpansion subclass or a registered name (e.g. "chebyshev").
             hyperparameters: Optional predefined hyperparameters. If None, hyperparameter tuning will be performed.
             test_frac: Fraction of data to use for testing (default: 0.15).
             n_train_samples: Optional limit on the number of samples to use for training.
@@ -47,6 +51,7 @@ class ModelTrainer(PipelineStage):
         """
         super().__init__(name="Model Trainer", index=4)
         self.model_cls = get_model_class(model)
+        self.basis_cls = get_basis_class(basis) if basis is not None else None
         self.hyperparameters = hyperparameters
         self.test_frac = test_frac
         self.n_samples = n_train_samples
@@ -94,6 +99,7 @@ class ModelTrainer(PipelineStage):
             tuner = HyperparameterTuner(
                 model_cls=self.model_cls,
                 dataset=train_val_dataset,
+                basis_cls=self.basis_cls,
                 n_fold_cv=self.n_fold_cv,
                 n_trials=self.n_trials,
             )
@@ -124,8 +130,11 @@ class ModelTrainer(PipelineStage):
             progress_callback=progress_callback,
             stage_name=self.name,
         )
+        spec = train_dataset.io_spec
+        basis = self.basis_cls.from_spec(spec, hyperparameters) if self.basis_cls else None
+
         result = trainer.fit(
-            model=self.model_cls.from_spec(train_dataset.io_spec, hyperparameters),
+            model=self.model_cls.from_spec(spec, hyperparameters, basis),
             train_dataset=train_dataset,
             val_dataset=val_dataset,
         )

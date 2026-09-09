@@ -6,7 +6,6 @@ import pandas as pd
 import torch
 
 from orca.training.codecs import OutputCodec
-from orca.training.feature_transform import FeatureTransformPipeline
 from orca.training.normalize import Normalizer
 from orca.training.spec import FrequencyMode, IOSpec
 
@@ -18,7 +17,6 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
     def __init__(
         self,
         codec: OutputCodec,
-        features: FeatureTransformPipeline | None = None,
         input_normalizer: Normalizer | None = None,
         output_normalizer: Normalizer | None = None,
     ):
@@ -29,14 +27,12 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
 
         Args:
             codec (OutputCodec): Output representation used to encode targets.
-            features (FeatureTransformPipeline | None): Optional feature pipeline.
             input_normalizer (Normalizer|None): Normalizer for input parameters.
             output_normalizer (Normalizer|None): Normalizer for output parameters.
         """
         super(BaseDataset, self).__init__()
 
         self.codec = codec
-        self.features = features
         self.samples: list[tuple[torch.Tensor, torch.Tensor]] = []
         self.input_normalizer = input_normalizer
         self.output_normalizer = output_normalizer
@@ -75,7 +71,6 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
             input_names=tuple(self.input_param_names),
             codec=self.codec,
             frequency_mode=type(self).frequency_mode,
-            n_extra_features=len(self.features) if self.features is not None else 0,
             frequency_grid=self.frequency_grid,
         )
 
@@ -83,8 +78,7 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         self, directory: str, data_df: pd.DataFrame, fit_normalizers: bool = False
     ) -> None:
         """
-        Load features and apply normalization to the dataset samples.
-        This method should be called after loading samples.
+        Load the samples of a split and apply normalization to them.
 
         Args:
             directory (str): Directory containing the Touchstone files.
@@ -101,11 +95,6 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
                 f"No samples could be loaded from {directory}: none of the {len(data_df)} "
                 "files listed in the parameter table exist. Check that the result "
                 "directory and the CSV describe the same set of simulations."
-            )
-
-        if self.features is not None:
-            self.samples = list(
-                map(lambda s: (self.features(s[0]), s[1]), self.samples)
             )
 
         inputs, outputs = zip(*self.samples)
@@ -158,8 +147,8 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         self, directory: str, data_df: pd.DataFrame, fit_normalizers: bool = False
     ) -> "BaseDataset":
         """
-        Create a new dataset split (train/val/test) with the same codec, normalizers
-        and feature pipeline. The new split will load its own samples from the provided data_df.
+        Create a new dataset split (train/val/test) with the same codec and
+        normalizers. The new split will load its own samples from the provided data_df.
 
         Args:
             directory (str): Directory containing the dataset files for the new split.
@@ -173,7 +162,6 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         """
         new_dataset = self.__class__(
             codec=self.codec,
-            features=self.features,
             input_normalizer=self.input_normalizer,
             output_normalizer=self.output_normalizer,
         )

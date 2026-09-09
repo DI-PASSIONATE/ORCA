@@ -6,7 +6,6 @@ import torch
 import tqdm
 
 from orca.training.normalize import Normalizer
-from orca.training.feature_transform import FeatureTransformPipeline
 from orca.logger import logger
 
 

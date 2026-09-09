@@ -46,7 +46,6 @@ class OnnxExporter(PipelineStage):
 
         wrapped_model = ONNXWrapper(
             trained_model.eval(),
-            features=dataset.features,
             input_normalizer=dataset.input_normalizer,
             output_denormalizer=dataset.output_normalizer,
         ).eval()

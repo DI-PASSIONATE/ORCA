@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 from orca.geometry.input_parameters import InputParameterIterator
-from orca.training.feature_transform import FeatureTransformPipeline
 from orca.logger import logger
 
 
@@ -73,7 +72,7 @@ class InputNormalizer(Normalizer):
     Subclasses are parameterised from the geometry's declared parameter ranges
     rather than from data, so they are usable the moment they are constructed and
     inherit the no-op :meth:`~Normalizer.fit`. The expected constructor is
-    ``(input_parameter_iterator, features=None)``; it is not declared as an
+    ``(input_parameter_iterator)``; it is not declared as an
     abstract ``__init__`` here, because that stub would sit between a subclass and
     ``nn.Module`` in the MRO and swallow the ``super().__init__()`` every
     ``nn.Module`` subclass has to make.
@@ -122,24 +121,17 @@ class MinMaxNormalizer(InputNormalizer):
     A normalizer that applies min-max normalization to input parameters.
     """
 
-    def __init__(
-        self,
-        input_parameter_iterator: InputParameterIterator,
-        features: FeatureTransformPipeline | None = None,
-    ):
+    def __init__(self, input_parameter_iterator: InputParameterIterator):
         """
         Applies component-wise min-max normalization to the input tensor.
 
         Args:
-            input_mins (list of float): Minimum values for each input parameter.
-            input_maxs (list of float): Maximum values for each input parameter.
+            input_parameter_iterator (InputParameterIterator): Supplies the declared
+                minimum and maximum of each input parameter.
         """
         super().__init__()
 
         input_mins, input_maxs = input_parameter_iterator.get_min_max_values()
-
-        if features is not None:
-            input_mins, input_maxs = features.transform_min_max(input_mins, input_maxs)
 
         # Registered on the CPU: `.to(device)` moves buffers along with the model,
         # so pinning them to cuda:0 here would only fight whatever device the

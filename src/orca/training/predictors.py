@@ -38,14 +38,13 @@ class NetworkPredictor(ABC):
 class TorchNetworkPredictor(NetworkPredictor):
     """Runs a trained torch model, reusing the dataset's preprocessing.
 
-    The feature pipeline and normalizers live on the dataset, so the same
-    transformations that were applied during training are applied here. This is
-    what the exported ONNX model does internally via
-    :class:`~orca.training.onnx_wrapper.ONNXWrapper`.
+    The normalizers live on the dataset, so the same transformations that were
+    applied during training are applied here. This is what the exported ONNX model
+    does internally via :class:`~orca.training.onnx_wrapper.ONNXWrapper`.
 
     Args:
         model (OrcaModel): Trained model.
-        dataset: Dataset the model was trained on, supplying features, normalizers and codec.
+        dataset: Dataset the model was trained on, supplying normalizers and codec.
     """
 
     def __init__(self, model: OrcaModel, dataset):
@@ -70,8 +69,6 @@ class TorchNetworkPredictor(NetworkPredictor):
         ).astype(np.float32)
         x = torch.tensor(x, device=self.device)
 
-        if self.dataset.features is not None:
-            x = self.dataset.features(x)
         if self.dataset.input_normalizer is not None:
             x = self.dataset.input_normalizer.normalize(x)
 
