@@ -74,6 +74,15 @@ class OnnxExporter(PipelineStage):
         meta = onnx_model.metadata_props.add()
         meta.key = "input_parameter_ranges"
         meta.value = json.dumps(ranges)
+
+        # Record which physical properties the architecture guarantees, so consumers
+        # (e.g. COBRA) know whether the predicted S-matrix is passive/reciprocal by construction
+        guarantees = getattr(trained_model, "guarantees", None)
+        if guarantees is not None:
+            meta = onnx_model.metadata_props.add()
+            meta.key = "physics_guarantees"
+            meta.value = json.dumps(guarantees.as_dict())
+
         onnx.save(onnx_model, output_path)
 
         context["model_path"] = output_path

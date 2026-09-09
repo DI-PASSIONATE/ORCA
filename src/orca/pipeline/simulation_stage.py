@@ -8,6 +8,7 @@ import tqdm
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger
 from orca.simulation.simulate import run_palace
+from orca.simulation.combine_snp_results import touchstone_filename
 from orca.utils.folder_structure import OrcaFolderStructure
 
 
@@ -73,6 +74,14 @@ class PalaceSimulator(PipelineStage):
             columns=["data_dir", "sim_path", "config_name"],
             inplace=True,
             errors="ignore",
+        )
+
+        # The name column arrives as "<geometry>.gds" from the GDS generation stage. Replace it
+        # with the Touchstone file this stage actually produces, so downstream datasets can open
+        # the file directly
+        n_ports = context["geometry"].dataset.n_ports
+        result_data["name"] = result_data["name"].apply(
+            lambda name: touchstone_filename(name, n_ports, self.touchstone_type)
         )
 
         use_slurm = self.num_parallel_palace_sims > 1
