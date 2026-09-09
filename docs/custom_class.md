@@ -19,18 +19,21 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 - `input_parameter_iterator: InputParameterIterator` — Defines geometry parameters and their sampling ranges.
 - `dataset: BaseDataset` — Dataset class instance (e.g. `GeoToSParamDatasetSingleFrequency`) used for training.
 
-**Optional dataclass fields:**
-
-- `features: FeatureTransformPipeline | None` — Optional pipeline of engineered features (ratios, Chebyshev polynomials, etc.) applied to inputs before the model. The geometry owns them and hands them to its dataset, so set them here rather than on the dataset.
-
 !!! warning "Give the object-valued fields a `default_factory`"
 
-    `input_parameter_iterator`, `dataset` and `features` must be declared with
+    `input_parameter_iterator` and `dataset` must be declared with
     `field(default_factory=...)`, as in the example below. Writing
     `dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(...)` instead builds
     **one** object shared by every instance of the class, so two geometries share a
     dataset and a pair of normalizers — and the normalization statistics fitted
     during one training run are silently reused by the next.
+
+!!! note "Basis expansions are not set on the geometry"
+
+    Engineered inputs such as a Chebyshev expansion of frequency belong to the
+    model, not the geometry: pass `orca.ModelTrainer(model=..., basis="chebyshev")`.
+    That way the expansion is tuned with the model and traced into the exported ONNX
+    graph. See `src/orca/training/README.md`.
 
 **Required abstract methods:**
 
@@ -59,14 +62,6 @@ def _input_parameters() -> InputParameterIterator:
     )
 
 
-def _features() -> FeatureTransformPipeline:
-    return FeatureTransformPipeline(
-        # Add RatioFeature or ChebyshevFeature transforms here if desired
-        # RatioFeature(i=0, j=1),         # bottom_winding_diameter / top_winding_diameter
-        # ChebyshevFeature(i=5, degree=3), # Chebyshev features of frequency
-    )
-
-
 def _dataset() -> BaseDataset:
     return GeoToSParamDatasetSingleFrequency(
         codec=FlatReImCodec(n_ports=6),
@@ -85,7 +80,6 @@ class TransformerOcta(BaseGeometry):
     stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml")
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
     input_parameter_iterator: InputParameterIterator = field(default_factory=_input_parameters)
-    features: FeatureTransformPipeline | None = field(default_factory=_features)
     dataset: BaseDataset = field(default_factory=_dataset)
 
     def get_hyperparameter_search_space(self) -> dict:
@@ -176,14 +170,23 @@ Picking strategies:
 | `GeoToSParamDatasetSingleFrequency` | One training sample per frequency point per geometry (recommended) |
 | `GeoToSParamDataset` | One training sample per geometry (full frequency sweep as a vector) |
 
-### Reference: Feature Transforms
+### Reference: Basis Expansions
 
-Feature transforms are applied to geometry inputs before the model and baked into the exported ONNX.
+Basis expansions widen the model's input before its first layer by appending fixed
+basis functions of it. Nothing about them is learned. They belong to the model,
+not the geometry, so they are chosen on the training stage — `orca.ModelTrainer(model="mlp",
+basis="chebyshev")` — and work with any architecture. Because the expansion is part
+of the model, it is tuned with it and traced into the exported ONNX graph; the ONNX
+input names stay the same.
 
-| Class | Description |
-|---|---|
-| `RatioFeature(i, j)` | Appends `params[i] / params[j]` as an extra input feature |
-| `ChebyshevFeature(i, degree)` | Appends Chebyshev polynomial features of `params[i]` up to `degree` |
+| Class | Name | Description |
+|---|---|---|
+| `IdentityBasis` | `"identity"` | Passes inputs through unchanged (the default) |
+| `ChebyshevBasis` | `"chebyshev"` | Appends `degree` Chebyshev polynomials of one column, `frequency` by default |
+
+`ChebyshevBasis` tunes `basis_degree` automatically when no hyperparameters are
+supplied. It sees *normalized* inputs and clamps to [-1, 1], so a frequency outside
+the training range saturates rather than diverging.
 
 ### Reference: Normalizers
 
