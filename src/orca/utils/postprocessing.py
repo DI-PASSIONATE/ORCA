@@ -3,11 +3,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def calculate_electrical_parameters(ntwk):
-    # 1. Single-ended to Mixed-Mode Conversion
+def to_mixed_mode(ntwk):
+    """Mixed-mode view of a single-ended network, as a copy.
+
+    Returned separately rather than alongside the electrical parameters: callers
+    iterate over that dict computing per-curve errors, and a Network is not a
+    curve.
+    """
     mm_ntwk = ntwk.copy()
     if ntwk.nports >= 4:
-        mm_ntwk.se2gmm(p=2)
+        mm_ntwk.se2gmm(p=ntwk.nports // 2)
+    return mm_ntwk
+
+
+def calculate_electrical_parameters(ntwk):
+    # 1. Single-ended to Mixed-Mode Conversion
+    mm_ntwk = to_mixed_mode(ntwk)
 
     freq_ghz = ntwk.f / 1e9
     omega = 2 * np.pi * ntwk.f
@@ -36,11 +47,15 @@ def calculate_electrical_parameters(ntwk):
     cross = cross[freq_ghz[cross] >= f_min]
 
     if cross.size == 0:
-        srf_f = None
+        # NaN rather than None, so callers can do arithmetic on the result and
+        # filter it out with the usual isfinite() masks.
+        srf_f = float("nan")
     else:
-        k = cross[0]
-        f0, f1 = freq_ghz[k], freq_ghz[k+1]
-        y0, y1 = im[k], im[k+1]
+        # Note: this index must not be called k - that name holds the coupling
+        # coefficient computed above.
+        cross_idx = cross[0]
+        f0, f1 = freq_ghz[cross_idx], freq_ghz[cross_idx + 1]
+        y0, y1 = im[cross_idx], im[cross_idx + 1]
         srf_f = float(f0 - y0 * (f1 - f0) / (y1 - y0))
 
     return {
@@ -58,10 +73,41 @@ def calculate_electrical_parameters(ntwk):
     }
 
 
+def median_relative_error(pred, gt) -> float:
+    """
+    Median relative error, in percent, between a predicted and a reference curve.
+
+    Normalizing by the mean of the whole curve hides real error: quantities like L and Q
+    diverge at self-resonance, and those few huge values dominate the mean, driving the
+    reported error towards zero. Instead the error is taken per point against the local
+    magnitude - floored at 1% of the curve's median magnitude so zero crossings stay
+    finite - and aggregated with a median, which the divergent points cannot dominate.
+
+    Args:
+        pred: Predicted values (array or scalar).
+        gt: Reference values (array or scalar), same shape as pred.
+
+    Returns:
+        float: Median relative error in percent, or NaN if nothing finite remains.
+    """
+    pred = np.atleast_1d(pred)
+    gt = np.atleast_1d(gt)
+
+    gt_abs = np.abs(gt)
+    finite_gt = gt_abs[np.isfinite(gt_abs)]
+    scale = np.median(finite_gt) if finite_gt.size else 0.0
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        errors = np.abs(pred - gt) / np.maximum(gt_abs, 0.01 * scale + 1e-10) * 100
+
+    errors = errors[np.isfinite(errors)]
+    return float(np.median(errors)) if errors.size else float("nan")
+
+
 def plot_rfic_transformer_metrics(ntwk):
     metrics = calculate_electrical_parameters(ntwk)
-    mm_ntwk = metrics["mm_ntwk"]
-    freq = metrics["freq_ghz"]
+    mm_ntwk = to_mixed_mode(ntwk)
+    freq = ntwk.f / 1e9
     Lp, Ls = metrics["Lp"], metrics["Ls"]
     Rp, Rs = metrics["Rp"], metrics["Rs"]
     Qp, Qs = metrics["Qp"], metrics["Qs"]
@@ -124,7 +170,7 @@ def plot_rfic_transformer_metrics(ntwk):
     axes[2, 1].plot(freq, np.imag(z_d11), label="Im(Zdd11)", color="brown")
     axes[2, 1].axhline(0, color="black", lw=1)  # y=0 line to find zero-crossing
     srf_f = metrics["srf_f"]
-    if srf_f is not None:
+    if np.isfinite(srf_f):
         axes[2, 1].axvline(
             srf_f, color="red", linestyle=":", label=f"SRF: {srf_f:.2f} GHz"
         )

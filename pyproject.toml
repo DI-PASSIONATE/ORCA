@@ -31,6 +31,8 @@ dependencies = [
     "ihp-gdsfactory @ git+https://github.com/gdsfactory/IHP.git",
     "gds2palace",
     "numpy",
+    "tqdm",
+    "torch",
     "pandas",
     "PySide6",
     "colorlog",
@@ -38,7 +40,7 @@ dependencies = [
     "optuna",
     "onnx",
     "onnxruntime",
-    "onnxscript",
+    "onnxscript>=0.7.1",
 ]
 
 [project.scripts]

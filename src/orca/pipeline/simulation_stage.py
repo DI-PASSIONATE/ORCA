@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Any, Dict, Callable
+from typing import Optional, Any, Callable, TYPE_CHECKING
 import json
 import os
 import pandas as pd
@@ -8,7 +8,10 @@ import tqdm
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger
 from orca.simulation.simulate import run_palace
-from orca.utils.folder_structure import OrcaFolderStructure
+from orca.simulation.combine_snp_results import touchstone_filename
+
+if TYPE_CHECKING:
+    from orca.pipeline.context import PipelineContext
 
 
 class PalaceSimulator(PipelineStage):
@@ -51,13 +54,13 @@ class PalaceSimulator(PipelineStage):
 
     def run(
         self,
-        context: Dict[str, Any],
+        context: "PipelineContext",
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-    ) -> Dict[str, Any]:
-        num_processes: int = context.get("num_processes", 1)
-        output_dir = OrcaFolderStructure.get_result_dir(context)
-        palace_csv = OrcaFolderStructure.get_palace_csv(context)
-        result_csv = OrcaFolderStructure.get_result_csv(context)
+    ) -> "PipelineContext":
+        num_processes: int = context.num_processes
+        output_dir = context.result_dir
+        palace_csv = context.palace_csv_path
+        result_csv = context.result_csv
         palace_data = pd.read_csv(palace_csv)  # Information
 
         if os.path.exists(output_dir):
@@ -73,6 +76,14 @@ class PalaceSimulator(PipelineStage):
             columns=["data_dir", "sim_path", "config_name"],
             inplace=True,
             errors="ignore",
+        )
+
+        # The name column arrives as "<geometry>.gds" from the GDS generation stage. Replace it
+        # with the Touchstone file this stage actually produces, so downstream datasets can open
+        # the file directly
+        n_ports = context.geometry.dataset.n_ports
+        result_data["name"] = result_data["name"].apply(
+            lambda name: touchstone_filename(name, n_ports, self.touchstone_type)
         )
 
         use_slurm = self.num_parallel_palace_sims > 1
@@ -144,8 +155,6 @@ class PalaceSimulator(PipelineStage):
         # Save updated results CSV
         result_data.to_csv(result_csv, index=False)
 
-        context["result_dir"] = output_dir
-        context["result_csv"] = result_csv
         logger.info("Palace EM simulations completed.")
         return context
 

@@ -1,53 +1,71 @@
+from typing import Any
+
+import optuna
 import torch
 import torch.nn as nn
-import numpy as np
+
+from orca.training.models.base_model import OrcaModel, register_model
+from orca.training.spec import FrequencyMode, IOSpec
 
 
-class OrcaMLP(nn.Module):
+@register_model("mlp")
+class OrcaMLP(OrcaModel):
+    """Plain multi-layer perceptron over geometry parameters and frequency.
+
+    One forward pass predicts the response at a single frequency point, so the
+    frequency curve is assembled by batching the same geometry over the band.
+    Nothing about the output is constrained: the network is free to predict a
+    non-passive, non-reciprocal S-matrix.
+
+    Args:
+        spec (IOSpec): Dataset contract the model is sized against.
+        hidden_sizes (list[int]): Width of each hidden layer.
+        activation (type[nn.Module]): Activation module class used between layers.
+        dropout (float): Dropout probability applied after each activation.
+    """
+
+    frequency_mode = FrequencyMode.PER_POINT
+
     def __init__(
         self,
-        input_dim: int,
+        spec: IOSpec,
         hidden_sizes: list[int],
-        output_dim: int,
-        output_shape: tuple[int, ...] | None = None,
+        activation: type[nn.Module] = nn.GELU,
+        dropout: float = 0.0,
     ):
-        """
-        Simple Multi-Layer Perceptron (MLP) model for regression tasks.
+        super().__init__(spec)
 
-        Args:
-            input_dim (int): Number of input parameters.
-            hidden_sizes (list[int]): Sizes of hidden layers.
-            output_dim (int): Total number of output parameters (flattened).
-            output_shape (tuple[int, ...] | None):
-                If provided, reshape output to (B, *output_shape).
-                Otherwise, return flat output (B, output_dim).
-        """
-        super().__init__()
-
-        # Check if output_shape is even possible
-        if output_shape is not None and np.prod(output_shape) != output_dim:
-            raise ValueError(
-                f"output_shape {output_shape} does not match output_dim={output_dim}"
-            )
-
-        self.output_shape = output_shape
-
-        layers = []
-        in_size = input_dim
-        for h_size in hidden_sizes:
-            layers.append(nn.Linear(in_size, h_size))
-            layers.append(nn.GELU())
-            in_size = h_size
-        layers.append(nn.Linear(in_size, output_dim))
+        layers: list[nn.Module] = []
+        in_size = spec.input_dim
+        for hidden_size in hidden_sizes:
+            layers.append(nn.Linear(in_size, hidden_size))
+            layers.append(activation())
+            if dropout > 0.0:
+                layers.append(nn.Dropout(dropout))
+            in_size = hidden_size
+        layers.append(nn.Linear(in_size, spec.output_dim))
 
         self.model = nn.Sequential(*layers)
 
+    @classmethod
+    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> "OrcaMLP":
+        num_layers = hyperparameters.get("num_layers", 4)
+        hidden_size = hyperparameters.get("hidden_size", 512)
+        activation = getattr(nn, hyperparameters.get("activation_function", "GELU"))
+        return cls(
+            spec=spec,
+            hidden_sizes=[hidden_size] * num_layers,
+            activation=activation,
+            dropout=hyperparameters.get("dropout", 0.0),
+        )
+
+    @staticmethod
+    def hyperparameter_search_space() -> dict[str, Any]:
+        return {
+            "num_layers": optuna.distributions.IntDistribution(3, 9, step=1),
+            "hidden_size": optuna.distributions.IntDistribution(128, 2048, step=128),
+            "activation_function": ["GELU", "SiLU"],
+        }
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Forward pass
-        y = self.model(x)
-
-        # Optional output reshaping
-        if self.output_shape is not None:
-            y = y.view(y.shape[0], *self.output_shape)
-
-        return y
+        return self.model(x)

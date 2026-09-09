@@ -19,6 +19,38 @@ import numpy as np
 from orca.logger import logger
 
 
+#: Filename suffix written for each touchstone_type, appended before the .sNp extension.
+#: "all" writes every variant; the fully corrected one is treated as canonical.
+TOUCHSTONE_SUFFIXES = {
+    "normal": "",
+    "dc": "_dc",
+    "deembedded": "_deembedded",
+    "dc_deembedded": "_dc_deembedded",
+    "all": "_dc_deembedded",
+}
+
+
+def touchstone_filename(base_name: str, n_ports: int, touchstone_type: str) -> str:
+    """
+    Name of the Touchstone file written for a geometry.
+
+    Args:
+        base_name (str): Geometry name, with or without a file extension.
+        n_ports (int): Number of ports, which sets the .sNp extension.
+        touchstone_type (str): One of "all", "normal", "deembedded", "dc", "dc_deembedded".
+
+    Returns:
+        str: Filename such as "tf_octa_c_ports_3_dc_deembedded.s6p".
+    """
+    if touchstone_type not in TOUCHSTONE_SUFFIXES:
+        raise ValueError(
+            f"Invalid touchstone_type: {touchstone_type}. "
+            f"Must be one of {sorted(TOUCHSTONE_SUFFIXES)}."
+        )
+    stem = os.path.splitext(base_name)[0]
+    return f"{stem}{TOUCHSTONE_SUFFIXES[touchstone_type]}.s{n_ports}p"
+
+
 def todb(x):
     return 20 * np.log10(np.abs(x))
 

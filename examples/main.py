@@ -33,7 +33,7 @@ orca_instance = orca.ORCA(
         orca.GDSGenerator(num_samples=10),
         orca.GDSConverter(),
         orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace"),
-        orca.ModelTrainer(n_train_samples=1000),
+        orca.ModelTrainer(model=orca.OrcaMLP, hyperparameters=hyperparameters, n_train_samples=1000),
         orca.OnnxExporter(),
         orca.ModelTester(),
     ]

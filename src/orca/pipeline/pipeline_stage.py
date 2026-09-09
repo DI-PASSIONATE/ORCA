@@ -1,7 +1,10 @@
-from typing import Any, Dict, Callable, Optional
 from abc import ABC, abstractmethod
+from typing import Callable, Optional, TYPE_CHECKING
 
 from orca.logger import logger
+
+if TYPE_CHECKING:
+    from orca.pipeline.context import PipelineContext
 
 
 class PipelineStage(ABC):
@@ -13,17 +16,17 @@ class PipelineStage(ABC):
     @abstractmethod
     def run(
         self,
-        context: Dict[str, Any],
+        context: "PipelineContext",
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> "PipelineContext":
         """
         Execute the pipeline stage.
 
         Args:
-            context: A shared dictionary containing data from previous stages.
+            context: The current state of the run, carrying the fields earlier
+                stages wrote and the folder layout of the run.
             progress_callback: A function to report progress (stage, current, total, message).
 
         Returns:
-            Updated context dictionary.
+            The same context, updated with the fields this stage owns.
         """
-        pass

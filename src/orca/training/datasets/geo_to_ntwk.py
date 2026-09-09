@@ -20,9 +20,7 @@ class GeoToNtwkDataset(torch.utils.data.Dataset):
         self,
         directory: str,
         data_df: pd.DataFrame,
-        n_ports: int = 6,
     ):
-        self.n_ports = n_ports
         self.samples = []
         self.load_samples(directory, data_df)
 
@@ -34,13 +32,10 @@ class GeoToNtwkDataset(torch.utils.data.Dataset):
         for idx, row in tqdm.tqdm(
             data_df.iterrows(), total=len(data_df), desc="Loading test network samples"
         ):
-            geometry_name = row["name"].replace(
-                ".gds", f"_dc_deembedded.s{self.n_ports}p"
-            )
-            snp_path = os.path.join(directory, geometry_name)
+            snp_path = os.path.join(directory, row["name"])
 
             if not os.path.exists(snp_path):
-                logger.debug(f"S-parameter file not found: {snp_path}")
+                logger.warning(f"S-parameter file not found, skipping: {snp_path}")
                 continue
 
             geometry_params = np.array(row.drop("name"), dtype=np.float32)

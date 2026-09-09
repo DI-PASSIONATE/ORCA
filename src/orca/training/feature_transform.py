@@ -226,7 +226,7 @@ class FeatureTransformPipeline(nn.Module):
 
     def __init__(self, *transforms: Feature):
         super(FeatureTransformPipeline, self).__init__()
-        self.transforms = transforms
+        self.transforms = nn.ModuleList(transforms)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for transform in self.transforms:
@@ -237,12 +237,20 @@ class FeatureTransformPipeline(nn.Module):
     def transform_min_max(
         self, input_mins: list[float], input_maxs: list[float]
     ) -> tuple[list[float], list[float]]:
+        """Extend the input ranges with the range of each generated feature.
+
+        Works on copies: the caller's lists come from the geometry's parameter
+        iterator and are reused, so appending in place would corrupt them and make
+        a second call return ranges for twice as many features.
+        """
+        mins = list(input_mins)
+        maxs = list(input_maxs)
         for transform in self.transforms:
-            min_val, max_val = transform.calculate_min_max(input_mins, input_maxs)
+            min_val, max_val = transform.calculate_min_max(mins, maxs)
             for _ in range(len(transform)):
-                input_mins.append(min_val)
-                input_maxs.append(max_val)
-        return input_mins, input_maxs
+                mins.append(min_val)
+                maxs.append(max_val)
+        return mins, maxs
 
     def __len__(self) -> int:
         # Return total number of new features added by all transforms

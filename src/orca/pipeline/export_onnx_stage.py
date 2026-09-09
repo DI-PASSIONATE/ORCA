@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Any, Dict, Callable
+from typing import Optional, Callable, TYPE_CHECKING
 import os
 import torch
 import onnx
@@ -8,7 +8,9 @@ from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.training.onnx_wrapper import ONNXWrapper
-from orca.utils.folder_structure import OrcaFolderStructure
+
+if TYPE_CHECKING:
+    from orca.pipeline.context import PipelineContext
 
 
 class OnnxExporter(PipelineStage):
@@ -21,14 +23,13 @@ class OnnxExporter(PipelineStage):
 
     def run(
         self,
-        context: Dict[str, Any],
+        context: "PipelineContext",
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-    ) -> Dict[str, Any]:
-        geometry: BaseGeometry = context["geometry"]
-        base_dir: str = context.get("base_dir", os.getcwd())
+    ) -> "PipelineContext":
+        geometry: BaseGeometry = context.geometry
 
-        trained_model = context.get("trained_model", None)
-        dataset = context.get("dataset", None)
+        trained_model = context.trained_model
+        dataset = context.dataset
 
         if trained_model is None or dataset is None:
             logger.error(
@@ -36,11 +37,10 @@ class OnnxExporter(PipelineStage):
             )
             return context
 
-        output_dir = OrcaFolderStructure.get_model_dir(context)
-        output_path = OrcaFolderStructure.get_model_path(context)
+        output_dir = context.model_dir
+        output_path = context.onnx_path
 
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
         logger.info(f"Exporting trained model to ONNX format at {output_path}.")
 
@@ -74,7 +74,16 @@ class OnnxExporter(PipelineStage):
         meta = onnx_model.metadata_props.add()
         meta.key = "input_parameter_ranges"
         meta.value = json.dumps(ranges)
+
+        # Record which physical properties the architecture guarantees, so consumers
+        # (e.g. COBRA) know whether the predicted S-matrix is passive/reciprocal by construction
+        guarantees = getattr(trained_model, "guarantees", None)
+        if guarantees is not None:
+            meta = onnx_model.metadata_props.add()
+            meta.key = "physics_guarantees"
+            meta.value = json.dumps(guarantees.as_dict())
+
         onnx.save(onnx_model, output_path)
 
-        context["model_path"] = output_path
+        context.model_path = output_path
         return context
