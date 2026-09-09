@@ -239,7 +239,7 @@ Palace runs a full-wave finite-element EM simulation for each layout variant and
 
 ### Stage 4 — Model training (`ModelTrainer`)
 
-A PyTorch MLP is trained on the simulation data. Inputs are geometry parameters and frequency; outputs are the real and imaginary parts of each S-parameter entry. Feature engineering (ratio features, Chebyshev features) and normalization are defined in the geometry class and applied automatically. Hyperparameters such as learning rate, batch size, and network depth can be passed to `ModelTrainer`.
+A PyTorch MLP is trained on the simulation data. Inputs are geometry parameters and frequency; outputs are the real and imaginary parts of each S-parameter entry. Normalization is defined in the geometry's dataset and applied automatically. An optional basis expansion of the inputs — for example a Chebyshev expansion of frequency — is chosen on the stage itself with `ModelTrainer(basis="chebyshev")`; it lives inside the model, so it is tuned with it and exported into the ONNX graph. Hyperparameters such as learning rate, batch size, and network depth can be passed to `ModelTrainer`.
 
 ### Stage 5 — ONNX export (`OnnxExporter`)
 

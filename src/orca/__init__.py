@@ -13,6 +13,13 @@ from .geometry.base_geometry import BaseGeometry
 from .geometry.input_parameters import InputParameterIterator
 from .training.models.base_model import OrcaModel, PhysicsGuarantees, register_model, available_models
 from .training.models.mlp import OrcaMLP
+from .training.basis_expansion import (
+    BasisExpansion,
+    IdentityBasis,
+    ChebyshevBasis,
+    register_basis,
+    available_bases,
+)
 from .training.codecs import OutputCodec, FlatReImCodec
 from .training.spec import FrequencyMode, IOSpec
 from .training.trainer import Trainer, TrainingConfig, TrainingResult
