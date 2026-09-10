@@ -14,6 +14,7 @@ architecture lives in a geometry class.
 | `spec.py` | `IOSpec` / `FrequencyMode` — the shape contract between dataset and model |
 | `datasets/` | Sample assembly from simulation results, normalization |
 | `basis_expansion.py` | `BasisExpansion` — optional fixed expansions of the inputs, shared by all architectures |
+| `guarantees.py` | `PhysicsGuarantees` — properties a model or codec enforces by construction |
 | `models/` | `OrcaModel` — architecture, hyperparameter space, loss, guarantees |
 | `trainer.py` | `Trainer` / `TrainingConfig` — optimizer, schedule, early stopping, history |
 | `tuner.py` | `HyperparameterTuner` — optuna study with k-fold cross-validation |
@@ -35,6 +36,54 @@ The model is chosen at the pipeline level, and so is the basis expansion:
 ```python
 orca.ModelTrainer(model=orca.OrcaMLP, hyperparameters=...)          # or model="mlp"
 orca.ModelTrainer(model="mlp", basis="chebyshev")                 # with a basis expansion
+```
+
+### Output codecs
+
+An `OutputCodec` decides *what* is regressed. It is the one place that knows how a
+`skrf.Network` becomes a target tensor and how model outputs become an S-matrix
+again, so datasets, trainer, exporter and predictors are all representation-agnostic.
+The codec is chosen on the dataset, in the geometry preset:
+
+```python
+GeoToSParamDatasetSingleFrequency(
+    codec=UpperTriangleReImCodec(n_ports=6),
+    ...
+)
+```
+
+| Codec | Values per frequency point | Notes |
+| --- | --- | --- |
+| `FlatReImCodec` | `2·N²` (72 for 6 ports) | Every entry independently; ORCA's historical layout |
+| `UpperTriangleReImCodec` | `N·(N+1)` (42 for 6 ports) | Upper triangle only, mirrored on decode |
+
+`UpperTriangleReImCodec` exploits reciprocity: a passive reciprocal structure
+satisfies `S = Sᵀ`, so the lower triangle is redundant — 21 unique complex entries
+for 6 ports, not 36. Predicting only those roughly halves the output dimension and
+makes symmetry structural rather than something the network has to learn and a
+downstream optimizer can exploit. On encode the two measured halves are averaged
+(the projection onto the reciprocal subspace) instead of one being thrown away.
+Use `FlatReImCodec` for anything non-reciprocal.
+
+Changing the codec changes the ONNX output signature (`S12_real`, ... in codec
+order, no lower-triangle entries), so a consumer reading outputs positionally has
+to be re-pointed. Codec and model both declare `PhysicsGuarantees`; the exporter
+writes their union into the ONNX metadata, so a model exported with the
+upper-triangle codec is marked `reciprocal` whatever the architecture is.
+
+### Adding an output codec
+
+```python
+class MyCodec(OutputCodec):
+    guarantees = PhysicsGuarantees(reciprocal=True)   # only if violations are impossible
+
+    @property
+    def output_dim(self) -> int: ...
+    @property
+    def output_names(self) -> list[str]: ...          # ONNX output names, in encode order
+
+    def encode(self, ntwk): ...                       # skrf.Network -> (n_freq, output_dim)
+    def decode(self, raw): ...                        # (n_freq, output_dim) -> (n_freq, N, N) complex
 ```
 
 ### Basis expansions

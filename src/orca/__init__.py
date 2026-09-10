@@ -11,7 +11,8 @@ from .pipeline.export_onnx_stage import OnnxExporter
 from .pipeline.test_model_stage import ModelTester
 from .geometry.base_geometry import BaseGeometry
 from .geometry.input_parameters import InputParameterIterator
-from .training.models.base_model import OrcaModel, PhysicsGuarantees, register_model, available_models
+from .training.guarantees import PhysicsGuarantees
+from .training.models.base_model import OrcaModel, register_model, available_models
 from .training.models.mlp import OrcaMLP
 from .training.basis_expansion import (
     BasisExpansion,
@@ -20,7 +21,7 @@ from .training.basis_expansion import (
     register_basis,
     available_bases,
 )
-from .training.codecs import OutputCodec, FlatReImCodec
+from .training.codecs import OutputCodec, FlatReImCodec, UpperTriangleReImCodec
 from .training.spec import FrequencyMode, IOSpec
 from .training.trainer import Trainer, TrainingConfig, TrainingResult
 from .training.tuner import HyperparameterTuner

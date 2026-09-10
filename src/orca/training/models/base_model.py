@@ -11,7 +11,6 @@ to change when you swap one for another.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict
 from typing import Any, Callable, ClassVar
 
 import numpy as np
@@ -20,35 +19,8 @@ import torch
 import torch.nn as nn
 
 from orca.training.basis_expansion import IdentityBasis, BasisExpansion
+from orca.training.guarantees import PhysicsGuarantees
 from orca.training.spec import FrequencyMode, IOSpec
-
-
-@dataclass(frozen=True)
-class PhysicsGuarantees:
-    """Physical properties a model enforces *by construction*.
-
-    These are guarantees, not aspirations: set a flag only if the architecture
-    makes violations impossible (a structurally symmetric output, a stable-by-
-    parameterization pole, ...), not if the network merely tends to learn it.
-
-    The guarantees are written into the exported ONNX metadata so downstream
-    consumers (COBRA) know what they are holding, and let the trainer skip
-    penalty terms that would be redundant.
-
-    Attributes:
-        passive: sigma_max(S) <= 1 for all frequencies.
-        reciprocal: S == S.T.
-        causal: The response is causal (e.g. a rational/pole-residue head).
-        stable: All poles lie in the left half plane.
-    """
-
-    passive: bool = False
-    reciprocal: bool = False
-    causal: bool = False
-    stable: bool = False
-
-    def as_dict(self) -> dict[str, bool]:
-        return asdict(self)
 
 
 class OrcaModel(nn.Module, ABC):

@@ -28,6 +28,15 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
     dataset and a pair of normalizers — and the normalization statistics fitted
     during one training run are silently reused by the next.
 
+!!! tip "Choosing an output representation"
+
+    The `codec` passed to the dataset decides what the model regresses. `FlatReImCodec`
+    predicts all `N x N` entries; `UpperTriangleReImCodec` predicts only the upper
+    triangle and mirrors it on decode, which halves the output dimension and makes
+    `S = S^T` structural. Use it for reciprocal passives (any ordinary inductor or
+    transformer), and `FlatReImCodec` for anything non-reciprocal. Note that this
+    changes the ONNX output names. See `src/orca/training/README.md`.
+
 !!! note "Basis expansions are not set on the geometry"
 
     Engineered inputs such as a Chebyshev expansion of frequency belong to the

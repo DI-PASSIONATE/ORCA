@@ -186,10 +186,39 @@ def plot_rfic_transformer_metrics(ntwk):
     plt.show()
 
 
+def _infer_port_count(s_param_dict: dict) -> int:
+    """
+    Number of ports described by a dict of ``S<i><j>_real``/``_imag`` keys.
+
+    Read off the highest port index appearing in the keys rather than from the
+    number of entries, so that a full N x N output and an upper-triangle-only one
+    are told apart (both counts collide for some N: 36 entries is either an
+    8-port triangle or a 6-port full matrix).
+    """
+    ports = [
+        max(int(key[1]), int(key[2]))
+        for key in s_param_dict
+        if len(key) > 2 and key[0] == "S" and key[1:3].isdigit()
+    ]
+    if not ports:
+        raise ValueError(
+            "No S-parameter entries found: expected keys such as 'S11_real'. "
+            "Note that this naming only distinguishes up to 9 ports."
+        )
+    return max(ports)
+
+
 def s_param_dict_to_network(
     s_param_dict: dict, frequencies: np.ndarray
 ) -> tuple[int, rf.Network, dict]:
-    N = int(np.sqrt(len(s_param_dict) // 2))  # number of ports
+    """
+    Build a network from a dict of named real/imaginary columns, as an ONNX model emits.
+
+    Both output layouts are accepted: every entry (``FlatReImCodec``) and the upper
+    triangle only (``UpperTriangleReImCodec``), in which case the missing lower
+    triangle is filled from its transpose.
+    """
+    N = _infer_port_count(s_param_dict)
 
     num_freq = len(frequencies)
 
@@ -203,8 +232,13 @@ def s_param_dict_to_network(
     # Fill S-matrix
     for i in range(N):
         for j in range(N):
-            real = np.array(s_param_dict[f"S{i + 1}{j + 1}_real"]).squeeze()
-            imag = np.array(s_param_dict[f"S{i + 1}{j + 1}_imag"]).squeeze()
+            name = f"S{i + 1}{j + 1}"
+            if f"{name}_real" not in s_param_dict:
+                # Upper-triangle-only output: the entry is stored transposed
+                name = f"S{j + 1}{i + 1}"
+
+            real = np.array(s_param_dict[f"{name}_real"]).squeeze()
+            imag = np.array(s_param_dict[f"{name}_imag"]).squeeze()
 
             if real.shape[0] != num_freq or imag.shape[0] != num_freq:
                 raise ValueError(
