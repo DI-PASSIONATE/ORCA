@@ -4,6 +4,7 @@ import optuna
 import torch
 import torch.nn as nn
 
+from orca.training.basis_expansion import BasisExpansion
 from orca.training.models.base_model import OrcaModel, register_model
 from orca.training.spec import FrequencyMode, IOSpec
 
@@ -22,6 +23,8 @@ class OrcaMLP(OrcaModel):
         hidden_sizes (list[int]): Width of each hidden layer.
         activation (type[nn.Module]): Activation module class used between layers.
         dropout (float): Dropout probability applied after each activation.
+        basis (BasisExpansion | None): Optional basis expansion of the inputs,
+            applied before the first layer. See :mod:`orca.training.basis_expansion`.
     """
 
     frequency_mode = FrequencyMode.PER_POINT
@@ -32,11 +35,12 @@ class OrcaMLP(OrcaModel):
         hidden_sizes: list[int],
         activation: type[nn.Module] = nn.GELU,
         dropout: float = 0.0,
+        basis: BasisExpansion | None = None,
     ):
-        super().__init__(spec)
+        super().__init__(spec, basis)
 
         layers: list[nn.Module] = []
-        in_size = spec.input_dim
+        in_size = self.expanded_dim
         for hidden_size in hidden_sizes:
             layers.append(nn.Linear(in_size, hidden_size))
             layers.append(activation())
@@ -48,7 +52,12 @@ class OrcaMLP(OrcaModel):
         self.model = nn.Sequential(*layers)
 
     @classmethod
-    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> "OrcaMLP":
+    def from_spec(
+        cls,
+        spec: IOSpec,
+        hyperparameters: dict[str, Any],
+        basis: BasisExpansion | None = None,
+    ) -> "OrcaMLP":
         num_layers = hyperparameters.get("num_layers", 4)
         hidden_size = hyperparameters.get("hidden_size", 512)
         activation = getattr(nn, hyperparameters.get("activation_function", "GELU"))
@@ -57,6 +66,7 @@ class OrcaMLP(OrcaModel):
             hidden_sizes=[hidden_size] * num_layers,
             activation=activation,
             dropout=hyperparameters.get("dropout", 0.0),
+            basis=basis,
         )
 
     @staticmethod
@@ -68,4 +78,4 @@ class OrcaMLP(OrcaModel):
         }
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x)
+        return self.model(self.basis(x))

@@ -8,7 +8,6 @@ import torch
 from orca.logger import logger
 from orca.training.codecs import OutputCodec
 from orca.training.datasets.base_dataset import BaseDataset
-from orca.training.feature_transform import FeatureTransformPipeline
 from orca.training.normalize import Normalizer
 from orca.training.spec import FrequencyMode
 
@@ -25,12 +24,11 @@ class GeoToSParamDataset(BaseDataset):
     def __init__(
         self,
         codec: OutputCodec,
-        features: FeatureTransformPipeline | None = None,
         input_normalizer: Normalizer | None = None,
         output_normalizer: Normalizer | None = None,
     ):
         super(GeoToSParamDataset, self).__init__(
-            codec, features, input_normalizer, output_normalizer
+            codec, input_normalizer, output_normalizer
         )
 
     def load_samples(self, directory: str, data_df: pd.DataFrame) -> None:

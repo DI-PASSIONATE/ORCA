@@ -5,7 +5,6 @@ from typing import Any
 
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.training.datasets.base_dataset import BaseDataset
-from orca.training.feature_transform import FeatureTransformPipeline
 
 
 @dataclass
@@ -20,16 +19,6 @@ class BaseGeometry(ABC):
     simconfig_filename: str
     dataset: BaseDataset
     input_parameter_iterator: InputParameterIterator
-    features: FeatureTransformPipeline | None = None
-
-    def __post_init__(self):
-        # The dataset applies the features, but the geometry defines them. Pushing
-        # them across here keeps a single source of truth, instead of a geometry
-        # and its dataset disagreeing about which features exist.
-        if self.features is not None:
-            self.dataset.features = self.features
-        else:
-            self.features = self.dataset.features
 
     @property
     def input_iterator(self) -> InputParameterIterator:

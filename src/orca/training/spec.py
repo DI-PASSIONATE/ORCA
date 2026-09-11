@@ -39,22 +39,22 @@ class IOSpec:
             These become the ONNX input names.
         codec (OutputCodec): Output representation the dataset encoded its targets with.
         frequency_mode (FrequencyMode): Frequency layout of the dataset samples.
-        n_extra_features (int): Number of extra columns appended by the feature
-            transform pipeline. Not part of ``input_names``, since they are
-            computed inside the exported model rather than passed in.
         frequency_grid (np.ndarray | None): Frequency points of a BAND dataset.
     """
 
     input_names: tuple[str, ...]
     codec: OutputCodec
     frequency_mode: FrequencyMode
-    n_extra_features: int = 0
     frequency_grid: np.ndarray | None = None
 
     @property
     def input_dim(self) -> int:
-        """Width of the tensor the model actually sees, features included."""
-        return len(self.input_names) + self.n_extra_features
+        """Width of the tensor handed to the model.
+
+        A model that expands its inputs widens this itself; see
+        :attr:`~orca.training.models.base_model.OrcaModel.expanded_dim`.
+        """
+        return len(self.input_names)
 
     @property
     def output_dim(self) -> int:

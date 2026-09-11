@@ -1,8 +1,8 @@
 """Hyperparameter search for ORCA surrogate models.
 
-:class:`HyperparameterTuner` runs an optuna study over the union of the trainer's
-own search space and the architecture search space the model class declares,
-scoring each trial with k-fold cross-validation.
+:class:`HyperparameterTuner` runs an optuna study over the union of three search
+spaces - the trainer's own, the architecture's, and the basis expansion's - scoring
+each trial with k-fold cross-validation.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from sklearn.model_selection import KFold
 from torch.utils.data import Dataset, Subset
 
 from orca.logger import logger
+from orca.training.basis_expansion import BasisExpansion
 from orca.training.models.base_model import OrcaModel
 from orca.training.trainer import Trainer, TrainingConfig
 
@@ -68,6 +69,9 @@ class HyperparameterTuner:
         model_cls (type[OrcaModel]): Architecture to tune.
         dataset (Dataset): Train/validation data, split into folds internally.
             Must expose an ``io_spec`` (any :class:`~orca.training.datasets.base_dataset.BaseDataset`).
+        basis_cls (type[BasisExpansion] | None): Basis expansion to build each model
+            with. Its search space is tuned alongside the model's. ``None`` trains
+            on the raw inputs.
         n_fold_cv (int): Number of cross-validation folds per trial.
         n_trials (int): Number of optuna trials to run.
         seed (int): Seed for the fold split.
@@ -79,6 +83,7 @@ class HyperparameterTuner:
         self,
         model_cls: type[OrcaModel],
         dataset: Dataset,
+        basis_cls: Optional[type[BasisExpansion]] = None,
         n_fold_cv: int = 5,
         n_trials: int = 200,
         seed: int = 42,
@@ -87,6 +92,7 @@ class HyperparameterTuner:
     ):
         self.model_cls = model_cls
         self.dataset = dataset
+        self.basis_cls = basis_cls
         self.spec = dataset.io_spec
         self.n_fold_cv = n_fold_cv
         self.n_trials = n_trials
@@ -97,8 +103,15 @@ class HyperparameterTuner:
 
     @property
     def search_space(self) -> dict[str, Any]:
-        """Trainer hyperparameters merged with the model's architecture hyperparameters."""
-        return {**TrainingConfig.search_space(), **self.model_cls.hyperparameter_search_space()}
+        """Trainer, architecture and basis-expansion hyperparameters, merged into one space."""
+        basis_space = (
+            self.basis_cls.hyperparameter_search_space() if self.basis_cls else {}
+        )
+        return {
+            **TrainingConfig.search_space(),
+            **self.model_cls.hyperparameter_search_space(),
+            **basis_space,
+        }
 
     def tune(self) -> dict[str, Any]:
         """Run the study.
@@ -130,7 +143,12 @@ class HyperparameterTuner:
         fold_label = f"Fold {fold_idx + 1}/{self.n_fold_cv}"
 
         try:
-            model = self.model_cls.from_spec(self.spec, hyperparameters)
+            basis = (
+                self.basis_cls.from_spec(self.spec, hyperparameters)
+                if self.basis_cls
+                else None
+            )
+            model = self.model_cls.from_spec(self.spec, hyperparameters, basis)
             trainer = Trainer(
                 config=config,
                 stage_name=f"Tuning ({fold_label})",

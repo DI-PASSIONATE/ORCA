@@ -12,7 +12,6 @@ from orca.training.normalize import (
     OutputMinMaxNormalizer,
 )
 from orca.training.codecs import FlatReImCodec
-from orca.training.feature_transform import FeatureTransformPipeline
 from orca.training.datasets.geo_to_s_param_single_f import (
     GeoToSParamDatasetSingleFrequency,
 )
@@ -41,12 +40,6 @@ def _input_parameters() -> InputParameterIterator:
     )
 
 
-def _features() -> FeatureTransformPipeline:
-    return FeatureTransformPipeline(
-        # RatioFeature(i=0, j=1),  # turns / width
-        # ChebyshevFeature(i=4, degree=3),  # Chebyshev features of frequency
-    )
-
 
 def _dataset() -> BaseDataset:
     return GeoToSParamDatasetSingleFrequency(
@@ -74,7 +67,6 @@ class InductorOcta(BaseGeometry):
     input_parameter_iterator: InputParameterIterator = field(
         default_factory=_input_parameters
     )
-    features: FeatureTransformPipeline | None = field(default_factory=_features)
     dataset: BaseDataset = field(default_factory=_dataset)
 
     @staticmethod

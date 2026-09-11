@@ -11,7 +11,6 @@ to change when you swap one for another.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict
 from typing import Any, Callable, ClassVar
 
 import numpy as np
@@ -19,35 +18,9 @@ import skrf as rf
 import torch
 import torch.nn as nn
 
+from orca.training.basis_expansion import IdentityBasis, BasisExpansion
+from orca.training.guarantees import PhysicsGuarantees
 from orca.training.spec import FrequencyMode, IOSpec
-
-
-@dataclass(frozen=True)
-class PhysicsGuarantees:
-    """Physical properties a model enforces *by construction*.
-
-    These are guarantees, not aspirations: set a flag only if the architecture
-    makes violations impossible (a structurally symmetric output, a stable-by-
-    parameterization pole, ...), not if the network merely tends to learn it.
-
-    The guarantees are written into the exported ONNX metadata so downstream
-    consumers (COBRA) know what they are holding, and let the trainer skip
-    penalty terms that would be redundant.
-
-    Attributes:
-        passive: sigma_max(S) <= 1 for all frequencies.
-        reciprocal: S == S.T.
-        causal: The response is causal (e.g. a rational/pole-residue head).
-        stable: All poles lie in the left half plane.
-    """
-
-    passive: bool = False
-    reciprocal: bool = False
-    causal: bool = False
-    stable: bool = False
-
-    def as_dict(self) -> dict[str, bool]:
-        return asdict(self)
 
 
 class OrcaModel(nn.Module, ABC):
@@ -56,8 +29,22 @@ class OrcaModel(nn.Module, ABC):
     Subclasses must implement :meth:`from_spec`, :meth:`hyperparameter_search_space`
     and :meth:`forward`, and set :attr:`frequency_mode`.
 
+    Every model accepts a :class:`~orca.training.basis_expansion.BasisExpansion`, so
+    input expansions are shared across architectures instead of being reimplemented
+    in each one. Two rules make a subclass basis-ready:
+
+    1. size the first layer from :attr:`expanded_dim`, not from ``spec.input_dim``,
+    2. start :meth:`forward` with ``x = self.basis(x)``.
+
+    Doing it in ``forward`` rather than behind the scenes keeps the data path
+    visible, and means the basis is traced into the exported ONNX graph like
+    any other layer.
+
     Args:
         spec (IOSpec): The dataset contract this model was built against.
+        basis (BasisExpansion | None): Fixed expansion applied to the inputs.
+            Defaults to :class:`~orca.training.basis_expansion.IdentityBasis`,
+            which changes nothing.
     """
 
     #: Frequency layout this model consumes. Checked against the dataset at wiring time.
@@ -66,18 +53,31 @@ class OrcaModel(nn.Module, ABC):
     #: Physical properties the architecture enforces by construction.
     guarantees: ClassVar[PhysicsGuarantees] = PhysicsGuarantees()
 
-    def __init__(self, spec: IOSpec):
+    def __init__(self, spec: IOSpec, basis: BasisExpansion | None = None):
         super().__init__()
         self.spec = spec
+        self.basis = basis if basis is not None else IdentityBasis()
+
+    @property
+    def expanded_dim(self) -> int:
+        """Width of the tensor the first layer sees, after the basis expansion."""
+        return self.basis.expanded_dim(self.spec.input_dim)
 
     @classmethod
     @abstractmethod
-    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> "OrcaModel":
+    def from_spec(
+        cls,
+        spec: IOSpec,
+        hyperparameters: dict[str, Any],
+        basis: BasisExpansion | None = None,
+    ) -> "OrcaModel":
         """Build a model sized for ``spec`` and configured by ``hyperparameters``.
 
         Implementations must tolerate extra keys in ``hyperparameters`` (the
-        trainer passes its own keys, such as ``learning_rate``, through the same
-        dictionary) and should fall back to sensible defaults for missing ones.
+        trainer and the basis expansion pass their own keys, such as ``learning_rate``
+        or ``basis_degree``, through the same dictionary) and should fall back to
+        sensible defaults for missing ones. ``basis`` is forwarded to
+        :meth:`__init__` unchanged.
         """
 
     @staticmethod

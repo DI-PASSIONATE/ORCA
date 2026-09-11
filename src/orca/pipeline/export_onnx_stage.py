@@ -46,7 +46,6 @@ class OnnxExporter(PipelineStage):
 
         wrapped_model = ONNXWrapper(
             trained_model.eval(),
-            features=dataset.features,
             input_normalizer=dataset.input_normalizer,
             output_denormalizer=dataset.output_normalizer,
         ).eval()
@@ -75,10 +74,13 @@ class OnnxExporter(PipelineStage):
         meta.key = "input_parameter_ranges"
         meta.value = json.dumps(ranges)
 
-        # Record which physical properties the architecture guarantees, so consumers
-        # (e.g. COBRA) know whether the predicted S-matrix is passive/reciprocal by construction
+        # Record which physical properties are guaranteed by construction, so consumers
+        # (e.g. COBRA) know whether the predicted S-matrix is passive/reciprocal by
+        # construction. The architecture and the output codec both contribute: an
+        # upper-triangle codec makes the response reciprocal whatever sits behind it.
         guarantees = getattr(trained_model, "guarantees", None)
         if guarantees is not None:
+            guarantees = guarantees | dataset.codec.guarantees
             meta = onnx_model.metadata_props.add()
             meta.key = "physics_guarantees"
             meta.value = json.dumps(guarantees.as_dict())
