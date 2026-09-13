@@ -1,9 +1,18 @@
 import gdsfactory as gf
 import klayout.db as kdb
 import numpy as np
-from ihp import PDK
+from orca.geometry.layers import SG13G2
 
 GRID_NM = 10  # 10 nm manufacturing grid = 0.01 µm
+
+
+def _ensure_active_pdk() -> None:
+    """gdsfactory refuses to extrude paths without an active PDK. We only use it as a
+    polygon generator with explicit SG13G2 layer tuples, so its generic PDK is enough."""
+    try:
+        gf.get_active_pdk()
+    except ValueError:
+        gf.gpdk.PDK.activate()
 
 def _snap_inplace(c: gf.Component) -> None:
     """Snap all polygon vertices to GRID_NM across the component hierarchy.
@@ -67,9 +76,11 @@ def tf_octa_c(
         rs: Ring spacing at side.
         rw: Ring width.
     """
-    LAYER_BOT = PDK.layers.TopMetal1drawing
-    LAYER_TOP = PDK.layers.TopMetal2drawing
-    LAYER_RING = PDK.layers.Metal5drawing
+    _ensure_active_pdk()
+
+    LAYER_BOT = SG13G2.TopMetal1
+    LAYER_TOP = SG13G2.TopMetal2
+    LAYER_RING = SG13G2.Metal5
 
     c = gf.Component(name)
     # -------------------------------------------------
