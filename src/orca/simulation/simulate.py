@@ -1,111 +1,68 @@
-import glob
-import os
-import platform
-import subprocess
 import json
+import os
+import subprocess
+from typing import Any
 
 from orca.logger import logger
 from orca.simulation.combine_snp_results import convert_to_touchstone
 
-
-def _resolve_palace_binary(palace_executable: str) -> str:
-    """
-    Mimics the Palace wrapper script's own binary lookup (`find $PALACE_DIR -name "palace-*.bin"`)
-    to find the real MPI-enabled Palace binary next to the wrapper script, so it can be launched
-    directly via `srun` instead of through the wrapper's own `mpirun` call.
-
-    Args:
-        palace_executable (str): Path to the Palace wrapper script (e.g. "~/palace/build/bin/palace").
-            Must be a plain filesystem path to the wrapper, not a compound command (e.g. via
-            apptainer/singularity), since there is no wrapper script to look next to in that case.
-
-    Returns:
-        str: Absolute path to the resolved `palace-*.bin` binary.
-    """
-    wrapper_path = os.path.expanduser(palace_executable.strip())
-    palace_dir = os.path.dirname(wrapper_path)
-    candidates = glob.glob(os.path.join(palace_dir, "**", "palace-*.bin"), recursive=True)
-
-    arch = "arm64" if platform.machine() in ("arm64", "aarch64") else "x86_64"
-    matches = [path for path in candidates if arch in os.path.basename(path)]
-
-    if not matches:
-        raise FileNotFoundError(
-            f"Could not locate a 'palace-*.bin' executable for architecture '{arch}' under '{palace_dir}'. "
-            "use_srun requires palace_executable to be a direct filesystem path to the Palace wrapper script."
-        )
-    if len(matches) > 1:
-        raise RuntimeError(
-            f"Found multiple 'palace-*.bin' candidates under '{palace_dir}': {matches}. "
-            "Could not unambiguously resolve the Palace binary for use_srun."
-        )
-    return matches[0]
+PALACE_LOG_NAME = "palace.log"
 
 
 def run_palace(
     sim_path: str,
     data_dir: str,
     result_dir: str,
-    config_name: str,
-    palace_executable: str,
+    cmd: str,
     touchstone_type: str,
-    num_processes: int,
-    use_srun: bool = False,
-    extra_srun_args: str = "",
+    save_log: bool = False,
 ) -> bool:
     """
-    Runs Palace simulation for the given model.
+    Runs one Palace simulation and converts its results to a Touchstone file.
 
     Args:
-        data_dir (str): Directory where the Palace model is stored.
-        config_name (str): Name of the Palace configuration to run.
-        palace_executable (str): Path to the Palace executable (e.g. "apptainer exec ~/path/to/palace.sif palace").
-        num_processes (int): Number of MPI processes to use for the simulation.
-        use_srun (bool): If True, bypass the Palace wrapper script's own `mpirun` call and instead
-            resolve the real `palace-*.bin` binary and launch it directly via
-            `PMIX_MCA_psec=native srun --exclusive --nodes=1 --ntasks=num_processes --mpi=pmix`, so
-            Slurm's own PMIx becomes the MPI launcher for this simulation, pinned to a single,
-            dedicated node, without requiring a "munge" security plugin that may not be
-            loadable/available. Running several simulations like this in parallel (e.g. via a thread
-            pool) lets Slurm pack each one onto its own free node within a multi-node allocation (e.g.
-            `sbatch --nodes=N`). Requires `palace_executable` to be a direct filesystem path to the
-            wrapper script (see `_resolve_palace_binary`), not a container-wrapped compound command.
-            Pass `extra_srun_args="--mpi=pmi2"` (or another value) to override the default PMI type if
-            a given cluster needs a different one.
-        extra_srun_args (str): Additional arguments appended to the `srun` command when `use_srun` is
-            True (e.g. "--cpu-bind=cores"). Ignored otherwise.
+        sim_path (str): Simulation folder (working directory of the command).
+        data_dir (str): Directory where Palace writes its results, relative to `sim_path`.
+        result_dir (str): Directory to write the Touchstone file to.
+        cmd (str): Shell command that runs the simulation, as built by a
+            `SimulationLauncher` (e.g. `palace -np 16 config.json`).
         touchstone_type (str): Type of Touchstone file to generate. One of "all", "normal", "deembedded", "dc", "dc_deembedded".
+        save_log (bool): Write the command and everything Palace/srun/MPI print to
+            `<sim_path>/palace.log`. Off by default, since Palace prints a lot; then only stderr is
+            kept (in memory) and shown if the simulation fails.
 
     Returns:
         bool: True if simulation was successful, False otherwise.
     """
-    if use_srun:
-        palace_bin = _resolve_palace_binary(palace_executable)
-        # --mpi=pmix is required so Open MPI can rendezvous through Slurm's PMIx server; without it,
-        # Open MPI silently launches num_processes independent single-rank "singleton" processes
-        # instead of one coordinated job, which then race each other (e.g. concurrently
-        # creating/checking the output directory) and fail unpredictably.
-        # PMIX_MCA_psec=native tells the PMIx client to skip the "munge" security component (which
-        # may not be built/loadable in this environment, causing "component was not found" warnings
-        # and potentially failing the handshake) and fall back to PMIx's always-available basic
-        # UID/GID-based security check instead.
-        cmd = (
-            "PMIX_MCA_psec=native "
-            f"srun --exclusive --nodes=1 --ntasks={num_processes} --cpu-bind=cores --mpi=pmix"
-        )
-        if extra_srun_args:
-            cmd += f" {extra_srun_args}"
-        cmd += f" {palace_bin} {config_name}"
-    else:
-        cmd = f"{palace_executable} -np {num_processes} {config_name}"
-
-    # execute the command, hide output and save return code
     # cwd is passed explicitly (instead of os.chdir) so this is safe to call concurrently from
-    # multiple threads when running several simulations in parallel across Slurm nodes.
-    ret = subprocess.run(cmd, shell=True, cwd=sim_path, capture_output=True) # USUALLY: SET capture_output=True to avoid palace output, only for debugging
+    # multiple threads when running several simulations in parallel.
+    run_kwargs: dict[str, Any] = {"shell": True, "cwd": sim_path, "stdin": subprocess.DEVNULL}
+    if save_log:
+        log_path = os.path.join(sim_path, PALACE_LOG_NAME)
+        with open(log_path, "w") as log_file:
+            log_file.write(f"$ {cmd}\n")
+            log_file.flush()
+            ret = subprocess.run(cmd, stdout=log_file, stderr=subprocess.STDOUT, check=False, **run_kwargs)
+        if ret.returncode != 0:
+            with open(log_path, errors="replace") as log_file:
+                diagnostics = f"Last lines of {log_path}:\n" + "".join(log_file.readlines()[-15:])
+    else:
+        ret = subprocess.run(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            check=False,
+            **run_kwargs,
+        )
+        if ret.returncode != 0:
+            diagnostics = "stderr:\n" + "".join(ret.stderr.splitlines(keepends=True)[-15:])
 
     if ret.returncode != 0:
-        logger.error(f"Palace simulation failed with return code {ret.returncode} for command: {cmd}")
+        logger.error(
+            f"Palace simulation failed with return code {ret.returncode} for command: {cmd}\n{diagnostics}"
+        )
         return False
 
     # data_dir (from gds2palace) is relative to sim_path (matching Palace's own relative

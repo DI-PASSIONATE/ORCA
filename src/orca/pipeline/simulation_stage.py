@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from queue import Queue
 from typing import Optional, Any, Callable, TYPE_CHECKING
 import json
 import os
@@ -7,6 +8,7 @@ import tqdm
 
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger
+from orca.simulation.launchers import BIND_CHOICES, LocalLauncher, SimulationLauncher
 from orca.simulation.simulate import run_palace
 from orca.simulation.combine_snp_results import touchstone_filename
 
@@ -23,34 +25,74 @@ class PalaceSimulator(PipelineStage):
         self,
         palace_executable: str = "palace",
         touchstone_type: str = "dc_deembedded",
-        num_parallel_palace_sims: int = 1,
+        launcher: str = "local",
+        num_parallel_sims: int = 1,
+        bind: str = "node",
         extra_srun_args: str = "",
+        save_log: bool = False,
+        hyperthreads: bool = False,
     ):
         """
         Initializes the PalaceSimulator stage.
 
         Args:
             palace_executable (str): Path to the Palace executable. Default is "palace".
-            touchstone_type (str): Type of Touchstone file to generate. One of "all", "normal", "deembedded", "dc", "dc_deembedded". 
-            num_parallel_palace_sims (int): Number of Palace simulations to run in parallel. When > 1,
-                each simulation bypasses the Palace wrapper script's own `mpirun` call and is instead
-                launched directly as `srun --exclusive --nodes=1 --ntasks=num_processes <palace-bin> config`,
-                so Slurm packs each simulation onto its own dedicated node (see `run_palace` in
-                simulate.py for details). Requires running inside a Slurm allocation with at least this
-                many nodes (e.g. `sbatch --nodes=<num_parallel_palace_sims>`), and `palace_executable`
-                to be a direct filesystem path to the Palace wrapper script (not a container-wrapped
-                compound command). Default is 1, which runs simulations sequentially on the current
-                node without Slurm, using `palace_executable` as-is.
-            extra_srun_args (str): Additional arguments appended to the `srun` command used when
-                `num_parallel_palace_sims` > 1 (e.g. "--cpu-bind=cores"). Ignored otherwise.
+            touchstone_type (str): Type of Touchstone file to generate. One of "all", "normal", "deembedded", "dc", "dc_deembedded".
+            launcher (str): Where simulations run. "local" (default) runs them on this machine
+                through the Palace wrapper (`palace -np num_processes config`); `palace_executable`
+                may then also be a container invocation. "slurm" runs one simulation per node of the
+                current Slurm allocation, each as its own `srun` job step (see
+                `orca.simulation.slurm.SlurmLauncher`); `palace_executable` must then be a direct
+                filesystem path to the Palace wrapper script.
+            num_parallel_sims (int): Simulations to run at once. 0 means "as many slots as there
+                are": one per `bind` domain of every Slurm node for "slurm", one per `bind` domain of
+                this machine for "local". A larger value is clamped with a warning. Default is 1
+                (sequential). `num_processes` (passed to `ORCA.run`) is the number of MPI ranks *per
+                simulation* and is capped to the cores of one slot.
+            bind (str): What one simulation is bound to: "node" (default, a whole node or this whole
+                machine), "socket" or "numa" (one socket / NUMA domain, so several simulations run per
+                node with their own cores and local memory). For a memory-bandwidth-bound solver like
+                Palace, "numa" with num_parallel_sims=0 usually gives the best throughput, as long as
+                one simulation fits into the memory of a NUMA domain; use "socket" otherwise.
+            extra_srun_args (str): "slurm" only: additional arguments appended to each `srun`
+                command (e.g. "--mpi=pmi2" or "--mem-per-cpu=2G").
+            save_log (bool): Write each simulation's full Palace/srun output to `palace.log` in its
+                simulation folder. Off by default (Palace prints a lot); errors are still reported.
+            hyperthreads (bool): Allow one MPI rank per hardware thread instead of per physical
+                core. Palace is memory-bandwidth bound and usually gains nothing from SMT (two
+                ranks then share one core's execution units, caches and bandwidth), so this is
+                off by default; enable it to measure the difference on your machine.
         """
         super().__init__(name="Palace EM Simulator", index=2)
         self.palace_executable = palace_executable
         self.touchstone_type = touchstone_type
-        if num_parallel_palace_sims < 1:
-            raise ValueError("num_parallel_palace_sims must be at least 1.")
-        self.num_parallel_palace_sims = num_parallel_palace_sims
+        if launcher not in ("local", "slurm"):
+            raise ValueError(f"launcher must be 'local' or 'slurm', got {launcher!r}.")
+        if num_parallel_sims < 0:
+            raise ValueError("num_parallel_sims must be >= 0 (0 = one per slot).")
+        if bind not in BIND_CHOICES:
+            raise ValueError(f"bind must be one of {BIND_CHOICES}, got {bind!r}.")
+        self.launcher = launcher
+        self.num_parallel_sims = num_parallel_sims
+        self.bind = bind
         self.extra_srun_args = extra_srun_args
+        self.save_log = save_log
+        self.hyperthreads = hyperthreads
+
+    def _create_launcher(self) -> SimulationLauncher:
+        """Builds the launcher for this run (reads the Slurm allocation / NUMA topology now, not at construction)."""
+        if self.launcher == "slurm":
+            from orca.simulation.slurm import SlurmLauncher
+
+            return SlurmLauncher(
+                num_parallel_sims=self.num_parallel_sims,
+                bind=self.bind,
+                extra_srun_args=self.extra_srun_args,
+                hyperthreads=self.hyperthreads,
+            )
+        return LocalLauncher(
+            num_parallel_sims=self.num_parallel_sims, bind=self.bind, hyperthreads=self.hyperthreads
+        )
 
     def run(
         self,
@@ -86,58 +128,42 @@ class PalaceSimulator(PipelineStage):
             lambda name: touchstone_filename(name, n_ports, self.touchstone_type)
         )
 
-        use_slurm = self.num_parallel_palace_sims > 1
+        launcher = self._create_launcher()
+        num_processes = launcher.ranks_per_simulation(num_processes)
+        logger.info(
+            f"Starting Palace EM simulations for {len(palace_data)} models, "
+            f"{launcher.describe()}, each using {num_processes} MPI processes."
+        )
+        # Fail fast if the launcher cannot start simulations with these settings, instead of hanging
+        # silently in the first simulation (whose output is not shown on the console).
+        launcher.check(num_processes)
 
-        if use_slurm:
-            logger.info(
-                f"Starting Palace EM simulations for {len(palace_data)} models, "
-                f"{self.num_parallel_palace_sims} in parallel across Slurm nodes, "
-                f"each using {num_processes} MPI processes."
-            )
-        else:
-            logger.info(
-                f"Starting Palace EM simulations for {len(palace_data)} models using {num_processes} MPI processes."
-            )
+        # One worker per slot: each takes a free slot from the queue, runs its simulation there and
+        # hands the slot back afterwards, so simulations never share a slot (node / NUMA domain).
+        # A single simulation is already parallelized internally via MPI, so this is the only
+        # parallelism on top.
+        free_slots: Queue[str] = Queue()
+        for slot in launcher.slots:
+            free_slots.put(slot)
+
+        def run_in_free_slot(index: Any, row: "pd.Series") -> tuple[Any, str, bool]:
+            slot = free_slots.get()
+            try:
+                return self._run_single_simulation(index, row, output_dir, num_processes, launcher, slot)
+            finally:
+                free_slots.put(slot)
 
         completed = 0
-        if use_slurm:
-            # Run simulations in parallel, one per Slurm node (via srun), since a single simulation
-            # is already parallelized internally via MPI and does not benefit from more than one node.
-            with ThreadPoolExecutor(max_workers=self.num_parallel_palace_sims) as executor:
-                futures = {
-                    executor.submit(
-                        self._run_single_simulation, index, row, output_dir, num_processes, use_slurm
-                    ): index
-                    for index, row in palace_data.iterrows()
-                }
-                for future in tqdm.tqdm(
-                    as_completed(futures), total=len(futures), desc="Palace Simulations"
-                ):
-                    index, palace_config_name, success = future.result()
-                    if not success:
-                        logger.error(
-                            f"Simulation for config {palace_config_name} failed. Removing from results."
-                        )
-                        result_data.drop(index, inplace=True)
-
-                    completed += 1
-                    if progress_callback:
-                        progress_callback(
-                            self.name,
-                            completed,
-                            len(palace_data),
-                            f"Simulated {completed} of {len(palace_data)} models.",
-                        )
-        else:
-            for index, row in tqdm.tqdm(
-                palace_data.iterrows(), total=len(palace_data), desc="Palace Simulations"
+        with ThreadPoolExecutor(max_workers=len(launcher.slots)) as executor:
+            futures = {
+                executor.submit(run_in_free_slot, index, row): index
+                for index, row in palace_data.iterrows()
+            }
+            for future in tqdm.tqdm(
+                as_completed(futures), total=len(futures), desc="Palace Simulations"
             ):
-                index, palace_config_name, success = self._run_single_simulation(
-                    index, row, output_dir, num_processes, use_slurm
-                )
-
+                index, palace_config_name, success = future.result()
                 if not success:
-                    # Remove failed simulation from the CSV
                     logger.error(
                         f"Simulation for config {palace_config_name} failed. Removing from results."
                     )
@@ -164,7 +190,8 @@ class PalaceSimulator(PipelineStage):
         row: "pd.Series",
         output_dir: str,
         num_processes: int,
-        use_srun: bool,
+        launcher: SimulationLauncher,
+        slot: str,
     ) -> tuple[Any, str, bool]:
         """
         Patches the config for and runs a single Palace simulation.
@@ -175,8 +202,8 @@ class PalaceSimulator(PipelineStage):
             row (pd.Series): Row from the palace_data DataFrame describing the simulation to run.
             output_dir (str): Directory to write Touchstone results to.
             num_processes (int): Number of MPI processes to use for the simulation.
-            use_srun (bool): Whether to pin this simulation to its own Slurm node via `srun`. See
-                `run_palace` for details.
+            launcher (SimulationLauncher): Builds the launch command for the simulation.
+            slot (str): The launcher slot (Slurm node, NUMA domain, ...) to run in.
 
         Returns:
             tuple[Any, str, bool]: The row index, the Palace config name, and whether the simulation succeeded.
@@ -188,19 +215,15 @@ class PalaceSimulator(PipelineStage):
         # Patch the auto-generated config.json to speed up simulation time
         self._patch_palace_config(os.path.join(sim_path, palace_config_name))
 
-        # This is not parallelized across CPUs because Palace is already parallelized very well
-        # internally via MPI; num_parallel_palace_sims instead parallelizes across Slurm nodes.
-        # Also, we convert results after each simulation instead of an extra stage to allow using intermediate results
+        # Results are converted right after each simulation instead of in an extra stage, so
+        # intermediate results are usable while the stage is still running.
         success = run_palace(
             sim_path=sim_path,
             data_dir=data_directory,
             result_dir=output_dir,
-            config_name=palace_config_name,
-            palace_executable=self.palace_executable,
+            cmd=launcher.command(slot, self.palace_executable, num_processes, palace_config_name),
             touchstone_type=self.touchstone_type,
-            num_processes=num_processes,
-            use_srun=use_srun,
-            extra_srun_args=self.extra_srun_args,
+            save_log=self.save_log,
         )
 
         return index, palace_config_name, success

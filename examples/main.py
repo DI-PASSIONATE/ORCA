@@ -33,7 +33,7 @@ def main():
         [
             orca.GDSGenerator(num_samples=10),
             orca.GDSConverter(),
-            orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace"),
+            orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
             orca.ModelTrainer(model=orca.OrcaMLP, hyperparameters=hyperparameters, n_train_samples=1000),
             orca.OnnxExporter(),
             orca.ModelTester(),
