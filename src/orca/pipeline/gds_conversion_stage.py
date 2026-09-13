@@ -1,4 +1,6 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
+import multiprocessing
 import pandas as pd
 import os
 import tqdm
@@ -46,7 +48,7 @@ class GDSConverter(PipelineStage):
             f"Starting GDS conversion for {len(gds_data)} files using {cpu_cores} CPU cores."
         )
 
-        with ProcessPoolExecutor(max_workers=cpu_cores) as executor:
+        with ProcessPoolExecutor(max_workers=cpu_cores, mp_context=multiprocessing.get_context("spawn")) as executor:
             futures = []
             gds_dir = os.path.dirname(gds_csv)
             for i, row in gds_data.iterrows():
@@ -84,6 +86,8 @@ class GDSConverter(PipelineStage):
                     self._save_csv(
                         palace_csv, geo_name, params, data_dir, sim_path, config_name
                     )
+                except BrokenProcessPool:
+                    raise  # a worker died; nothing else will finish
                 except Exception as e:
                     logger.error(
                         f"GDS conversion failed for file index {i} with error: {e}"

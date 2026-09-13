@@ -56,8 +56,11 @@ orca_instance = ORCA(
     ]
 )
 
-orca_instance.run(geometry=geometry, num_processes=16)
+if __name__ == "__main__":
+    orca_instance.run(geometry=geometry, num_processes=16)
 ```
+
+Wrap the call in `if __name__ == "__main__":` (or a `main()` function) as shown: ORCA starts its worker processes with the `spawn` start method, which re-imports your script in every worker. Without the guard each worker would start its own pipeline.
 
 This will:
 

@@ -23,20 +23,24 @@ hyperparameters = {
     "activation_function": "GELU"
 }
 
-# Use predefined geometry from examples
-np.random.seed(40)
-torch.manual_seed(40)
-geometry = TransformerOcta()
+def main():
+    # Use predefined geometry from examples
+    np.random.seed(40)
+    torch.manual_seed(40)
+    geometry = TransformerOcta()
 
-orca_instance = orca.ORCA(
-    [
-        orca.GDSGenerator(num_samples=10),
-        orca.GDSConverter(),
-        orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace"),
-        orca.ModelTrainer(model=orca.OrcaMLP, hyperparameters=hyperparameters, n_train_samples=1000),
-        orca.OnnxExporter(),
-        orca.ModelTester(),
-    ]
-)
+    orca_instance = orca.ORCA(
+        [
+            orca.GDSGenerator(num_samples=10),
+            orca.GDSConverter(),
+            orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace"),
+            orca.ModelTrainer(model=orca.OrcaMLP, hyperparameters=hyperparameters, n_train_samples=1000),
+            orca.OnnxExporter(),
+            orca.ModelTester(),
+        ]
+    )
 
-orca_instance.run(geometry=geometry, num_processes=16)
+    orca_instance.run(geometry=geometry, num_processes=16)
+
+if __name__ == "__main__":
+    main()

@@ -1,4 +1,5 @@
 import json
+import multiprocessing
 import os
 from typing import Callable, Optional
 from orca.pipeline.context import PipelineContext
@@ -58,7 +59,21 @@ class ORCA:
 
         Returns:
             PipelineContext|None: The final context, or None if the run was aborted.
+
+        Raises:
+            RuntimeError: If called from a worker process, i.e. the calling script starts the
+                pipeline at module level without an ``if __name__ == "__main__":`` guard.
         """
+        # Pipeline stages start their workers with the "spawn" start method, which re-imports
+        # the user's script in every worker. Without a __main__ guard that re-import would call
+        # run() again and every worker would start its own pipeline.
+        if multiprocessing.current_process().name != "MainProcess":
+            raise RuntimeError(
+                "ORCA.run() was called from a worker process. Put the code that starts the "
+                "pipeline inside 'if __name__ == \"__main__\":' (or a main() function called "
+                "from there) so it only runs in the main process."
+            )
+
         self.print_super_cool_logo_art()
 
         context = PipelineContext(

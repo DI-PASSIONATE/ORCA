@@ -1,8 +1,10 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 import pandas as pd
 from typing import Any, Callable, Optional, TYPE_CHECKING
 from orca.geometry.base_geometry import BaseGeometry
 from orca.pipeline.pipeline_stage import PipelineStage
+import multiprocessing
 from orca.logger import logger
 import tqdm
 import os
@@ -33,16 +35,6 @@ class GDSGenerator(PipelineStage):
             f"Starting GDS generation for {self.num_samples} samples using {cpu_cores} CPU cores."
         )
 
-        try:
-            from ihp import PDK
-
-            PDK.activate()
-        except ImportError:
-            logger.error(
-                "IHP PDK not found. Please install the IHP PDK to use GDS conversion."
-            )
-            return context
-
         # Create output directory if it doesn't exist
         if os.path.exists(output_dir):
             import shutil
@@ -55,7 +47,7 @@ class GDSGenerator(PipelineStage):
         geometry.input_parameter_iterator.set_sample_count(self.num_samples)
 
         futures = []
-        with ProcessPoolExecutor(max_workers=cpu_cores) as executor:
+        with ProcessPoolExecutor(max_workers=cpu_cores, mp_context=multiprocessing.get_context("spawn")) as executor:
             # Create cpu_cores processes to generate GDS files in parallel
             for i, input_params in enumerate(geometry.input_iterator):
                 if i >= self.num_samples:
@@ -82,6 +74,10 @@ class GDSGenerator(PipelineStage):
 
                     # Save instance name + input parameters to CSV
                     self._save_csv(gds_csv, name, params)
+                except BrokenProcessPool:
+                    # A worker died (e.g. the calling script re-ran the pipeline on
+                    # import); nothing else will finish, so abort instead of skipping
+                    raise
                 except Exception as e:
                     logger.debug(f"Worker task failed: {e}")
                 finally:

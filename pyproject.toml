@@ -17,18 +17,18 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
+    "Programming Language :: Python",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Testing",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
 ]
-# Capped at 3.12 by ihp-gdsfactory, which declares Requires-Python: >=3.12,<3.13.
-# Widen this again once that dependency supports newer interpreters.
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.11"
 dependencies = [
     "scikit-rf",
     "scikit-learn",
     "gdsfactory",
-    "ihp-gdsfactory @ git+https://github.com/gdsfactory/IHP.git",
     "gds2palace",
     "numpy",
     "tqdm",
