@@ -1,3 +1,11 @@
+---
+title: Quickstart
+description: >-
+  Run ORCA for the first time: prepare a geometry, launch the GUI or a Python
+  script, generate GDS layouts, run Palace EM simulations, train a neural
+  network and export an ONNX surrogate model.
+---
+
 # Quickstart
 
 Once you have completed installation (see **Getting Started -> Installation**), you are ready to run ORCA.

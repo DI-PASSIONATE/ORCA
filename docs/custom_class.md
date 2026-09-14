@@ -1,3 +1,11 @@
+---
+title: Custom Geometry Classes
+description: >-
+  Bring your own RF passive to ORCA: write a BaseGeometry subclass, a layer
+  stackup XML and a Palace simulation config to generate GDS layouts, simulate
+  them and train an S-parameter surrogate model.
+---
+
 # Custom Classes
 
 If you want to simulate and predict your own geometry, you need to create three files:
@@ -6,7 +14,7 @@ If you want to simulate and predict your own geometry, you need to create three 
 - A stackup XML file defining the layers of your geometry.
 - A simulation configuration file defining the simulation parameters for Palace.
 
-Once you have these three files, you can head over to [Running ORCA](/docs/running_orca.md) to see how to run ORCA with these files.
+Once you have these three files, you can head over to [Running ORCA](running_orca.md) to see how to run ORCA with these files.
 
 ### Python Class
 The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must implement the following:
