@@ -14,17 +14,27 @@ def main():
         [
             orca.GDSGenerator(num_samples=430),
             orca.GDSConverter(),
-            # num_parallel_palace_sims runs that many simulations in parallel, each pinned to its own
-            # Slurm node via srun (requires #SBATCH --nodes=<num_parallel_palace_sims> in the job script).
-            # Set to 1 (default) to run sequentially on the current node, with or without Slurm.
-            orca.PalaceSimulator(palace_executable="~/palace/build/bin/palace", num_parallel_palace_sims=2),
+            # launcher="slurm" runs the simulations as srun job steps on the nodes of this allocation
+            # (#SBATCH --nodes in the job script). bind="numa" with num_parallel_sims=0 runs one
+            # simulation per NUMA domain of every node (4 x 18 ranks on a Fritz node), which suits the
+            # memory-bandwidth-bound solver best as long as one simulation fits into a domain's memory;
+            # use bind="socket" (2 x 36) or "node" (1 x 72) otherwise. Leave launcher/num_parallel_sims
+            # at their defaults to run sequentially on the current node, with or without Slurm.
+            orca.PalaceSimulator(
+                palace_executable="~/palace/build/bin/palace",
+                launcher="slurm",
+                num_parallel_sims=0,
+                bind="numa",
+            ),
             # orca.ModelTrainer(n_train_samples=1000),
             # orca.OnnxExporter(),
             # orca.ModelTester(),
         ]
     )
 
-    orca_instance.run(geometry=geometry, num_processes=36, force_overwrite=True)
+    # num_processes=None uses all cores of the current node for the GDS stages. Each Palace simulation
+    # gets at most that many MPI ranks, capped to the cores of its slot (18 for a NUMA domain).
+    orca_instance.run(geometry=geometry, num_processes=None, force_overwrite=True)
 
 
 if __name__ == "__main__":

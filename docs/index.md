@@ -1,4 +1,12 @@
-# ORCA: An AI-Assisted Surrogate Modelling Pipeline for RFIC Passives
+---
+description: >-
+  ORCA (Open RF Integrated Circuit Automation) is an open-source pipeline that
+  turns a parametric GDS geometry into a trained neural network surrogate model
+  of an RF component: gdsfactory layout generation, Palace full-wave EM simulation,
+  PyTorch training and ONNX export for fast RFIC optimization with COBRA.
+---
+
+# ORCA: Open RF Integrated Circuit Automation
 
 <div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
 	<img src="logo.png" alt="ORCA logo" width="300"/>
@@ -42,10 +50,12 @@
 
 ## Start Here
 
-- New users: go to **Getting Started -> Installation**.
-- First successful run: **Getting Started -> Quickstart**.
-- Bring your own geometry: **User Guide -> Custom Classes**.
-- API details: see the source and docstrings in `src/orca/`.
+- New users: go to [Installation](setup.md).
+- First successful run: [Quickstart](running_orca.md).
+- Understand the stages: [Pipeline Stages](pipeline.md).
+- Bring your own geometry: [Custom Classes](custom_class.md).
+- Publish a trained model: [Sharing Models on Hugging Face](sharing_models.md).
+- API details: see the source and docstrings in [`src/orca/`](https://github.com/DI-PASSIONATE/ORCA/tree/main/src/orca).
 
 ## Core Concepts
 
@@ -105,8 +115,10 @@ A geometry class defines everything ORCA needs to sample and simulate a componen
 
 ## Related Projects
 
-- COBRA consumes ORCA surrogate models for circuit-level RFIC optimization.
-- Palace is used as the EM solver backend.
+- [COBRA](https://github.com/DI-PASSIONATE/COBRA) consumes ORCA surrogate models for circuit-level RFIC optimization.
+- [Palace](https://github.com/awslabs/palace) is used as the full-wave EM solver backend.
+- [gdsfactory](https://github.com/gdsfactory/gdsfactory) generates the parametric GDS layouts.
+- [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2) converts GDS layouts into Palace simulation setups.
 
 ---
 

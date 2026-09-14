@@ -5,8 +5,29 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "orca"
 version = "1.0.0"
-description = "ORCA - Open RF Circuit Automation"
+description = "ORCA - Open RF Integrated Circuit Automation: AI-assisted surrogate modelling pipeline for RFIC passives (gdsfactory GDS generation, Palace EM simulation, PyTorch training, ONNX export)"
 readme = "README.md"
+keywords = [
+    "RFIC",
+    "RF integrated circuit",
+    "surrogate model",
+    "machine learning",
+    "neural network",
+    "electromagnetic simulation",
+    "EM simulation",
+    "Palace",
+    "gdsfactory",
+    "GDS",
+    "ONNX",
+    "PyTorch",
+    "S-parameters",
+    "inductor",
+    "transformer",
+    "EDA",
+    "design automation",
+    "open-source",
+    "COBRA",
+]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
@@ -16,13 +37,15 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "Operating System :: OS Independent",
+    "Operating System :: Unix",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Physics",
 ]
 requires-python = ">=3.11"
 dependencies = [
@@ -42,6 +65,13 @@ dependencies = [
     "onnxruntime",
     "onnxscript>=0.7.1",
 ]
+
+[project.urls]
+Homepage = "https://di-passionate.github.io/ORCA/"
+Documentation = "https://di-passionate.github.io/ORCA/"
+Repository = "https://github.com/DI-PASSIONATE/ORCA"
+Issues = "https://github.com/DI-PASSIONATE/ORCA/issues"
+"Related: COBRA" = "https://github.com/DI-PASSIONATE/COBRA"
 
 [project.scripts]
 orca = "orca.__main__:main"

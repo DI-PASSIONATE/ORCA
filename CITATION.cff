@@ -1,52 +1,95 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
-title: "GitHub Repository for COBRA - AI-Assisted RFIC Optimization Framework"
+message: "If you use ORCA in your research, please cite the SBCCI 2026 paper below."
+type: software
+title: "ORCA: Open RF Integrated Circuit Automation"
+abstract: >-
+  ORCA is an open-source, AI-assisted pipeline for building neural network
+  surrogate models of RF integrated circuit passives. It generates parametric
+  GDS layouts with gdsfactory, runs full-wave electromagnetic simulations with
+  Palace, trains a PyTorch model to predict S-parameters and exports it to ONNX
+  for fast circuit-level optimization with COBRA.
 authors:
-- family-names: "Simone"
-  given-names: "Gianluca"
-  orcid: "https://orcid.org/0009-0002-6315-1538"
-- family-names: "Lurz"
-  given-names: "David"
-  orcid: "https://orcid.org/0009-0003-6526-5464"
-- family-names: "Franchi"
-  given-names: "Norman"
-  orcid: "https://orcid.org/0000-0002-2777-4722"
+  - family-names: Simone
+    given-names: Gianluca
+    orcid: "https://orcid.org/0009-0002-6315-1538"
+    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+  - family-names: Lurz
+    given-names: David
+    orcid: "https://orcid.org/0009-0003-6526-5464"
+    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+  - family-names: Grund
+    given-names: Martin
+    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+  - family-names: Schneider
+    given-names: Fabian
+    orcid: "https://orcid.org/0009-0007-5891-7582"
+    affiliation: "Chair of Integrated Electronic Systems, Otto-von-Guericke-University Magdeburg"
+  - family-names: Loose
+    given-names: Michael
+    orcid: "https://orcid.org/0000-0002-8422-5391"
+    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+  - family-names: Breun
+    given-names: Sascha
+    orcid: "https://orcid.org/0000-0002-9600-2988"
+    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+  - family-names: Koch
+    given-names: Manuel
+    orcid: "https://orcid.org/0009-0002-7827-7205"
+    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+  - family-names: Weigel
+    given-names: Robert
+    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+  - family-names: Franchi
+    given-names: Norman
+    orcid: "https://orcid.org/0000-0002-2777-4722"
+    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
 version: 1.0.0
-date-released: 2026
-url: "https://github.com/DI-PASSIONATE/COBRA"
+repository-code: "https://github.com/DI-PASSIONATE/ORCA"
+url: "https://di-passionate.github.io/ORCA/"
+license: Apache-2.0
+keywords:
+  - RFIC
+  - surrogate model
+  - machine learning
+  - neural network
+  - electromagnetic simulation
+  - Palace
+  - gdsfactory
+  - ONNX
+  - design automation
+  - open-source EDA
 preferred-citation:
   type: conference-paper
-  authors:
-    - family-names: "Simone"
-      given-names: "Gianluca"
-      orcid: "https://orcid.org/0009-0002-6315-1538"
-    - family-names: "Lurz"
-      given-names: "David"
-      orcid: "https://orcid.org/0009-0003-6526-5464"
-    - family-names: "Grund"
-      given-names: "Martin"
-    - family-names: "Schneider"
-      given-names: "Fabian"
-      orcid: "https://orcid.org/0009-0007-5891-7582"
-    - family-names: "Loose"
-      given-names: "Michael"
-      orcid: "https://orcid.org/0000-0002-8422-5391"
-    - family-names: "Breun"
-      given-names: "Sascha"
-      orcid: "https://orcid.org/0000-0002-9600-2988"
-    - family-names: "Koch"
-      given-names: "Manuel"
-      orcid: "https://orcid.org/0009-0002-7827-7205"
-    - family-names: "Weigel"
-      given-names: "Robert"
-    - family-names: "Franchi"
-      given-names: "Norman"
-      orcid: "https://orcid.org/0000-0002-2777-4722"
   title: "COBRA: An AI-Assisted Circuit-Level Optimizer for Open Source Based RFIC Design"
-  collection-title: "2026 39nd SBC/SBMicro/IEEE Symposium on Integrated Circuits and Systems Design (SBCCI)"
+  authors:
+    - family-names: Simone
+      orcid: "https://orcid.org/0009-0002-6315-1538"
+      given-names: Gianluca
+    - family-names: Lurz
+      orcid: "https://orcid.org/0009-0003-6526-5464"
+      given-names: David
+    - family-names: Grund
+      given-names: Martin
+    - family-names: Schneider
+      orcid: "https://orcid.org/0009-0007-5891-7582"
+      given-names: Fabian
+    - family-names: Loose
+      orcid: "https://orcid.org/0000-0002-8422-5391"
+      given-names: Michael
+    - family-names: Breun
+      orcid: "https://orcid.org/0000-0002-9600-2988"
+      given-names: Sascha
+    - family-names: Koch
+      orcid: "https://orcid.org/0009-0002-7827-7205"
+      given-names: Manuel
+    - family-names: Weigel
+      given-names: Robert
+    - family-names: Franchi
+      orcid: "https://orcid.org/0000-0002-2777-4722"
+      given-names: Norman
+  collection-title: "2026 39th SBC/SBMicro/IEEE Symposium on Integrated Circuits and Systems Design (SBCCI)"
   conference:
-    name: "Symposium on Integrated Circuits and System Design"
-  year: 2026
+    name: "Symposium on Integrated Circuits and Systems Design"
   publisher:
-    name: "IEEE"
-  url: "https://github.com/DI-PASSIONATE/COBRA"
+    name: IEEE
+  year: 2026

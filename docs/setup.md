@@ -1,4 +1,12 @@
-## Installation
+---
+title: Installation
+description: >-
+  Install ORCA with uv or pip on Python 3.11+, set up the Palace
+  electromagnetic solver, and verify the installation before your first
+  surrogate model run.
+---
+
+# Installation
 
 ## Requirements
 

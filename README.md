@@ -1,5 +1,12 @@
 # ORCA — Open RF Integrated Circuit Automation
-[![pages-documentation](https://img.shields.io/badge/pages-documentation-green?logo=github)](https://di-passionate.github.io/ORCA/)
+
+**An open-source, AI-assisted surrogate modelling pipeline for RF integrated circuit (RFIC) passives — from parametric GDS layout to full-wave EM simulation to a trained ONNX model.**
+
+[![Documentation](https://img.shields.io/badge/docs-di--passionate.github.io%2FORCA-green?logo=materialformkdocs&logoColor=white)](https://di-passionate.github.io/ORCA/)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white)](pyproject.toml)
+[![Cite this repository](https://img.shields.io/badge/cite-CITATION.cff-lightgrey)](CITATION.cff)
+[![GitHub stars](https://img.shields.io/github/stars/DI-PASSIONATE/ORCA?style=social)](https://github.com/DI-PASSIONATE/ORCA/stargazers)
 
 ©2026
 
@@ -14,7 +21,7 @@ Gianluca Simone\*, David Lurz\*, Martin Grund\*, Fabian Schneider°, Michael Loo
 > [!NOTE]
 > ORCA is still under active development. The current codebase is functional and can be used for experimentation, but we keep adding features, improving documentation, and refining the API. If you encounter any issues or have questions, please [open an issue](https://github.com/DI-PASSIONATE/ORCA/issues) or reach out.
 
-**ORCA** is an AI-assisted pipeline for building surrogate models of RF integrated circuit passives.
+**ORCA** is an AI-assisted pipeline for building neural network surrogate models of RF integrated circuit components such as on-chip inductors and transformers. Instead of running a slow electromagnetic (EM) simulation for every candidate geometry during circuit design, ORCA runs the simulations once, learns the mapping from geometry parameters to S-parameters, and hands the result to circuit optimizers like [COBRA](https://github.com/DI-PASSIONATE/COBRA) as a portable ONNX model.
 It combines:
 
 - parametric GDS layout generation (via [gdsfactory](https://github.com/gdsfactory/gdsfactory)),
@@ -31,7 +38,18 @@ Given a geometry class with configurable parameters, ORCA automatically:
 
 The resulting ONNX model can then be loaded by [COBRA](https://github.com/DI-PASSIONATE/COBRA) for fast circuit-level optimization — no EM simulation required at optimization time. Created models can easily be shared via Hugging Face Hub for others to use in their own design flows and reduce redundant EM simulations across the community.
 
-![](docs/orca.png)
+![ORCA pipeline overview: parametric GDS generation, Palace EM simulation, PyTorch training and ONNX export of an RFIC passive surrogate model](docs/orca.png)
+
+## Key Features
+
+- **Parametric layout generation** — sample thousands of GDS variants of an RF passive from a small Python geometry class.
+- **Open-source full-wave EM simulation** — finite-element S-parameter extraction with [Palace](https://github.com/awslabs/palace); runs on a laptop, a multi-socket workstation or a Slurm HPC cluster.
+- **Machine learning surrogate models** — PyTorch models with automatic normalization and Optuna hyperparameter tuning.
+- **Portable ONNX export** — the trained model runs with `onnxruntime` only; no PyTorch needed at inference time.
+- **Built-in validation** — held-out test set evaluation of the exported model.
+- **GUI and scripting workflows** — click through the pipeline or drive it from Python; remote execution on OpenStack.
+- **Model sharing** — publish surrogates on the Hugging Face Hub (`orca-surrogate` tag) for the whole community to reuse.
+- **Technology-agnostic** — bring your own layer stackup XML; no PDK dependency.
 
 ## How ORCA Fits with COBRA
 
@@ -240,6 +258,13 @@ Each GDS file is converted to a Palace-ready simulation setup using [gds2palace]
 
 Palace runs a full-wave finite-element EM simulation for each layout variant and writes the S-parameters to a Touchstone file (`.sNp`). Simulations are distributed across available CPU cores. The `palace_executable` argument can point to a local binary or a container invocation (e.g. `apptainer exec palace.sif palace`).
 
+Several simulations can run at once, each already parallelized internally with MPI (`num_processes` ranks per simulation). `bind` chooses what one simulation gets — a whole `"node"`, one `"socket"` or one `"numa"` domain — and `num_parallel_sims=0` uses all such slots:
+
+- `PalaceSimulator(num_parallel_sims=0, bind="numa")` runs one simulation per NUMA domain of the current machine, each pinned with `numactl` (e.g. 2 or 4 at once on a multi-socket workstation).
+- `PalaceSimulator(launcher="slurm", num_parallel_sims=0, bind="numa")` does the same on every node of a Slurm allocation (`sbatch --nodes=N`), each simulation launched as an `srun` job step pinned to its node and cores. See [examples/slurm_runs](examples/slurm_runs) for a job script.
+
+Palace is memory-bandwidth bound, so several smaller simulations confined to their own NUMA domain usually give a higher throughput than one simulation spread over a whole node — as long as one simulation fits into a domain's memory (use `bind="socket"` otherwise). The layout is derived from the machine or allocation at runtime, so `num_parallel_sims` and `num_processes` are capped to what is actually available. Pass `save_log=True` to keep each simulation's full Palace output in `palace.log` in its simulation folder (off by default, Palace prints a lot); failures are reported either way.
+
 ### Stage 4 — Model training (`ModelTrainer`)
 
 A PyTorch MLP is trained on the simulation data. Inputs are geometry parameters and frequency; outputs are the real and imaginary parts of each S-parameter entry. Normalization is defined in the geometry's dataset and applied automatically. An optional basis expansion of the inputs — for example a Chebyshev expansion of frequency — is chosen on the stage itself with `ModelTrainer(basis="chebyshev")`; it lives inside the model, so it is tuned with it and exported into the ONNX graph. Hyperparameters such as learning rate, batch size, and network depth can be passed to `ModelTrainer`.
@@ -325,7 +350,7 @@ Once uploaded, COBRA can query all public `orca-surrogate` models or load a spec
 
 ## Cite This Work
 
-If you use ORCA in your research, please cite our upcoming SBCCI 2026 paper:
+If you use ORCA in your research, please cite our upcoming SBCCI 2026 paper (or use GitHub's **Cite this repository** button, backed by [`CITATION.cff`](CITATION.cff)):
 
 ```bibtex
 @INPROCEEDINGS{2026_COBRA,
