@@ -6,15 +6,28 @@ from typing import List, Type, Any
 
 from orca.geometry.base_geometry import BaseGeometry
 from orca.geometry.presets.inductor_octa import InductorOcta
+from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
 
 # Import all pipeline stages
 from orca.pipeline.gds_gen_stage import GDSGenerator
 from orca.pipeline.gds_conversion_stage import GDSConverter
 from orca.pipeline.simulation_stage import PalaceSimulator
-from orca.pipeline.training_stage import ModelTrainer
-from orca.pipeline.export_onnx_stage import OnnxExporter
-from orca.pipeline.test_model_stage import ModelTester
+
+# The training stages need PyTorch (the "train" extra). Without it the GUI still
+# offers the GDS generation, conversion and simulation stages.
+try:
+    from orca.pipeline.training_stage import ModelTrainer
+    from orca.pipeline.export_onnx_stage import OnnxExporter
+    from orca.pipeline.test_model_stage import ModelTester
+except ModuleNotFoundError as e:
+    _TRAINING_STAGES: List[Type[PipelineStage]] = []
+    logger.warning(
+        f"Training stages are unavailable ({e}). Install ORCA's optional "
+        "training dependencies with `pip install -e '.[train]'` to enable them."
+    )
+else:
+    _TRAINING_STAGES = [ModelTrainer, OnnxExporter, ModelTester]
 
 # Import all preset geometries 
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
@@ -53,14 +66,7 @@ def get_available_stages() -> List[Type[PipelineStage]]:
     """
     Returns a list of available PipelineStage subclasses.
     """
-    return [
-        GDSGenerator,
-        GDSConverter,
-        PalaceSimulator,
-        ModelTrainer,
-        OnnxExporter,
-        ModelTester
-    ]
+    return [GDSGenerator, GDSConverter, PalaceSimulator, *_TRAINING_STAGES]
 
 def get_preset_geometries() -> List[Type[BaseGeometry]]:
     """

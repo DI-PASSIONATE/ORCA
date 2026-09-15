@@ -43,6 +43,14 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         )  # Ensure same behavior for all instances
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+        # Samples are built on self.device, and the predictor and ONNX exporter
+        # apply the normalizers to tensors on that device too. Normalizers that
+        # fit their buffers from the samples land there anyway; ones built from
+        # declared ranges (MinMaxNormalizer) start on the CPU and are moved here.
+        for normalizer in (self.input_normalizer, self.output_normalizer):
+            if normalizer is not None:
+                normalizer.to(self.device)
+
     @property
     def n_ports(self) -> int:
         return self.codec.n_ports
