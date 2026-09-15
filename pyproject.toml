@@ -50,21 +50,66 @@ classifiers = [
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "scikit-rf",
-    "scikit-learn",
     "gdsfactory",
     "gds2palace",
+    "klayout",
+    "gdspy",
     "numpy",
     "tqdm",
-    "torch",
     "pandas",
     "PySide6",
     "colorlog",
     "matplotlib",
+]
+
+[project.optional-dependencies]
+# Model training, ONNX export and model testing (ModelTrainer, OnnxExporter, ModelTester).
+# GDS generation, conversion and Palace simulation work without it.
+train = [
+    "torch",
+    "scikit-learn",
     "optuna",
     "onnx",
     "onnxruntime",
     "onnxscript>=0.7.1",
 ]
+# PyTorch build selectors, resolved through the PyTorch indexes below by uv (pip ignores them):
+#   uv sync --extra train --extra cpu     # CPU-only wheels, e.g. on an HPC login/compute node
+#   uv sync --extra train --extra cu130   # CUDA 13.0 wheels for NVIDIA GPUs (driver >= 580)
+#   uv sync --extra train --extra cu126   # CUDA 12.6 wheels for older drivers
+# Without a selector, torch comes from PyPI (CUDA-bundled on Linux, CPU on macOS/Windows).
+cpu = ["torch"]
+cu126 = ["torch"]
+cu130 = ["torch"]
+
+[tool.uv]
+conflicts = [
+    [{ extra = "cpu" }, { extra = "cu126" }],
+    [{ extra = "cpu" }, { extra = "cu130" }],
+    [{ extra = "cu126" }, { extra = "cu130" }],
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu126", extra = "cu126" },
+    { index = "pytorch-cu130", extra = "cu130" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
 
 [project.urls]
 Homepage = "https://di-passionate.github.io/ORCA/"
@@ -90,7 +135,7 @@ orca = "src/orca"
 
 [tool.black]
 line-length = 79
-target-version = ['py311', 'py312', 'py313', 'py314']
+target-version = ['py311', 'py312', 'py313']
 
 [tool.isort]
 profile = "black"
