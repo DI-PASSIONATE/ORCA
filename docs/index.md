@@ -1,9 +1,10 @@
 ---
 description: >-
-  ORCA (Open RF Integrated Circuit Automation) is an open-source pipeline that
-  turns a parametric GDS geometry into a trained neural network surrogate model
-  of an RF component: gdsfactory layout generation, Palace full-wave EM simulation,
-  PyTorch training and ONNX export for fast RFIC optimization with COBRA.
+  ORCA (Open RF Integrated Circuit Automation) is an open-source EDA tool for  
+  AI-assisted RFIC design: a pipeline that turns any parametric GDS geometry
+  into a trained neural network surrogate model of an RFIC component, with gdsfactory
+  layout generation, Palace full-wave EM simulation, PyTorch training and ONNX
+  export for fast RFIC optimization with COBRA.
 ---
 
 # ORCA: Open RF Integrated Circuit Automation
@@ -11,7 +12,7 @@ description: >-
 <div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
 	<img src="logo.png" alt="ORCA logo" width="300"/>
 	<p style="margin:0; flex:1; min-width:240px;">
-		ORCA (Open RF Integrated Circuit Automation) builds surrogate models of RF integrated circuit passives by combining parametric GDS layout generation, full-wave electromagnetic simulation, and neural network training and export in one automated pipeline.
+		ORCA (Open RF Integrated Circuit Automation) builds surrogate models of RF integrated circuit components by combining parametric GDS layout generation, full-wave electromagnetic simulation, and neural network training and export in one automated pipeline.
 	</p>
 </div>
 

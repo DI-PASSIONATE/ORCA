@@ -2,12 +2,12 @@ site_name: ORCA — Open RF Integrated Circuit Automation
 site_url: https://di-passionate.github.io/ORCA/
 site_author: LITES, Friedrich-Alexander-Universität Erlangen-Nürnberg
 site_description: >-
-  ORCA is an open-source, AI-assisted pipeline for building neural network
-  surrogate models of RF integrated circuit (RFIC) components such as inductors
-  and transformers. It generates parametric GDS layouts with gdsfactory, runs
-  full-wave electromagnetic simulations with Palace, trains a PyTorch model to
-  predict S-parameters, and exports it to ONNX for fast circuit optimization
-  with COBRA.
+  ORCA is an open-source EDA tool for AI-assisted RFIC design: a pipeline for
+  building neural network surrogate models of RF integrated circuit components
+  from parametric layouts. It generates parametric GDS layouts with
+  gdsfactory, runs full-wave electromagnetic simulations with Palace, trains a
+  PyTorch model to predict S-parameters, and exports it to ONNX for fast
+  circuit optimization with COBRA.
 
 # Repository
 repo_name: DI-PASSIONATE/ORCA

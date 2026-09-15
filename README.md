@@ -1,6 +1,6 @@
 # ORCA — Open RF Integrated Circuit Automation
 
-**An open-source, AI-assisted surrogate modelling pipeline for RF integrated circuit (RFIC) passives — from parametric GDS layout to full-wave EM simulation to a trained ONNX model.**
+**An open-source EDA tool for AI-assisted RFIC design: a surrogate modelling pipeline for RF integrated circuit components — from parametric GDS layout to full-wave EM simulation to a trained ONNX model for COBRA.**
 
 [![Documentation](https://img.shields.io/badge/docs-di--passionate.github.io%2FORCA-green?logo=materialformkdocs&logoColor=white)](https://di-passionate.github.io/ORCA/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -21,7 +21,7 @@ Gianluca Simone\*, David Lurz\*, Martin Grund\*, Fabian Schneider°, Michael Loo
 > [!NOTE]
 > ORCA is still under active development. The current codebase is functional and can be used for experimentation, but we keep adding features, improving documentation, and refining the API. If you encounter any issues or have questions, please [open an issue](https://github.com/DI-PASSIONATE/ORCA/issues) or reach out.
 
-**ORCA** is an AI-assisted pipeline for building neural network surrogate models of RF integrated circuit components such as on-chip inductors and transformers. Instead of running a slow electromagnetic (EM) simulation for every candidate geometry during circuit design, ORCA runs the simulations once, learns the mapping from geometry parameters to S-parameters, and hands the result to circuit optimizers like [COBRA](https://github.com/DI-PASSIONATE/COBRA) as a portable ONNX model.
+**ORCA** is an open-source EDA tool for AI-assisted RFIC design: a pipeline for building neural network surrogate models of RF integrated circuit components from parametric layouts (the bundled examples are on-chip inductors and transformers). Instead of running a slow electromagnetic (EM) simulation for every candidate geometry during circuit design, ORCA runs the simulations once, learns the mapping from geometry parameters to S-parameters, and hands the result to circuit optimizers like [COBRA](https://github.com/DI-PASSIONATE/COBRA) as a portable ONNX model.
 It combines:
 
 - parametric GDS layout generation (via [gdsfactory](https://github.com/gdsfactory/gdsfactory)),
@@ -38,11 +38,11 @@ Given a geometry class with configurable parameters, ORCA automatically:
 
 The resulting ONNX model can then be loaded by [COBRA](https://github.com/DI-PASSIONATE/COBRA) for fast circuit-level optimization — no EM simulation required at optimization time. Created models can easily be shared via Hugging Face Hub for others to use in their own design flows and reduce redundant EM simulations across the community.
 
-![ORCA pipeline overview: parametric GDS generation, Palace EM simulation, PyTorch training and ONNX export of an RFIC passive surrogate model](docs/orca.png)
+![ORCA pipeline overview: parametric GDS generation, Palace EM simulation, PyTorch training and ONNX export of an RFIC component surrogate model](docs/orca.png)
 
 ## Key Features
 
-- **Parametric layout generation** — sample thousands of GDS variants of an RF passive from a small Python geometry class.
+- **Parametric layout generation** — sample thousands of GDS variants of an RFIC component from a small Python geometry class.
 - **Open-source full-wave EM simulation** — finite-element S-parameter extraction with [Palace](https://github.com/awslabs/palace); runs on a laptop, a multi-socket workstation or a Slurm HPC cluster.
 - **Machine learning surrogate models** — PyTorch models with automatic normalization and Optuna hyperparameter tuning.
 - **Portable ONNX export** — the trained model runs with `onnxruntime` only; no PyTorch needed at inference time.
@@ -279,7 +279,7 @@ The ONNX model is loaded and evaluated against held-out simulation data. Predict
 
 ## Custom Geometry
 
-To train a surrogate for your own passive component, create three files:
+To train a surrogate for your own component, create three files:
 
 1. **A Python class** extending `BaseGeometry` — defines geometry parameters, GDS generation, and model architecture.
 2. **A stackup XML file** — defines the physical layer stack (materials, thicknesses, conductor layers).
