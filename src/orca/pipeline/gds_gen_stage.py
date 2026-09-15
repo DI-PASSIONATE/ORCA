@@ -47,7 +47,7 @@ class GDSGenerator(PipelineStage):
         geometry.input_parameter_iterator.set_sample_count(self.num_samples)
 
         futures = []
-        with ProcessPoolExecutor(max_workers=cpu_cores, mp_context=multiprocessing.get_context("spawn")) as executor:
+        with ProcessPoolExecutor(max_workers=cpu_cores) as executor:
             # Create cpu_cores processes to generate GDS files in parallel
             for i, input_params in enumerate(geometry.input_iterator):
                 if i >= self.num_samples:

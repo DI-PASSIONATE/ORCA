@@ -60,6 +60,7 @@ dependencies = [
     "PySide6",
     "colorlog",
     "matplotlib",
+    "pebble>=5.2.2",
 ]
 
 [project.optional-dependencies]

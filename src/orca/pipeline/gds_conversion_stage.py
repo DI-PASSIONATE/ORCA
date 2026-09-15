@@ -1,9 +1,9 @@
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from concurrent.futures.process import BrokenProcessPool
+from concurrent.futures import as_completed
 import multiprocessing
 import pandas as pd
 import os
 import tqdm
+from pebble import ProcessPool
 
 from typing import Any, Callable, Optional, TYPE_CHECKING
 from orca.geometry.base_geometry import BaseGeometry
@@ -18,10 +18,22 @@ if TYPE_CHECKING:
 class GDSConverter(PipelineStage):
     """
     Pipeline stage for converting GDS files to Palace-compatible format.
+
+    Each conversion runs in a worker process with a time limit. gmsh can loop
+    forever on degenerate geometry (self-intersecting boundary curves that its
+    2D mesher never recovers from), and a plain process pool would then wait
+    for that worker indefinitely. A worker that exceeds ``timeout`` is killed
+    and replaced, and the sample is logged and skipped like a failed mesh.
     """
 
-    def __init__(self):
+    def __init__(self, timeout: float = 60.0):
+        """
+        Args:
+            timeout (float): Maximum seconds a single GDS conversion may take
+                before its worker is killed and the sample is skipped.
+        """
         super().__init__(name="GDS Converter", index=1)
+        self.timeout = timeout
 
     def run(
         self,
@@ -48,8 +60,10 @@ class GDSConverter(PipelineStage):
             f"Starting GDS conversion for {len(gds_data)} files using {cpu_cores} CPU cores."
         )
 
-        with ProcessPoolExecutor(max_workers=cpu_cores, mp_context=multiprocessing.get_context("spawn")) as executor:
-            futures = []
+        with ProcessPool(
+            max_workers=cpu_cores
+        ) as pool:
+            futures = {}
             gds_dir = os.path.dirname(gds_csv)
             for i, row in gds_data.iterrows():
                 # CSV layout:
@@ -61,17 +75,20 @@ class GDSConverter(PipelineStage):
                 del params["name"]
 
                 # Submit GDS conversion tasks
-                future = executor.submit(
+                future = pool.schedule(
                     create_palace_model_from_gds,
-                    geometry_name=name,
-                    params=params,
-                    output_dir=base_dir,
-                    gds_filename=gds_path,
-                    stackup_xml=geometry.stackup_xml,
-                    simconfig_filename=geometry.simconfig_filename,
-                    show_mesh_results=False,
+                    kwargs=dict(
+                        geometry_name=name,
+                        params=params,
+                        output_dir=base_dir,
+                        gds_filename=gds_path,
+                        stackup_xml=geometry.stackup_xml,
+                        simconfig_filename=geometry.simconfig_filename,
+                        show_mesh_results=False,
+                    ),
+                    timeout=self.timeout,
                 )
-                futures.append(future)
+                futures[future] = name
 
             # Collect finished results
             # Print progress bar using tqdm
@@ -80,18 +97,20 @@ class GDSConverter(PipelineStage):
                     as_completed(futures), total=len(futures), desc="GDS Conversion"
                 )
             ):
+                name = futures[future]
                 try:
                     geo_name, params, config_name, sim_path, data_dir = future.result()
                     # Save input parameters to CSV
                     self._save_csv(
                         palace_csv, geo_name, params, data_dir, sim_path, config_name
                     )
-                except BrokenProcessPool:
-                    raise  # a worker died; nothing else will finish
-                except Exception as e:
+                except TimeoutError:
                     logger.error(
-                        f"GDS conversion failed for file index {i} with error: {e}"
+                        f"GDS conversion of {name} exceeded {self.timeout:g} s "
+                        "(gmsh did not finish meshing); skipping this sample."
                     )
+                except Exception as e:
+                    logger.error(f"GDS conversion failed for {name} with error: {e}")
                 finally:  # and call progress_callback even on failure
                     if progress_callback:
                         progress_callback(
