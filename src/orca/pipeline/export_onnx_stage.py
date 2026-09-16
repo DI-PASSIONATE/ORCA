@@ -51,7 +51,7 @@ class OnnxExporter(PipelineStage):
         ).eval()
 
         batch = torch.export.Dim("batch_size")
-        
+
         # Export to ONNX with multiple inputs/outputs using ONNXWrapper
         torch.onnx.export(
             wrapped_model,
@@ -67,8 +67,15 @@ class OnnxExporter(PipelineStage):
             dynamo=True,
         )
 
-        # Add valid ranges as metadata to the ONNX model
         onnx_model = onnx.load(output_path)
+
+        # The dynamo exporter annotates every node with the Python stack trace
+        # FX provenance it came from.
+        # bloats the file and leaks local paths into a model that may be shared.
+        for node in onnx_model.graph.node:
+            del node.metadata_props[:]
+
+        # Add valid ranges as metadata to the ONNX model
         ranges = geometry.input_parameter_iterator.get_ranges()
         meta = onnx_model.metadata_props.add()
         meta.key = "input_parameter_ranges"

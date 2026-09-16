@@ -1,20 +1,14 @@
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TYPE_CHECKING
 import numpy as np
 import os
 
 from orca import BaseGeometry
 from orca.geometry.cells.inductor import symmetric_octa_IHP, get_min_outer_diameter
 from orca.geometry.input_parameters import InputParameterIterator
-from orca.training.datasets.base_dataset import BaseDataset
-from orca.training.normalize import (
-    StandardNormalizer,
-    OutputMinMaxNormalizer,
-)
-from orca.training.codecs import FlatReImCodec
-from orca.training.datasets.geo_to_s_param_single_f import (
-    GeoToSParamDatasetSingleFrequency,
-)
+
+if TYPE_CHECKING:
+    from orca.training.datasets.base_dataset import BaseDataset
 
 # Ground ring is drawn on Metal5 (matches "from_layername": "Metal5" in the
 # simcfg). Feed is on TopMetal1, which requires N >= 2 turns (see
@@ -24,9 +18,8 @@ RING_SPACING = 20.0     # µm, gap between inductor outer edge and ground ring
 RING_WIDTH = 20.0       # µm, ground-ring thickness
 
 
-# Built per instance rather than shared as class attributes - see the note in
-# tf_octa_c_ports.py: a shared dataset would carry one run's fitted normalizer
-# statistics into the next.
+# Built per instance rather than shared as a class attribute - see the note in
+# tf_octa_c_ports.py. The dataset is built per instance too, by create_dataset().
 
 
 def _input_parameters() -> InputParameterIterator:
@@ -39,14 +32,6 @@ def _input_parameters() -> InputParameterIterator:
         diameter=[float(x) for x in range(30, 301, 1)],  # 30 .. 300 µm
     )
 
-
-
-def _dataset() -> BaseDataset:
-    return GeoToSParamDatasetSingleFrequency(
-        codec=FlatReImCodec(n_ports=2),
-        input_normalizer=OutputMinMaxNormalizer(),
-        output_normalizer=StandardNormalizer(),
-    )
 
 
 @dataclass
@@ -67,7 +52,23 @@ class InductorOcta(BaseGeometry):
     input_parameter_iterator: InputParameterIterator = field(
         default_factory=_input_parameters
     )
-    dataset: BaseDataset = field(default_factory=_dataset)
+
+    def create_dataset(self) -> "BaseDataset":
+        # Imported here so the geometry can be drawn and simulated without the
+        # "train" extra (PyTorch) installed.
+        from orca.training.codecs import FlatReImCodec
+        from orca.training.datasets.geo_to_s_param_single_f import (
+            GeoToSParamDatasetSingleFrequency,
+        )
+        from orca.training.normalize import MinMaxNormalizer, StandardNormalizer
+
+        return GeoToSParamDatasetSingleFrequency(
+            codec=FlatReImCodec(n_ports=2),
+            # Scale inputs with the declared parameter ranges rather than the
+            # min/max of whatever subset happens to be trained on.
+            input_normalizer=MinMaxNormalizer(self.input_parameter_iterator),
+            output_normalizer=StandardNormalizer(),
+        )
 
     @staticmethod
     def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:

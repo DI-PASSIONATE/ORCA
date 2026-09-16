@@ -27,6 +27,8 @@ The geometry class's `input_parameter_iterator` samples parameter combinations (
 
 Each GDS file is converted to a Palace-ready simulation setup using [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2). The geometry's `stackup_xml` defines the physical layer stackup and material properties; the `simconfig_filename` defines the simulation parameters (port positions, frequency sweep, mesh settings).
 
+Conversions run in parallel worker processes, one sample per task. A sample whose geometry gds2palace/gmsh cannot mesh (e.g. `PLC Error: A segment and a facet intersect`) is logged and skipped. gmsh can also loop forever on degenerate geometry, so each conversion has a time limit — `GDSConverter(timeout=60)` seconds by default — after which its worker is killed and the sample is skipped as well, instead of stalling the whole pipeline.
+
 ## Stage 3 — EM simulation (`PalaceSimulator`)
 
 Palace runs a full-wave finite-element EM simulation for each layout variant and writes the S-parameters to a Touchstone file (`.sNp`). Simulations are distributed across available CPU cores. The `palace_executable` argument can point to a local binary or a container invocation (e.g. `apptainer exec palace.sif palace`).

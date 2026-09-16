@@ -29,7 +29,7 @@ def create_palace_model_from_gds(
     Returns:
         tuple[str, str]: Palace config name and data directory of the created Palace model.
     """
-    # ExitStack is used to suppress stdout output in the ProcessPoolExecutor workers to avoid cluttering the console
+    # ExitStack is used to suppress stdout output in the conversion worker processes to avoid cluttering the console
     with ExitStack() as stack:
         if not show_mesh_results:
             null_file = stack.enter_context(open(os.devnull, "w"))
@@ -100,7 +100,14 @@ def create_palace_model_from_gds(
         excite_ports = simulation_ports.all_active_excitations()
         gmsh.initialize()
         gmsh.option.setNumber("General.Terminal", 0)
-        config_name, data_dir = simulation_setup.create_palace(excite_ports, settings)
+        try:
+            config_name, data_dir = simulation_setup.create_palace(excite_ports, settings)
+        finally:
+            # create_palace only finalizes gmsh on success. Worker processes are
+            # reused, so tear it down here after a failed mesh as well, otherwise
+            # the next conversion in this process starts on top of the dead model.
+            if gmsh.isInitialized():
+                gmsh.finalize()
 
         # for convenience, write run script to model directory
         utilities.create_run_script(settings["sim_path"])

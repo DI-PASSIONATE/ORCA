@@ -82,12 +82,16 @@ conda activate orca
 conda install -y -c conda-forge mesalib libglu
 
 # --- Install ORCA dependencies ---
+# Simulation-only install (GDS generation, conversion, Palace simulation);
+# PyTorch is not needed for it.
 pip install -e ./ORCA/
 
-# --- Install PyTorch (CPU version) ---
-# Replace with the command from https://pytorch.org/get-started/locally/
-# if you need a different (e.g. GPU) build.
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# --- Optional: model training on the cluster ---
+# Uncomment to install the CPU build of PyTorch and ORCA's training extra.
+# Replace the torch line with the command from
+# https://pytorch.org/get-started/locally/ if you need a GPU build.
+# pip install torch --index-url https://download.pytorch.org/whl/cpu
+# pip install -e "./ORCA/[train]"
 
 # --- Make sure everything is set up correctly ---
 which python

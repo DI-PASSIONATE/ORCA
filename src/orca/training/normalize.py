@@ -135,7 +135,7 @@ class MinMaxNormalizer(InputNormalizer):
 
         # Registered on the CPU: `.to(device)` moves buffers along with the model,
         # so pinning them to cuda:0 here would only fight whatever device the
-        # trainer was configured with.
+        # trainer was configured with. The dataset moves them to its own device.
         self.register_buffer("input_mins", torch.tensor(input_mins, dtype=torch.float32))
         self.register_buffer("input_maxs", torch.tensor(input_maxs, dtype=torch.float32))
 

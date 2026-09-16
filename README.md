@@ -99,17 +99,19 @@ uv venv --python 3.13
 source .venv/bin/activate
 ```
 
-5. Locate and install your preferred PyTorch version (CPU or GPU) from [PyTorch.org](https://pytorch.org/get-started/locally/). For example, for CPU-only:
+5. Install ORCA in editable mode. The `train` extra adds PyTorch and the other model-training dependencies; leave it out for a simulation-only install (GDS generation, conversion and Palace simulation), e.g. on an HPC cluster:
 
 ```bash
-# Example only, replace with the command from PyTorch.org for your system!
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+uv pip install -e ".[train]"   # full pipeline, PyTorch from PyPI
+uv pip install -e .            # simulation only, no PyTorch
 ```
 
-6. Install ORCA in editable mode:
+   To pick a specific PyTorch build, use `uv sync` with one of the build selectors defined in `pyproject.toml` instead:
 
 ```bash
-uv pip install -e .
+uv sync --extra train --extra cpu     # CPU-only PyTorch wheels
+uv sync --extra train --extra cu130   # CUDA 13.0 wheels (driver >= 580)
+uv sync --extra train --extra cu126   # CUDA 12.6 wheels for older drivers
 ```
 
 ### Option B: Using standard `venv` + `pip`
@@ -128,19 +130,15 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-3. Locate and install your preferred PyTorch version (CPU or GPU) from [PyTorch.org](https://pytorch.org/get-started/locally/). For example, for CPU-only:
-
-```bash
-# Example only, replace with the command from PyTorch.org for your system!
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-```
-
-4. Install ORCA:
+3. Install ORCA. The `train` extra adds PyTorch and the other model-training dependencies; leave it out for a simulation-only install:
 
 ```bash
 pip install -U pip
-pip install -e .
+pip install -e ".[train]"   # full pipeline
+pip install -e .            # simulation only, no PyTorch
 ```
+
+   pip installs the PyPI build of PyTorch (CUDA-bundled on Linux). For a CPU-only or a specific CUDA build, install torch first with the command from [PyTorch.org](https://pytorch.org/get-started/locally/), then run the `pip install -e ".[train]"` line above; pip keeps the version already installed.
 
 ## Running ORCA
 
@@ -187,7 +185,7 @@ if __name__ == "__main__":
     orca_instance.run(geometry=geometry, num_processes=16)
 ```
 
-Wrap the call in `if __name__ == "__main__":` (or a `main()` function) as shown: ORCA starts its worker processes with the `spawn` start method, which re-imports your script in every worker. Without the guard each worker would start its own pipeline.
+Wrap the call in `if __name__ == "__main__":` (or a `main()` function) as shown: ORCA runs GDS generation and conversion in worker processes, and on platforms whose default start method is `spawn` (macOS, Windows) every worker re-imports your script. Without the guard each worker would start its own pipeline.
 
 This generates 1000 parameterized layout variants, runs EM simulations, trains a model, exports it to ONNX, and evaluates its accuracy.
 You can omit any stage (e.g. skip `GDSGenerator` and `GDSConverter` if simulation data already exists).
@@ -346,7 +344,7 @@ Once uploaded, COBRA can query all public `orca-surrogate` models or load a spec
 - If the `orca` command is not found, ensure your virtual environment is activated and reinstall with `pip install -e .`.
 - If Palace simulations fail, verify Palace is installed and available in your `PATH`, or adjust the `palace_executable` argument.
 - If GDS conversion fails, verify that [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2) is installed and that the stackup XML matches your technology.
-- If ONNX export fails, ensure `onnx` and `onnxscript` are installed (`pip install onnx onnxscript`).
+- If `orca.ModelTrainer`, `orca.OnnxExporter` or `orca.ModelTester` raise `ModuleNotFoundError` (torch, sklearn, optuna, onnx...), the training dependencies are not installed: `pip install -e ".[train]"`.
 
 ## Cite This Work
 

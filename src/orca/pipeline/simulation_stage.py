@@ -123,7 +123,7 @@ class PalaceSimulator(PipelineStage):
         # The name column arrives as "<geometry>.gds" from the GDS generation stage. Replace it
         # with the Touchstone file this stage actually produces, so downstream datasets can open
         # the file directly
-        n_ports = context.geometry.dataset.n_ports
+        n_ports = context.geometry.n_ports
         result_data["name"] = result_data["name"].apply(
             lambda name: touchstone_filename(name, n_ports, self.touchstone_type)
         )
