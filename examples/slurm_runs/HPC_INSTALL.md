@@ -108,13 +108,17 @@ conda install -c conda-forge mesalib libglu
 pip install -e ./ORCA/
 ```
 
-5. Install PyTorch CPU version (or GPU version if you have access to a GPU node) from [PyTorch.org](https://pytorch.org/get-started/locally/). For example, for CPU-only:
+   This is a simulation-only install: GDS generation, conversion and Palace simulation, which is all the Slurm example runs. PyTorch is not needed for it.
+
+5. (Optional) To also train models on the cluster, install the CPU build of PyTorch (or a GPU build if you have access to a GPU node) from [PyTorch.org](https://pytorch.org/get-started/locally/), then ORCA's training extra:
 
 ```sh
 # Example only, replace with the command from PyTorch.org for your system!
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -e "./ORCA/[train]"
+```
 
-5. Make sure everything is set up correctly
+6. Make sure everything is set up correctly
 
 ```sh
 which palace

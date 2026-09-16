@@ -19,9 +19,9 @@ Verify Palace is installed and available in your `PATH`, or adjust the `palace_e
 
 Verify that [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2) is installed and that the stackup XML matches your technology. See [Custom Classes](custom_class.md#stackup-xml-file) for the stackup format.
 
-## ONNX export fails
+## `ModuleNotFoundError` for torch, sklearn, optuna or onnx
 
-Ensure `onnx` and `onnxscript` are installed (`pip install onnx onnxscript`).
+The model-training packages are an optional extra. `orca.ModelTrainer`, `orca.OnnxExporter` and `orca.ModelTester` need them; install with `pip install -e ".[train]"` (see [Setup](setup.md)). The GDS and simulation stages work without them.
 
 ## Still stuck?
 

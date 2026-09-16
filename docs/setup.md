@@ -33,10 +33,23 @@ cd ORCA
 
 	```bash
 	curl -LsSf https://astral.sh/uv/install.sh | sh
-	uv python install 3.13
-	uv venv --python 3.13
-	source .venv/bin/activate
-	uv pip install -e .
+	uv sync
+	```
+
+	or explicitly:
+
+    ```bash
+    uv venv --python 3.13
+    source .venv/bin/activate
+    uv pip install -e ".[train]"
+    ```
+
+	To pick a specific PyTorch build, use `uv sync` with one of the build selectors from `pyproject.toml` instead of `uv pip install`:
+
+	```bash
+	uv sync --extra train --extra cpu     # CPU-only PyTorch wheels
+	uv sync --extra train --extra cu130   # CUDA 13.0 wheels (driver >= 580)
+	uv sync --extra train --extra cu126   # CUDA 12.6 wheels for older drivers
 	```
 
 === "Option B: venv + pip"
@@ -45,8 +58,13 @@ cd ORCA
 	python3 -m venv .venv
 	source .venv/bin/activate
 	pip install -U pip
-	pip install -e .
+	pip install -e ".[train]"
 	```
+
+	pip installs the PyPI build of PyTorch (CUDA-bundled on Linux). For a CPU-only or a specific CUDA build, install torch first with the command from [PyTorch.org](https://pytorch.org/get-started/locally/); pip then keeps that version.
+
+!!! tip "Simulation-only install"
+	PyTorch and the other model-training packages are an optional extra. If you only want to generate layouts and run Palace simulations — on an HPC cluster, say — drop the `[train]` extra: `pip install -e .`. `GDSGenerator`, `GDSConverter` and `PalaceSimulator` work without it; `ModelTrainer`, `OnnxExporter` and `ModelTester` report the missing packages when used.
 
 ## Verify Setup
 

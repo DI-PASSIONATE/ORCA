@@ -25,16 +25,12 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 - `stackup_xml: str` — Path to the stackup XML file describing the physical layer stack.
 - `simconfig_filename: str` — Path to the Palace simulation configuration file (`.simcfg`).
 - `input_parameter_iterator: InputParameterIterator` — Defines geometry parameters and their sampling ranges.
-- `dataset: BaseDataset` — Dataset class instance (e.g. `GeoToSParamDatasetSingleFrequency`) used for training.
 
-!!! warning "Give the object-valued fields a `default_factory`"
+!!! warning "Give the object-valued field a `default_factory`"
 
-    `input_parameter_iterator` and `dataset` must be declared with
-    `field(default_factory=...)`, as in the example below. Writing
-    `dataset: BaseDataset = GeoToSParamDatasetSingleFrequency(...)` instead builds
-    **one** object shared by every instance of the class, so two geometries share a
-    dataset and a pair of normalizers — and the normalization statistics fitted
-    during one training run are silently reused by the next.
+    `input_parameter_iterator` must be declared with `field(default_factory=...)`,
+    as in the example below. Writing `= InputParameterIterator(...)` instead builds
+    **one** object shared by every instance of the class.
 
 !!! tip "Choosing an output representation"
 
@@ -55,17 +51,23 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 **Required abstract methods:**
 
 - `create_gds_file(name, output_path, params) -> str` — Generates a GDS layout file from geometry parameters. Returns the path to the created file.
-- `get_model(hyperparameters: dict) -> nn.Module` — Returns a PyTorch model instance configured from the given hyperparameters. Called during `ModelTrainer` hyperparameter search.
-- `get_hyperparameter_search_space() -> dict` — Returns an Optuna hyperparameter search space dictionary. Used by `ModelTrainer` to tune the model.
+- `create_dataset() -> BaseDataset` — Builds the dataset (e.g. `GeoToSParamDatasetSingleFrequency`) with its output codec and normalizers, used for training. It is called once per geometry instance, the first time `geometry.dataset` is read, so each instance gets its own dataset and normalizer statistics.
 
-**Optional override:**
+!!! tip "Keep the training imports inside `create_dataset()`"
 
-- `postprocess_outputs(output, frequency_points)` — Post-processes raw ONNX model outputs after inference. Default implementation returns outputs unchanged.
+    The dataset classes and normalizers need PyTorch, which is an optional
+    dependency of ORCA (the `train` extra). Import them inside `create_dataset()`,
+    as in the example below, and your geometry can still generate layouts and run
+    Palace simulations in an environment without PyTorch (e.g. an HPC cluster).
+
+The model architecture and its hyperparameters are not part of the geometry: pass them to
+the training stage with `orca.ModelTrainer(model=..., hyperparameters=...)`, or leave
+`hyperparameters` out to let `ModelTrainer` tune them with Optuna over the model's own search space.
 
 Example:
 
 ```python
-# Each of these builds a fresh object per geometry instance. See the warning above:
+# Builds a fresh iterator per geometry instance. See the warning above:
 # a bare `= InputParameterIterator(...)` default would be shared by every instance.
 def _input_parameters() -> InputParameterIterator:
     return InputParameterIterator(
@@ -79,14 +81,6 @@ def _input_parameters() -> InputParameterIterator:
     )
 
 
-def _dataset() -> BaseDataset:
-    return GeoToSParamDatasetSingleFrequency(
-        codec=FlatReImCodec(n_ports=6),
-        input_normalizer=OutputMinMaxNormalizer(),
-        output_normalizer=StandardNormalizer(),
-    )
-
-
 @dataclass
 class TransformerOcta(BaseGeometry):
     """
@@ -97,24 +91,19 @@ class TransformerOcta(BaseGeometry):
     stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml")
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
     input_parameter_iterator: InputParameterIterator = field(default_factory=_input_parameters)
-    dataset: BaseDataset = field(default_factory=_dataset)
 
-    def get_hyperparameter_search_space(self) -> dict:
-        return {
-            "learning_rate": optuna.distributions.FloatDistribution(1e-5, 1e-2, log=True),
-            "batch_size": [32, 64, 128, 256, 512],
-            "epochs": optuna.distributions.IntDistribution(5, 50, step=5),
-            "num_layers": optuna.distributions.IntDistribution(3, 9),
-            "hidden_size": optuna.distributions.IntDistribution(128, 2048, step=128),
-            "activation_function": ["GELU", "SiLU"],
-        }
+    def create_dataset(self) -> "BaseDataset":
+        # Imported here so the geometry works without PyTorch (see the tip above).
+        from orca.training.codecs import FlatReImCodec
+        from orca.training.datasets.geo_to_s_param_single_f import GeoToSParamDatasetSingleFrequency
+        from orca.training.normalize import MinMaxNormalizer, StandardNormalizer
 
-    def get_model(self, hyperparameters: dict) -> nn.Module:
-        hidden_channels = [hyperparameters["hidden_size"]] * hyperparameters["num_layers"] + [72]
-        return torchvision.ops.MLP(
-            in_channels=5 + 1,  # 5 geometry params + 1 frequency
-            hidden_channels=hidden_channels,
-            activation_layer=getattr(nn, hyperparameters["activation_function"]),
+        return GeoToSParamDatasetSingleFrequency(
+            codec=FlatReImCodec(n_ports=6),
+            # Scale inputs with the declared parameter ranges rather than the
+            # min/max of whatever subset happens to be trained on.
+            input_normalizer=MinMaxNormalizer(self.input_parameter_iterator),
+            output_normalizer=StandardNormalizer(),
         )
 
     @staticmethod
@@ -124,39 +113,6 @@ class TransformerOcta(BaseGeometry):
         #
         c.write_gds(output_path, with_metadata=False)
         return output_path
-
-    # Example for a postprocessing method that plots the results and saves a Touchstone file
-    def postprocess_outputs(self, output, frequency_points=None):
-        """
-        Converts model outputs (Re/Im) into a .sNp Touchstone file format.
-        Plots the S-parameters for visualization.
-
-        Parameters
-        ----------
-        output : dict
-            Dictionary containing S-parameters split into real and imaginary parts.
-            Example keys: 'S11_real', 'S11_imag', ..., 'SNN_real', 'SNN_imag'.
-            Each value is a 1D array of length equal to len(f).
-        f : array-like
-            1D array of frequencies corresponding to the S-parameters.
-        filename : str, optional
-            Name of the Touchstone file to save, default "output.sNp".
-        """
-        # Frequency points are just from 1 to 200 in 1 GHz steps
-        if frequency_points is None:
-            frequency_points = np.arange(1, 201)  # 1 GHz to 200 GHz
-        N, ntwk, output_dict = s_param_dict_to_network(output, frequency_points)
-        filename = f"{self.name}.s{N}p"
-        ntwk.write_touchstone(filename)
-
-        # N, ntwk = single_ended_to_mixed_mode(ntwk)
-        plot_rfic_transformer_metrics(ntwk)
-        # plot_diff_s_params_and_k(ntwk)
-
-        # Write Touchstone
-        print(f"Touchstone file saved as {filename}")
-
-        return output_dict
 ```
 
 ### Reference: InputParameterIterator
@@ -211,7 +167,8 @@ the training range saturates rather than diverging.
 
 | Class | Description |
 |---|---|
-| `OutputMinMaxNormalizer` | Min-max normalisation derived from output statistics |
+| `MinMaxNormalizer(input_parameter_iterator)` | Min-max normalisation with the declared parameter ranges (recommended: independent of which samples are trained on, and matches the `input_parameter_ranges` metadata of the exported ONNX model) |
+| `OutputMinMaxNormalizer` | Min-max normalisation fitted to the min/max of the training split |
 
 **Output normalizers** (passed as `output_normalizer` to the dataset):
 
