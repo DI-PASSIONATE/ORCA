@@ -88,6 +88,13 @@ cpu = ["torch"]
 cu126 = ["torch"]
 cu130 = ["torch"]
 
+[dependency-groups]
+# Installed by `uv sync` (not by `pip install`): the linters CI runs, pinned by uv.lock.
+dev = [
+    "ruff",
+    "ty",
+]
+
 [tool.uv]
 conflicts = [
     [{ extra = "cpu" }, { extra = "cu126" }],
@@ -145,7 +152,7 @@ addopts = "-ra --strict-markers --strict-config"
 xfail_strict = true
 
 [tool.coverage.run]
-source = ["src/cobra"]
+source = ["src/orca"]
 branch = true
 
 [tool.coverage.report]
