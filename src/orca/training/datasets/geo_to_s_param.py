@@ -35,7 +35,7 @@ class GeoToSParamDataset(BaseDataset):
         self.input_param_names = list(data_df.columns)
         self.input_param_names.remove("name")  # Remove 'name' column
 
-        for idx, row in data_df.iterrows():
+        for _, row in data_df.iterrows():
             snp_path = os.path.join(directory, row["name"])
 
             if not os.path.exists(snp_path):

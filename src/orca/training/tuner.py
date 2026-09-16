@@ -8,16 +8,19 @@ each trial with k-fold cross-validation.
 from __future__ import annotations
 
 import traceback
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import optuna
 from sklearn.model_selection import KFold
-from torch.utils.data import Dataset, Subset
+from torch.utils.data import Subset
 
 from orca.logger import logger
-from orca.training.basis_expansion import BasisExpansion
-from orca.training.models.base_model import OrcaModel
 from orca.training.trainer import Trainer, TrainingConfig
+
+if TYPE_CHECKING:
+    from orca.training.basis_expansion import BasisExpansion
+    from orca.training.datasets.base_dataset import BaseDataset
+    from orca.training.models.base_model import OrcaModel
 
 
 def suggest_hyperparameters(trial: optuna.Trial, search_space: dict[str, Any]) -> dict[str, Any]:
@@ -67,8 +70,8 @@ class HyperparameterTuner:
 
     Args:
         model_cls (type[OrcaModel]): Architecture to tune.
-        dataset (Dataset): Train/validation data, split into folds internally.
-            Must expose an ``io_spec`` (any :class:`~orca.training.datasets.base_dataset.BaseDataset`).
+        dataset (BaseDataset): Train/validation data, split into folds internally;
+            its ``io_spec`` sizes the models.
         basis_cls (type[BasisExpansion] | None): Basis expansion to build each model
             with. Its search space is tuned alongside the model's. ``None`` trains
             on the raw inputs.
@@ -82,7 +85,7 @@ class HyperparameterTuner:
     def __init__(
         self,
         model_cls: type[OrcaModel],
-        dataset: Dataset,
+        dataset: BaseDataset,
         basis_cls: type[BasisExpansion] | None = None,
         n_fold_cv: int = 5,
         n_trials: int = 200,
@@ -159,15 +162,15 @@ class HyperparameterTuner:
                 train_dataset=Subset(self.dataset, list(train_indices)),
                 val_dataset=Subset(self.dataset, list(val_indices)),
             )
-        except Exception:
+        except Exception as e:
             traceback.print_exc()
-            raise optuna.exceptions.TrialPruned()
+            raise optuna.exceptions.TrialPruned from e
 
         logger.info(f"{fold_label} | Val Loss: {result.best_loss:.4f}")
 
         # Report once per fold, using the fold index as the pruning step
         trial.report(result.best_loss, fold_idx)
         if trial.should_prune():
-            raise optuna.exceptions.TrialPruned()
+            raise optuna.exceptions.TrialPruned
 
         return result.best_loss

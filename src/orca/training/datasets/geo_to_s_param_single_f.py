@@ -33,10 +33,10 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
         )
 
     def load_samples(self, directory: str, data_df: pd.DataFrame) -> None:
-        self.input_param_names = list(data_df.columns) + ["frequency"]
+        self.input_param_names = [*data_df.columns, "frequency"]
         self.input_param_names.remove("name")  # Remove 'name' column
 
-        for idx, row in tqdm.tqdm(
+        for _, row in tqdm.tqdm(
             data_df.iterrows(), total=len(data_df), desc="Loading samples"
         ):
             snp_path = os.path.join(directory, row["name"])
@@ -60,7 +60,7 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
 
         samples = []
         for i in range(len(freq)):
-            # Input = geometry + frequency
+            # the model input is the geometry vector with the frequency appended
             x = np.hstack((geometry_params, freq[i])).astype(np.float32)
 
             x, y = (

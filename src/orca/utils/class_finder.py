@@ -85,10 +85,10 @@ def discover_classes(
                             f"Discovered {base_class.__name__} subclass: {display_name}"
                         )
 
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 - skip the class, keep discovering
                         logger.warning(f"Could not process {name}: {e}")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - a broken plugin file must not stop discovery
             logger.warning(f"Failed to load classes from {py_file.name}: {e}")
 
     if not classes:

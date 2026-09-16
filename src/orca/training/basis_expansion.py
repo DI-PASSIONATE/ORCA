@@ -23,14 +23,16 @@ column on top allows the network to more easily capture complex frequency depend
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import optuna
 import torch
 from torch import nn
 
-from orca.training.spec import IOSpec
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from orca.training.spec import IOSpec
 
 
 class BasisExpansion(nn.Module, ABC):
@@ -66,11 +68,15 @@ class BasisExpansion(nn.Module, ABC):
 
 _BASIS_REGISTRY: dict[str, type[BasisExpansion]] = {}
 
+# The decorator hands back the very class it was given, so the type checker
+# keeps seeing e.g. ``IdentityBasis`` and not just ``type[BasisExpansion]``.
+_BasisT = TypeVar("_BasisT", bound=BasisExpansion)
 
-def register_basis(name: str) -> Callable[[type[BasisExpansion]], type[BasisExpansion]]:
+
+def register_basis(name: str) -> Callable[[type[_BasisT]], type[_BasisT]]:
     """Class decorator registering a basis expansion under a short name."""
 
-    def decorator(cls: type[BasisExpansion]) -> type[BasisExpansion]:
+    def decorator(cls: type[_BasisT]) -> type[_BasisT]:
         if name in _BASIS_REGISTRY and _BASIS_REGISTRY[name] is not cls:
             raise ValueError(f"Basis expansion '{name}' is already registered.")
         _BASIS_REGISTRY[name] = cls
@@ -109,7 +115,7 @@ class IdentityBasis(BasisExpansion):
         return x
 
     @classmethod
-    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> IdentityBasis:
+    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> IdentityBasis:  # noqa: ARG003 - nothing to configure
         return cls()
 
 

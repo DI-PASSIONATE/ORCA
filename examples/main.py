@@ -1,18 +1,12 @@
-import numpy as np
-
 import orca
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 
 PLOT = False
 
-### Example of using a custom geometry
-# geometry = MyCustomGeometry( # Python class that inherits from BaseGeometry
-#     name = "my_geometry",
-#     stackup_xml = "/path/to/stackup.xml", # XML file defining the physical layer stackup
-#     simconfig_filename = "/path/to/simconfig.simcfg" # Simulation configuration file generated manually or with setupEM
-# )
+# To run the pipeline on your own geometry, subclass BaseGeometry (name, stackup_xml,
+# simconfig_filename, input_parameter_iterator, create_gds_file) and pass an instance
+# to orca_instance.run() below; see docs/custom_class.md for a complete example.
 
-# hyperparameters = {'learning_rate': 0.0008166998266605425, 'batch_size': 128, 'epochs': 10, 'num_layers': 4, 'hidden_size': 512, 'activation_function': 'GELU'}
 hyperparameters = {
     "learning_rate": 0.0005,
     "batch_size": 256,
@@ -24,7 +18,6 @@ hyperparameters = {
 
 def main():
     # Use predefined geometry from examples
-    np.random.seed(40)
     try:
         import torch  # optional: only installed with ORCA's "train" extra
         torch.manual_seed(40)
@@ -34,7 +27,7 @@ def main():
 
     orca_instance = orca.ORCA(
         [
-            orca.GDSGenerator(num_samples=6000),
+            orca.GDSGenerator(num_samples=6000, seed=40),
             orca.GDSConverter(),
             #orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
             #orca.ModelTrainer(model=orca.OrcaMLP, hyperparameters=hyperparameters, n_train_samples=1000),

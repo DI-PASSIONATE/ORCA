@@ -1,12 +1,9 @@
-import numpy as np
-
 import orca
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 
 
 def main():
     # Use predefined geometry from examples
-    np.random.seed(40)
     try:
         import torch  # optional: only installed with ORCA's "train" extra
         torch.manual_seed(40)
@@ -16,7 +13,7 @@ def main():
 
     orca_instance = orca.ORCA(
         [
-            orca.GDSGenerator(num_samples=6000),
+            orca.GDSGenerator(num_samples=6000, seed=40),
             orca.GDSConverter(),
             # launcher="slurm" runs the simulations as srun job steps on the nodes of this allocation
             # (#SBATCH --nodes in the job script). bind="numa" with num_parallel_sims=0 runs one

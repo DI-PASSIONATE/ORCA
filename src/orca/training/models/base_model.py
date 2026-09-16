@@ -11,17 +11,21 @@ to change when you swap one for another.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
-import numpy as np
-import skrf as rf
 import torch
 from torch import nn
 
 from orca.training.basis_expansion import BasisExpansion, IdentityBasis
 from orca.training.guarantees import PhysicsGuarantees
-from orca.training.spec import FrequencyMode, IOSpec
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import numpy as np
+    import skrf as rf
+
+    from orca.training.spec import FrequencyMode, IOSpec
 
 
 class OrcaModel(nn.Module, ABC):
@@ -106,15 +110,19 @@ class OrcaModel(nn.Module, ABC):
 
 _MODEL_REGISTRY: dict[str, type[OrcaModel]] = {}
 
+# The decorator hands back the very class it was given, so the type checker
+# keeps seeing e.g. ``OrcaMLP`` and not just ``type[OrcaModel]``.
+_ModelT = TypeVar("_ModelT", bound=OrcaModel)
 
-def register_model(name: str) -> Callable[[type[OrcaModel]], type[OrcaModel]]:
+
+def register_model(name: str) -> Callable[[type[_ModelT]], type[_ModelT]]:
     """Class decorator registering a model under a short name.
 
     Args:
         name (str): Name to register the model under, e.g. ``"mlp"``.
     """
 
-    def decorator(cls: type[OrcaModel]) -> type[OrcaModel]:
+    def decorator(cls: type[_ModelT]) -> type[_ModelT]:
         if name in _MODEL_REGISTRY and _MODEL_REGISTRY[name] is not cls:
             raise ValueError(f"Model name '{name}' is already registered.")
         _MODEL_REGISTRY[name] = cls

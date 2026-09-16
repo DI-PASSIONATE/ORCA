@@ -13,6 +13,8 @@ class ONNXWrapper(torch.nn.Module):
 
     Args:
         model: The PyTorch model to be wrapped.
+        input_normalizer: Applied to the concatenated inputs before the model, if given.
+        output_denormalizer: Its ``denormalize`` is applied to the model output, if given.
 
     Returns:
         A torch.nn.Module that can be passed to torch.onnx.export.
@@ -20,9 +22,9 @@ class ONNXWrapper(torch.nn.Module):
 
     def __init__(
         self,
-        model,
-        input_normalizer: Normalizer,
-        output_denormalizer: Normalizer,
+        model: torch.nn.Module,
+        input_normalizer: Normalizer | None,
+        output_denormalizer: Normalizer | None,
     ):
         super().__init__()
         self.model = model

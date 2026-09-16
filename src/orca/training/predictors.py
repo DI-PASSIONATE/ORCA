@@ -10,14 +10,18 @@ the model's :class:`~orca.training.codecs.OutputCodec`.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 import numpy as np
-import skrf as rf
 import torch
 
-from orca.training.codecs import OutputCodec
-from orca.training.models.base_model import OrcaModel
 from orca.training.spec import FrequencyMode
+
+if TYPE_CHECKING:
+    import skrf as rf
+
+    from orca.training.codecs import OutputCodec
+    from orca.training.models.base_model import OrcaModel
 
 
 class NetworkPredictor(ABC):
@@ -101,14 +105,14 @@ class OnnxNetworkPredictor(NetworkPredictor):
 
     def predict(self, params: np.ndarray, frequencies: np.ndarray) -> rf.Network:
         frequencies = np.asarray(frequencies)
-        params = iter(np.asarray(params, dtype=np.float32))
+        # Geometry parameters are consumed in model-input order; frequency is the sweep
+        param_values = iter(np.asarray(params, dtype=np.float32))
 
         feed = {}
         for name in self.input_names:
-            if name == "frequency":
-                column = frequencies
-            else:
-                column = np.full(len(frequencies), next(params))
+            column = (
+                frequencies if name == "frequency" else np.full(len(frequencies), next(param_values))
+            )
             feed[name] = column.reshape(-1, 1).astype(np.float32)
 
         outputs = self.session.run(self.output_names, feed)

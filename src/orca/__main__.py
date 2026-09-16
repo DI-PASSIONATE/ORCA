@@ -12,7 +12,7 @@ def main():
     if len(sys.argv) == 1 or (len(sys.argv) > 1 and sys.argv[1] == "--gui"):
         run_gui()
     else:
-        print("CLI usage not yet implemented. Use --gui to launch the graphical interface.")
+        sys.exit("CLI usage not yet implemented. Use --gui to launch the graphical interface.")
 
 if __name__ == "__main__":
     main()

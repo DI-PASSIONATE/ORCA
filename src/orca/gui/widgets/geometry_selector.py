@@ -93,7 +93,7 @@ class GeometrySelector(QWidget):
             self.current_geometry_instance = instance
             self.name_input.setText(instance.name)
             self.lbl_status.setText(f"Loaded: {cls.__name__}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - user-supplied class: show the error instead of crashing
             QMessageBox.critical(self, "Error", f"Failed to instantiate geometry class: {e}")
             self.lbl_status.setText("Error instantiating class")
 

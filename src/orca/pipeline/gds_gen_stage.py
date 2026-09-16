@@ -7,22 +7,29 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 import tqdm
 
-from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
 
 if TYPE_CHECKING:
+    from orca.geometry.base_geometry import BaseGeometry
     from orca.pipeline.context import PipelineContext
 
 
 class GDSGenerator(PipelineStage):
     """
     Pipeline stage for generating GDS files from trained models.
+
+    Args:
+        num_samples (int): Number of parameter combinations to draw and lay out.
+        seed (int|None): Seed for the geometry's 'random' picking strategy, so that
+            a run can be reproduced. None keeps the seed set on the geometry's
+            input parameter iterator (fresh entropy by default).
     """
 
-    def __init__(self, num_samples: int = 1000):
+    def __init__(self, num_samples: int = 1000, seed: int | None = None):
         super().__init__(name="GDS Generator", index=0)
         self.num_samples = num_samples
+        self.seed = seed
 
     def run(
         self,
@@ -46,7 +53,7 @@ class GDSGenerator(PipelineStage):
         os.makedirs(output_dir)
 
         # Tell the input parameter iterator the number of samples to generate
-        geometry.input_parameter_iterator.set_sample_count(self.num_samples)
+        geometry.input_parameter_iterator.set_sample_count(self.num_samples, seed=self.seed)
 
         futures = []
         with ProcessPoolExecutor(max_workers=cpu_cores) as executor:
@@ -72,7 +79,7 @@ class GDSGenerator(PipelineStage):
                 )
             ):
                 try:
-                    gds_path, name, params = future.result()
+                    _gds_path, name, params = future.result()
 
                     # Save instance name + input parameters to CSV
                     self._save_csv(gds_csv, name, params)
@@ -80,7 +87,7 @@ class GDSGenerator(PipelineStage):
                     # A worker died (e.g. the calling script re-ran the pipeline on
                     # import); nothing else will finish, so abort instead of skipping
                     raise
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - one bad sample must not abort the batch
                     logger.debug(f"Worker task failed: {e}")
                 finally:
                     if progress_callback:
@@ -104,7 +111,7 @@ class GDSGenerator(PipelineStage):
         This is used for multiprocessing to avoid pickling issues with instance methods.
 
         Args:
-            geometry_class (Type[BaseGeometry]): The geometry class to instantiate.
+            gds_method (Callable): The geometry's create_gds_file(name, output_path, params).
             name (str): The name of the GDS file to create.
             output_dir (str): The directory to save the GDS file.
             params (dict[str, Any]): The input parameters for the geometry.

@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import skrf as rf
 
+from orca.logger import logger
+
 
 def to_mixed_mode(ntwk):
     """Mixed-mode view of a single-ended network, as a copy.
@@ -38,10 +40,8 @@ def calculate_electrical_parameters(ntwk):
         Qs = np.imag(z_d22) / np.real(z_d22)
         k = np.abs(np.imag(z_d12)) / np.sqrt(np.abs(np.imag(z_d11) * np.imag(z_d22)))
 
-    #srf_idx = np.where(np.diff(np.sign(np.imag(z_d11))))[0]
-    #srf_f = freq_ghz[srf_idx[0]] if len(srf_idx) > 0 else None
     im = np.imag(z_d11)
-    cross = np.where(im[:-1] * im[1:] < 0)[0]   # echte Vorzeichenwechsel
+    cross = np.where(im[:-1] * im[1:] < 0)[0]   # actual sign changes only
 
     f_min = 20.0
     cross = cross[freq_ghz[cross] >= f_min]
@@ -59,8 +59,6 @@ def calculate_electrical_parameters(ntwk):
         srf_f = float(f0 - y0 * (f1 - f0) / (y1 - y0))
 
     return {
-        #"mm_ntwk": mm_ntwk,
-        #"freq_ghz": freq_ghz,
         "Lp": np.array(Lp),
         "Ls": np.array(Ls),
         "Rp": np.array(Rp),
@@ -261,7 +259,7 @@ def s_param_list_to_network(s_param_list: np.ndarray) -> tuple[int, list[rf.Netw
     # Assume s_param_list shape is (batch_size, num_params)
     num_params = s_param_list.shape[1]
     N = int(np.sqrt(num_params // 2))  # number of ports
-    print(f"Number of ports inferred: {N}")
+    logger.debug(f"Number of ports inferred: {N}")
     # Create a network for each sample in the batch
     ntwk_list = []
     for sample in s_param_list:
@@ -282,13 +280,13 @@ def single_ended_to_mixed_mode(ntwk: rf.Network) -> rf.Network:
     Usually port 1 and 2 are considered differential pair 1, and port 3 and 4 differential pair 2.
 
     Args:
-        network (rf.Network): 4-port single-ended network.
+        ntwk (rf.Network): 4-port single-ended network, converted in place.
 
     Returns:
         rf.Network: 2-port mixed-mode network.
     """
     ntwk.se2gmm(p=2)
-    return ntwk.nports, ntwk
+    return ntwk
 
 
 def plot_diff_s_params_and_k(ntwk: rf.Network):
@@ -296,7 +294,7 @@ def plot_diff_s_params_and_k(ntwk: rf.Network):
     Plots the differential S-parameters and coupling factor k for a 4-port single-ended network.
 
     Args:
-        network (rf.Network): 4-port single-ended network.
+        ntwk (rf.Network): 4-port single-ended network.
     """
     # Calculate k
     z = ntwk.z
@@ -314,9 +312,12 @@ def plot_diff_s_params_and_k(ntwk: rf.Network):
     # Primary Y-Axis (S-parameters)
     ax1.set_xlabel("Frequency")
     ax1.set_ylabel("S-Parameters (dB)")
-    ntwk.plot_s_db(m=1, n=0, ax=ax1, label="Insertion Loss ($S_{d2d1}$)")
-    ntwk.plot_s_db(m=0, n=0, ax=ax1, label="Return Loss ($S_{d1d1}$)")
-    ntwk.plot_s_db(m=3, n=0, ax=ax1, label="Mode Conversion ($S_{c2d1}$)")
+    # Plotted against the same frequency axis as k below (ntwk.f in Hz), which
+    # Network.plot_s_db would not do: it scales the axis to the network's unit.
+    ax1.plot(freq_ghz, ntwk.s_db[:, 1, 0], label="Insertion Loss ($S_{d2d1}$)")
+    ax1.plot(freq_ghz, ntwk.s_db[:, 0, 0], label="Return Loss ($S_{d1d1}$)")
+    ax1.plot(freq_ghz, ntwk.s_db[:, 3, 0], label="Mode Conversion ($S_{c2d1}$)")
+    ax1.legend(loc="lower left")
 
     # Secondary Y-Axis (k)
     ax2 = ax1.twinx()

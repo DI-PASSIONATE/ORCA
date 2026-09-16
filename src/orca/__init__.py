@@ -12,6 +12,23 @@ from .training.codecs import FlatReImCodec, OutputCodec, UpperTriangleReImCodec
 from .training.guarantees import PhysicsGuarantees
 from .training.spec import FrequencyMode, IOSpec
 
+__all__ = [
+    "ORCA",
+    "BaseGeometry",
+    "FlatReImCodec",
+    "FrequencyMode",
+    "GDSConverter",
+    "GDSGenerator",
+    "IOSpec",
+    "InputParameterIterator",
+    "OutputCodec",
+    "PalaceSimulator",
+    "PhysicsGuarantees",
+    "PipelineContext",
+    "PipelineStage",
+    "UpperTriangleReImCodec",
+]
+
 # Everything that needs PyTorch (the "train" extra) is imported on first access
 # instead of here, so that `import orca` works in a simulation-only install, e.g.
 # on an HPC cluster. The names stay importable as `orca.ModelTrainer` etc.; a

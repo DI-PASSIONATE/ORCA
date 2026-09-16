@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.training.basis_expansion import BasisExpansion, get_basis_class
@@ -15,6 +14,7 @@ from orca.training.trainer import Trainer, TrainingConfig
 from orca.training.tuner import HyperparameterTuner
 
 if TYPE_CHECKING:
+    from orca.geometry.base_geometry import BaseGeometry
     from orca.pipeline.context import PipelineContext
 
 

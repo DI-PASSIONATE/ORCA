@@ -7,7 +7,6 @@ import pandas as pd
 import tqdm
 from sklearn.model_selection import train_test_split
 
-from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.training.datasets.geo_to_ntwk import GeoToNtwkDataset
@@ -23,6 +22,7 @@ from orca.utils.postprocessing import (
 )
 
 if TYPE_CHECKING:
+    from orca.geometry.base_geometry import BaseGeometry
     from orca.pipeline.context import PipelineContext
 
 
@@ -156,7 +156,7 @@ class ModelTester(PipelineStage):
             try:
                 predicted = calculate_electrical_parameters(ntwk_pred)
                 reference = calculate_electrical_parameters(ntwk_gt)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - skip samples whose metrics cannot be derived
                 logger.debug(f"Could not compute electrical parameters for sample {i}: {e}")
                 continue
 

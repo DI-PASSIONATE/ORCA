@@ -32,7 +32,6 @@ def _input_parameters() -> InputParameterIterator:
     )
 
 
-
 @dataclass
 class InductorOcta(BaseGeometry):
     """
@@ -70,8 +69,8 @@ class InductorOcta(BaseGeometry):
         )
 
     @staticmethod
-    def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:
-        N = int(round(params["turns"]))
+    def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:  # noqa: ARG004 - the cell name is derived from the parameters
+        N = round(params["turns"])
         w = float(params["width"])
         s = float(params["space"])
         D = float(params["diameter"])

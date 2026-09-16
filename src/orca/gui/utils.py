@@ -38,7 +38,7 @@ def load_class_from_file(file_path: str, base_class: type) -> type[Any] | None:
     Loads a class that inherits from `base_class` from a given file path.
     """
     path = Path(file_path)
-    if not path.exists() or not path.suffix == ".py":
+    if not path.exists() or path.suffix != ".py":
         return None
 
     # Module name from file name
@@ -52,15 +52,14 @@ def load_class_from_file(file_path: str, base_class: type) -> type[Any] | None:
     sys.modules[module_name] = module
     try:
         spec.loader.exec_module(module)
-    except Exception as e:
-        print(f"Error loading module {file_path}: {e}")
+    except Exception as e:  # noqa: BLE001 - a broken user file must not take the GUI down
+        logger.error(f"Error loading module {file_path}: {e}")
         return None
 
-    for name, obj in inspect.getmembers(module, inspect.isclass):
-        if issubclass(obj, base_class) and obj is not base_class:
-            # Avoid importing abstract classes or the base class itself if it's imported in the file
-             if not inspect.isabstract(obj):
-                return obj
+    for _name, obj in inspect.getmembers(module, inspect.isclass):
+        # Avoid importing abstract classes or the base class itself if it's imported in the file
+        if issubclass(obj, base_class) and obj is not base_class and not inspect.isabstract(obj):
+            return obj
     return None
 
 def get_available_stages() -> list[type[PipelineStage]]:

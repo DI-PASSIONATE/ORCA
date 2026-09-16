@@ -52,7 +52,7 @@ class PipelineWorker(QThread):
                 overwrite_callback=self.overwrite_callback
             )
             self.finished.emit()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - worker thread: report every failure to the GUI
             import traceback
             self.error.emit(str(e) + "\n" + traceback.format_exc())
 

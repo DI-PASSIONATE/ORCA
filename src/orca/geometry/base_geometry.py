@@ -5,9 +5,8 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
-from orca.geometry.input_parameters import InputParameterIterator
-
 if TYPE_CHECKING:
+    from orca.geometry.input_parameters import InputParameterIterator
     from orca.training.datasets.base_dataset import BaseDataset
 
 

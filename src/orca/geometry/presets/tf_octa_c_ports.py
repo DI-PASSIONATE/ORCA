@@ -5,25 +5,9 @@ from typing import TYPE_CHECKING, Any
 from orca import BaseGeometry
 from orca.geometry.cells.transformer import tf_octa_c
 from orca.geometry.input_parameters import InputParameterIterator
-from orca.utils.postprocessing import *
 
 if TYPE_CHECKING:
     from orca.training.datasets.base_dataset import BaseDataset
-
-# import gdstk
-# def _snap_gds_inplace(path: str, grid_nm: int = 10) -> None:
-#     """Snap all polygon vertices in a GDS file to the nearest grid_nm grid.
-
-#     gf.Path.extrude() produces off-grid vertices for angled octagon segments
-#     (e.g. width/2 * sin(22.5°) = 0.957 µm is not on the 10 nm grid).
-#     gdstk is always available as a gdsfactory dependency.
-#     """
-#     grid_um = grid_nm / 1000.0
-#     lib = gdstk.read_gds(path)
-#     for cell in lib.cells:
-#         for poly in cell.polygons:
-#             poly.points = np.round(poly.points / grid_um) * grid_um
-#     lib.write_gds(path)
 
 # Built per instance rather than shared as a class attribute: a dataclass default
 # holds one object for every instance of the class, so two geometries would share
@@ -46,7 +30,6 @@ def _input_parameters() -> InputParameterIterator:
         bottom_linewidth=[x / 10 for x in range(20, 121, 1)],  # 2.0 to 12.0 in 0.1 steps
         top_linewidth=[x / 10 for x in range(20, 121, 1)],  # 2.0 to 12.0 in 0.1 steps
     )
-
 
 
 @dataclass
@@ -101,45 +84,5 @@ class TransformerOcta(BaseGeometry):
             gnd_side_spacing=40,
             gnd_ring_width=20,
         )
-        # c.show()
         c.write_gds(output_path, with_metadata=False)
         return output_path
-
-    # def postprocess_outputs(self, output, frequency_points=None):
-    #     """
-    #     Converts model outputs (Re/Im) into a .sNp Touchstone file format.
-    #     Plots the S-parameters for visualization.
-
-    #     Parameters
-    #     ----------
-    #     output : dict
-    #         Dictionary containing S-parameters split into real and imaginary parts.
-    #         Example keys: 'S11_real', 'S11_imag', ..., 'SNN_real', 'SNN_imag'.
-    #         Each value is a 1D array of length equal to len(f).
-    #     f : array-like
-    #         1D array of frequencies corresponding to the S-parameters.
-    #     filename : str, optional
-    #         Name of the Touchstone file to save, default "output.sNp".
-    #     """
-    #     # Frequency points are just from 1 to 200 in 1 GHz steps
-    #     if frequency_points is None:
-    #         frequency_points = np.arange(1, 201)  # 1 GHz to 200 GHz
-    #     N, ntwk, output_dict = s_param_dict_to_network(output, frequency_points)
-    #     filename = f"{self.name}.s{N}p"
-    #     ntwk.write_touchstone(filename)
-
-    #     # N, ntwk = single_ended_to_mixed_mode(ntwk)
-    #     plot_rfic_transformer_metrics(ntwk)
-    #     # plot_diff_s_params_and_k(ntwk)
-
-    #     # Write Touchstone
-    #     print(f"Touchstone file saved as {filename}")
-
-    #     return output_dict
-
-# if __name__ == "__main__":
-#     geometry = TransformerOcta()
-#     input_params = np.array([70.6, 74.6, 13.2, 6.4, 5.4])  # Example input parameters
-#     onnx_session = onnxruntime.InferenceSession("/home/david/Documents/git/ORCA/output/tf_octa_c_ports/models/tf_octa_c_ports.onnx")
-#     ntwk = geometry.inference_snp(onnx_session, input_params)
-#     plot_rfic_transformer_metrics(ntwk)

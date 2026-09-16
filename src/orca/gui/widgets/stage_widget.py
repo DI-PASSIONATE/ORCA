@@ -88,7 +88,7 @@ class StageConfigWidget(QWidget):
                 widget.setText(str(value))
 
     def get_widget_value(self, widget, annotation):
-        if isinstance(widget, QSpinBox) or isinstance(widget, QDoubleSpinBox):
+        if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
             return widget.value()
         if isinstance(widget, QCheckBox):
             return widget.isChecked()
@@ -106,7 +106,7 @@ class StageConfigWidget(QWidget):
             if (text.startswith("[") and text.endswith("]")) or (text.startswith("{") and text.endswith("}")):
                  try:
                      return json.loads(text)
-                 except:
+                 except json.JSONDecodeError:
                      return text
             return text
         return None

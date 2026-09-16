@@ -159,7 +159,6 @@ exclude_also = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
 # Resolve first-party imports out of the src layout.
 src = ["src"]
 # Scratch/vendored trees that are not part of the package.
@@ -223,8 +222,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Examples are standalone scripts, not an importable package.
-"examples/*" = ["INP001", "T201"]
+# Examples are standalone scripts, not an importable package. Optional pipeline
+# stages are left in as commented-out lines to be enabled by the reader.
+"examples/*" = ["INP001", "T201", "ERA001"]
 # Tests assert, reach into private helpers deliberately, and use fixtures that
 # look like shadowed or unused arguments to the linter.
 "tests/*" = [

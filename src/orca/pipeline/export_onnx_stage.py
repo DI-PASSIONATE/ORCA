@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING
 import onnx
 import torch
 
-from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.training.onnx_wrapper import ONNXWrapper
 
 if TYPE_CHECKING:
+    from orca.geometry.base_geometry import BaseGeometry
     from orca.pipeline.context import PipelineContext
 
 
@@ -95,6 +95,9 @@ class OnnxExporter(PipelineStage):
             meta.value = json.dumps(guarantees.as_dict())
 
         onnx.save(onnx_model, output_path)
+
+        if progress_callback:
+            progress_callback(self.name, 1, 1, f"Exported ONNX model to {output_path}.")
 
         context.model_path = output_path
         return context
