@@ -1,9 +1,10 @@
-from gds2palace import gds_reader, stackup_reader, utilities, simulation_setup
 import os
-from contextlib import redirect_stdout, ExitStack
+from contextlib import ExitStack, redirect_stdout
+from typing import Any
 
 import gmsh
-from typing import Any
+from gds2palace import gds_reader, simulation_setup, stackup_reader, utilities
+
 from orca.simulation.simulate import read_simconfig
 
 

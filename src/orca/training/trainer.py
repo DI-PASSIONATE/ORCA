@@ -10,13 +10,14 @@ declares, so the two can be tuned together but configured independently.
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 import optuna
 import torch
-import torch.nn as nn
 import tqdm
+from torch import nn
 from torch.optim import AdamW, Optimizer
 from torch.utils.data import DataLoader, Dataset
 
@@ -52,7 +53,7 @@ class TrainingConfig:
     device: torch.device = field(default_factory=default_device)
 
     @classmethod
-    def from_hyperparameters(cls, hyperparameters: dict[str, Any], **overrides) -> "TrainingConfig":
+    def from_hyperparameters(cls, hyperparameters: dict[str, Any], **overrides) -> TrainingConfig:
         """Build a config from a hyperparameter dict, ignoring architecture keys.
 
         Args:
@@ -121,8 +122,8 @@ class Trainer:
     def __init__(
         self,
         config: TrainingConfig | None = None,
-        criterion: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        criterion: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
         stage_name: str = "Training",
         verbose: bool = True,
     ):
@@ -219,7 +220,7 @@ class Trainer:
         self,
         model: nn.Module,
         dataset: Dataset,
-        criterion: Optional[Callable] = None,
+        criterion: Callable | None = None,
         batch_size: int | None = None,
     ) -> float:
         """Mean loss of ``model`` over ``dataset``, without updating any weights."""

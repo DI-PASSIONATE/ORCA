@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import pandas as pd
-    import torch.nn as nn
+    from torch import nn
 
     from orca.geometry.base_geometry import BaseGeometry
     from orca.training.datasets.base_dataset import BaseDataset

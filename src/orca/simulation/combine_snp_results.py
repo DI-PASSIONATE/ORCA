@@ -9,15 +9,16 @@
 # updated 13-Nov-2025 Mue: added simple de-embedding of parasitic port inductance (flat ribbon calculation)
 # updated 26-Nov-2025 Mue: also read Elmer FEM files
 
-import os
-import re
 import json
 import math
+import os
+import re
+
+import numpy as np
 import skrf as rf
 from skrf.network import connect
-import numpy as np
-from orca.logger import logger
 
+from orca.logger import logger
 
 #: Filename suffix written for each touchstone_type, appended before the .sNp extension.
 #: "all" writes every variant; the fully corrected one is treated as canonical.
@@ -67,7 +68,7 @@ def parse_elmer_results(found_filename, freq, S_dB, S_arg):
 
     # Parse column names
     column_names = []
-    with open(names_filename, "r") as namesfile:
+    with open(names_filename) as namesfile:
         for line in namesfile:
             if ":" in line and line.strip()[0].isdigit():
                 parts = line.split(":")
@@ -232,9 +233,7 @@ def traverse_directories(path, level=0):
 
             if os.path.isdir(item_path):
                 traverse_directories(item_path, level + 1)
-            elif item == "port-S.csv":
-                found_datafiles.append(item_path)
-            elif item == "scalar_results.names":
+            elif item == "port-S.csv" or item == "scalar_results.names":
                 found_datafiles.append(item_path)
 
     except PermissionError:
@@ -320,7 +319,7 @@ def port_deembedding(snp_filename, port_info_available, port_info_data):
 
         # convert the dict with port L into a list, to have the final values in correct order
         L_values = []
-        for key in Lport.keys():
+        for key in Lport:
             L_values.append(-Lport[key])
 
         # load SnP data and apply negative series L at each port
@@ -395,7 +394,7 @@ def convert_to_touchstone(workdir, output_dir, touchstone_type: str):
             )
 
             # Load the JSON data
-            with open(port_info_filename, "r") as f:
+            with open(port_info_filename) as f:
                 port_info_data = json.load(f)
 
             # Extract all Z0 values
@@ -406,7 +405,7 @@ def convert_to_touchstone(workdir, output_dir, touchstone_type: str):
 
             Z0_string = str(Z0_values[0])
             for Z in Z0_values:
-                if Z != Z0_values[0]:
+                if Z0_values[0] != Z:
                     Z0_string = Z0_string + " " + str(Z)
             # If string is filled, we have a Z0 parameter for Touchstone header line.
             # For mixed port impedance, we have multiple values there

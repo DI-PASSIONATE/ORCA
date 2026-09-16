@@ -172,8 +172,7 @@ def get_min_outer_diameter(N, w, s):
 
     min_crossover_size = (2 * s + w) * (math.sqrt(2) - 1) + (s + w) + 2 * overlap_size
 
-    if crossover_size < min_crossover_size:
-        crossover_size = min_crossover_size
+    crossover_size = max(crossover_size, min_crossover_size)
 
     if N < 3:
         inner_segment_size = crossover_size

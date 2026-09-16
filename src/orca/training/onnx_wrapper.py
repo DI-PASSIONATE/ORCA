@@ -1,4 +1,5 @@
 import torch
+
 from orca.training.normalize import Normalizer
 
 
@@ -12,6 +13,7 @@ class ONNXWrapper(torch.nn.Module):
 
     Args:
         model: The PyTorch model to be wrapped.
+
     Returns:
         A torch.nn.Module that can be passed to torch.onnx.export.
     """

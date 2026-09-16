@@ -1,11 +1,11 @@
+import os
+
+import numpy as np
 import pandas as pd
 import skrf as rf
-import os
-import numpy as np
 import torch
 import tqdm
 
-from orca.training.normalize import Normalizer
 from orca.logger import logger
 
 
@@ -46,11 +46,10 @@ class GeoToNtwkDataset(torch.utils.data.Dataset):
         self, sparam_path: str, geometry_params: np.ndarray
     ) -> list[tuple[np.ndarray, rf.Network]]:
         """Load S-parameter data from a Touchstone file."""
-
         return [(geometry_params, rf.Network(sparam_path, f_unit="Hz"))]
-        
+
     def __len__(self):
         return len(self.samples)
-    
+
     def __getitem__(self, idx):
         return self.samples[idx]

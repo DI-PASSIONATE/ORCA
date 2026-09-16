@@ -1,13 +1,15 @@
+import os
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from concurrent.futures.process import BrokenProcessPool
+from typing import TYPE_CHECKING, Any
+
 import pandas as pd
-from typing import Any, Callable, Optional, TYPE_CHECKING
-from orca.geometry.base_geometry import BaseGeometry
-from orca.pipeline.pipeline_stage import PipelineStage
-import multiprocessing
-from orca.logger import logger
 import tqdm
-import os
+
+from orca.geometry.base_geometry import BaseGeometry
+from orca.logger import logger
+from orca.pipeline.pipeline_stage import PipelineStage
 
 if TYPE_CHECKING:
     from orca.pipeline.context import PipelineContext
@@ -25,7 +27,7 @@ class GDSGenerator(PipelineStage):
     def run(
         self,
         context: "PipelineContext",
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
     ) -> "PipelineContext":
         geometry: BaseGeometry = context.geometry
         cpu_cores: int = context.num_processes

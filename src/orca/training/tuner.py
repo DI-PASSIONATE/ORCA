@@ -8,7 +8,7 @@ each trial with k-fold cross-validation.
 from __future__ import annotations
 
 import traceback
-from typing import Any, Optional
+from typing import Any
 
 import optuna
 from sklearn.model_selection import KFold
@@ -44,7 +44,7 @@ def suggest_hyperparameters(trial: optuna.Trial, search_space: dict[str, Any]) -
                 step=distribution.step,
                 log=distribution.log,
             )
-        elif isinstance(distribution, optuna.distributions.FloatDistribution): 
+        elif isinstance(distribution, optuna.distributions.FloatDistribution):
             values[key] = trial.suggest_float(
                 key,
                 distribution.low,
@@ -83,12 +83,12 @@ class HyperparameterTuner:
         self,
         model_cls: type[OrcaModel],
         dataset: Dataset,
-        basis_cls: Optional[type[BasisExpansion]] = None,
+        basis_cls: type[BasisExpansion] | None = None,
         n_fold_cv: int = 5,
         n_trials: int = 200,
         seed: int = 42,
-        sampler: Optional[optuna.samplers.BaseSampler] = None,
-        pruner: Optional[optuna.pruners.BasePruner] = None,
+        sampler: optuna.samplers.BaseSampler | None = None,
+        pruner: optuna.pruners.BasePruner | None = None,
     ):
         self.model_cls = model_cls
         self.dataset = dataset

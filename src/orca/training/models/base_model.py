@@ -11,14 +11,15 @@ to change when you swap one for another.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, ClassVar
+from collections.abc import Callable
+from typing import Any, ClassVar
 
 import numpy as np
 import skrf as rf
 import torch
-import torch.nn as nn
+from torch import nn
 
-from orca.training.basis_expansion import IdentityBasis, BasisExpansion
+from orca.training.basis_expansion import BasisExpansion, IdentityBasis
 from orca.training.guarantees import PhysicsGuarantees
 from orca.training.spec import FrequencyMode, IOSpec
 
@@ -70,7 +71,7 @@ class OrcaModel(nn.Module, ABC):
         spec: IOSpec,
         hyperparameters: dict[str, Any],
         basis: BasisExpansion | None = None,
-    ) -> "OrcaModel":
+    ) -> OrcaModel:
         """Build a model sized for ``spec`` and configured by ``hyperparameters``.
 
         Implementations must tolerate extra keys in ``hyperparameters`` (the

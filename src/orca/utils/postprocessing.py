@@ -1,6 +1,6 @@
-import skrf as rf
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import skrf as rf
 
 
 def to_mixed_mode(ntwk):
@@ -280,8 +280,10 @@ def single_ended_to_mixed_mode(ntwk: rf.Network) -> rf.Network:
     """
     Converts a 4-port single-ended network to a 2-port mixed-mode network using rf.se2gmm.
     Usually port 1 and 2 are considered differential pair 1, and port 3 and 4 differential pair 2.
+
     Args:
         network (rf.Network): 4-port single-ended network.
+
     Returns:
         rf.Network: 2-port mixed-mode network.
     """
@@ -292,6 +294,7 @@ def single_ended_to_mixed_mode(ntwk: rf.Network) -> rf.Network:
 def plot_diff_s_params_and_k(ntwk: rf.Network):
     """
     Plots the differential S-parameters and coupling factor k for a 4-port single-ended network.
+
     Args:
         network (rf.Network): 4-port single-ended network.
     """

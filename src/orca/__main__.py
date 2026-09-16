@@ -1,5 +1,7 @@
 import sys
+
 from orca.gui.app import run_gui
+
 
 def main():
     """

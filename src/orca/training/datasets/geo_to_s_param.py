@@ -27,7 +27,7 @@ class GeoToSParamDataset(BaseDataset):
         input_normalizer: Normalizer | None = None,
         output_normalizer: Normalizer | None = None,
     ):
-        super(GeoToSParamDataset, self).__init__(
+        super().__init__(
             codec, input_normalizer, output_normalizer
         )
 

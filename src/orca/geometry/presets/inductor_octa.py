@@ -1,10 +1,9 @@
-from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
-import numpy as np
 import os
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from orca import BaseGeometry
-from orca.geometry.cells.inductor import symmetric_octa_IHP, get_min_outer_diameter
+from orca.geometry.cells.inductor import get_min_outer_diameter, symmetric_octa_IHP
 from orca.geometry.input_parameters import InputParameterIterator
 
 if TYPE_CHECKING:
@@ -79,8 +78,7 @@ class InductorOcta(BaseGeometry):
 
         # clamp the outer diameter to the minimum buildable (DRC-valid) value
         do_min = get_min_outer_diameter(N, w, s)
-        if D < do_min:
-            D = do_min
+        D = max(D, do_min)
 
         symmetric_octa_IHP(
             N=N, D=D, w=w, s=s,

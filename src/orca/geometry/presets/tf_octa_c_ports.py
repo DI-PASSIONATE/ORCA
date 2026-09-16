@@ -1,7 +1,6 @@
-from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
-import numpy as np
 import os
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from orca import BaseGeometry
 from orca.geometry.cells.transformer import tf_octa_c
@@ -105,7 +104,7 @@ class TransformerOcta(BaseGeometry):
         # c.show()
         c.write_gds(output_path, with_metadata=False)
         return output_path
-    
+
     # def postprocess_outputs(self, output, frequency_points=None):
     #     """
     #     Converts model outputs (Re/Im) into a .sNp Touchstone file format.

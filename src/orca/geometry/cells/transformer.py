@@ -1,14 +1,16 @@
 import gdsfactory as gf
 import klayout.db as kdb
 import numpy as np
+
 from orca.geometry.layers import SG13G2
 
 GRID_NM = 10  # 10 nm manufacturing grid = 0.01 µm
 
 
 def _ensure_active_pdk() -> None:
-    """gdsfactory refuses to extrude paths without an active PDK. We only use it as a
-    polygon generator with explicit SG13G2 layer tuples, so its generic PDK is enough."""
+    """Gdsfactory refuses to extrude paths without an active PDK. We only use it as a
+    polygon generator with explicit SG13G2 layer tuples, so its generic PDK is enough.
+    """
     try:
         gf.get_active_pdk()
     except ValueError:
@@ -120,18 +122,18 @@ def tf_octa_c(
     # Check if linewidth is too large for winding diameter
     if bottom_linewidth > bottom_winding_diameter / 3.0:
         raise ValueError("bottom_linewidth is too large for input_winding_diameter.")
-    elif top_linewidth > top_winding_diameter / 3.0:
+    if top_linewidth > top_winding_diameter / 3.0:
         raise ValueError("upper_linewidth is too large for output_winding_diameter.")
     # Check if center tap width is too large for winding diameter of the other winding
     if bottom_centertap_width > top_winding_diameter / 3.0:
         raise ValueError(
             "bottom_center_tap_width is too large for output_winding_diameter."
         )
-    elif top_centertap_width > bottom_winding_diameter / 3.0:
+    if top_centertap_width > bottom_winding_diameter / 3.0:
         raise ValueError(
             "upper_center_tap_width is too large for input_winding_diameter."
         )
-    elif abs(bottom_winding_diameter - top_winding_diameter) > 40.0:
+    if abs(bottom_winding_diameter - top_winding_diameter) > 40.0:
         raise ValueError(
             "input_winding_diameter and output_winding_diameter difference is too large. No sufficient coupling."
         )

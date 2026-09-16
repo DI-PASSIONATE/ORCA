@@ -1,5 +1,6 @@
-from typing import Optional, Any, Dict, Callable, TYPE_CHECKING
 import os
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -34,7 +35,7 @@ class ModelTester(PipelineStage):
     physical units, on geometries the model was never trained on.
     """
 
-    def __init__(self, n_test_samples: Optional[int] = None, plot: bool = False):
+    def __init__(self, n_test_samples: int | None = None, plot: bool = False):
         """
         Args:
             n_test_samples: Limit the evaluation to the first N held-out geometries.
@@ -49,7 +50,7 @@ class ModelTester(PipelineStage):
     def run(
         self,
         context: "PipelineContext",
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
     ) -> "PipelineContext":
         result_dir = context.result_dir
         test_df = context.test_df
@@ -123,8 +124,8 @@ class ModelTester(PipelineStage):
         self,
         test_dataset: GeoToNtwkDataset,
         predictor: NetworkPredictor,
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-    ) -> Dict[str, Any]:
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Evaluates the predictor on the test dataset.
 

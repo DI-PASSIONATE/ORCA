@@ -1,14 +1,15 @@
-from concurrent.futures import as_completed
-import multiprocessing
-import pandas as pd
 import os
+from collections.abc import Callable
+from concurrent.futures import as_completed
+from typing import TYPE_CHECKING, Any
+
+import pandas as pd
 import tqdm
 from pebble import ProcessPool
 
-from typing import Any, Callable, Optional, TYPE_CHECKING
 from orca.geometry.base_geometry import BaseGeometry
-from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger
+from orca.pipeline.pipeline_stage import PipelineStage
 from orca.simulation.gds_converter import create_palace_model_from_gds
 
 if TYPE_CHECKING:
@@ -38,7 +39,7 @@ class GDSConverter(PipelineStage):
     def run(
         self,
         context: "PipelineContext",
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
     ) -> "PipelineContext":
         geometry: BaseGeometry = context.geometry
         cpu_cores: int = context.num_processes

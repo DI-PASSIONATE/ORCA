@@ -6,17 +6,17 @@ import importlib
 import inspect
 import os
 from pathlib import Path
-from typing import Type, Dict, Any
+from typing import Any
 
 from orca.logger import logger
 
 
 def discover_classes(
-    base_class: Type,
+    base_class: type,
     search_dir: str,
     module_prefix: str,
     extract_default_params: bool = False,
-) -> Dict[str, Dict[str, Any]]:
+) -> dict[str, dict[str, Any]]:
     """
     Automatically discover and load classes that inherit from a specified base class.
 

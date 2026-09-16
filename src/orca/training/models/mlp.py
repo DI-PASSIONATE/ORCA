@@ -2,7 +2,7 @@ from typing import Any
 
 import optuna
 import torch
-import torch.nn as nn
+from torch import nn
 
 from orca.training.basis_expansion import BasisExpansion
 from orca.training.models.base_model import OrcaModel, register_model

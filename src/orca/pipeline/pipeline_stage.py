@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from orca.logger import logger
 
@@ -17,7 +18,7 @@ class PipelineStage(ABC):
     def run(
         self,
         context: "PipelineContext",
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
     ) -> "PipelineContext":
         """
         Execute the pipeline stage.

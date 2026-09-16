@@ -23,11 +23,12 @@ column on top allows the network to more easily capture complex frequency depend
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import optuna
 import torch
-import torch.nn as nn
+from torch import nn
 
 from orca.training.spec import IOSpec
 
@@ -50,7 +51,7 @@ class BasisExpansion(nn.Module, ABC):
 
     @classmethod
     @abstractmethod
-    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> "BasisExpansion":
+    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> BasisExpansion:
         """Build a basis expansion for ``spec``, configured by ``hyperparameters``.
 
         Implementations must tolerate extra keys: the trainer's and the model's
@@ -108,7 +109,7 @@ class IdentityBasis(BasisExpansion):
         return x
 
     @classmethod
-    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> "IdentityBasis":
+    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> IdentityBasis:
         return cls()
 
 
@@ -168,7 +169,7 @@ class ChebyshevBasis(BasisExpansion):
         return torch.cat([x, torch.stack(terms[1:], dim=1)], dim=1)
 
     @classmethod
-    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> "ChebyshevBasis":
+    def from_spec(cls, spec: IOSpec, hyperparameters: dict[str, Any]) -> ChebyshevBasis:
         column = hyperparameters.get("basis_column")
         if column is None:
             if "frequency" not in spec.input_names:

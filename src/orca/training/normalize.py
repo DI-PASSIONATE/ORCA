@@ -1,7 +1,8 @@
-import torch
-import torch.nn as nn
 from abc import ABC, abstractmethod
+
 import numpy as np
+import torch
+from torch import nn
 
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.logger import logger
@@ -21,6 +22,7 @@ class Normalizer(nn.Module, ABC):
 
         Args:
             x (torch.Tensor): Input tensor of shape (batch_size, n_input_parameters).
+
         Returns:
             torch.Tensor: Normalized tensor of shape (batch_size, n_input_parameters).
         """
@@ -32,6 +34,7 @@ class Normalizer(nn.Module, ABC):
 
         Args:
             x (torch.Tensor): Normalized tensor of shape (batch_size, n_output_parameters).
+
         Returns:
             torch.Tensor: Denormalized tensor of shape (batch_size, n_output_parameters).
         """
@@ -42,6 +45,7 @@ class Normalizer(nn.Module, ABC):
 
         Args:
             x (torch.Tensor): Input tensor of shape (batch_size, n_input_parameters).
+
         Returns:
             torch.Tensor: Normalized tensor of shape (batch_size, n_input_parameters).
         """
@@ -113,7 +117,6 @@ class OutputNormalizer(Normalizer):
         Args:
             samples (list): List of output parameter samples.
         """
-        pass
 
 
 class MinMaxNormalizer(InputNormalizer):

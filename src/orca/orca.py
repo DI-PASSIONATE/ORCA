@@ -1,11 +1,12 @@
 import json
 import multiprocessing
 import os
-from typing import Callable, Optional
-from orca.pipeline.context import PipelineContext
-from orca.pipeline.pipeline_stage import PipelineStage
+from collections.abc import Callable
+
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
+from orca.pipeline.context import PipelineContext
+from orca.pipeline.pipeline_stage import PipelineStage
 
 
 def default_process_count() -> int:
@@ -33,14 +34,14 @@ class ORCA:
     def run(
         self,
         geometry: BaseGeometry,
-        num_processes: Optional[int] = None,
+        num_processes: int | None = None,
         force_overwrite: bool = False,
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-        overwrite_callback: Optional[Callable[[str], bool]] = None,
-        base_dir: Optional[str] = None,
-        result_dir: Optional[str] = None,
-        result_csv: Optional[str] = None,
-    ) -> Optional[PipelineContext]:
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
+        overwrite_callback: Callable[[str], bool] | None = None,
+        base_dir: str | None = None,
+        result_dir: str | None = None,
+        result_csv: str | None = None,
+    ) -> PipelineContext | None:
         """
         Runs the ORCA pipeline with the specified geometry and CPU cores.
 

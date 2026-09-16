@@ -1,12 +1,14 @@
 import json
-from typing import Optional, Callable, TYPE_CHECKING
 import os
-import torch
-import onnx
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from orca.pipeline.pipeline_stage import PipelineStage
+import onnx
+import torch
+
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
+from orca.pipeline.pipeline_stage import PipelineStage
 from orca.training.onnx_wrapper import ONNXWrapper
 
 if TYPE_CHECKING:
@@ -24,7 +26,7 @@ class OnnxExporter(PipelineStage):
     def run(
         self,
         context: "PipelineContext",
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
     ) -> "PipelineContext":
         geometry: BaseGeometry = context.geometry
 

@@ -36,8 +36,13 @@ authors = [
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: X11 Applications :: Qt",
     "Intended Audience :: Developers",
-    "Operating System :: Unix",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -134,10 +139,103 @@ orca = "src/orca"
 [tool.setuptools.package-data]
 "orca" = ["**/*.simcfg", "**/*.xml"]
 
-[tool.black]
-line-length = 79
-target-version = ['py311', 'py312', 'py313']
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+xfail_strict = true
 
-[tool.isort]
-profile = "black"
-line_length = 79
+[tool.coverage.run]
+source = ["src/cobra"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+# Resolve first-party imports out of the src layout.
+src = ["src"]
+# Scratch/vendored trees that are not part of the package.
+extend-exclude = ["Ignore"]
+
+[tool.ruff.lint]
+select = [
+    "ALL", # include all the rules, including new ones
+]
+ignore = [
+    #### modules
+    "ANN", # flake8-annotations: full annotation coverage is not a project goal
+    "COM", # flake8-commas: trailing commas are the formatter's job
+    "C90", # mccabe complexity: PLR0912/PLR0915 cover this better
+    "CPY", # flake8-copyright: no per-file copyright headers in this project
+    "DJ",  # django
+    "EM",  # exception messages inline, consistent with TRY003 below
+    "EXE", # flake8-executable
+    "FBT", # boolean traps: unavoidable in Qt slots and config flags
+    "PD",  # pandas-vet: false positives on numpy/scikit-rf `.values`
+    "T10", # debugger
+    "TID", # flake8-tidy-imports
+
+    #### specific rules
+    "D100",    # ignore missing docs
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D106",
+    "D107",
+    "D200",
+    "D203",    # incompatible with D211; D211 is the convention here
+    "D205",
+    "D212",    # summary placement is not enforced; both styles exist in the tree
+    "D400",
+    "D401",
+    "D415",
+    "E402",    # false positives for local imports
+    "E501",    # line too long
+    "N802",    # RF symbols keep their conventional casing (S, Z, Y, N, K, ...)
+    "N803",
+    "N806",
+    "PLC0415", # imports are deliberately local to keep Palace/ORCA/GUI optional
+    "PLR0911", # simulation and GUI setup code is legitimately branch-heavy
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    "PLR0917",
+    "PLR2004", # magic-value comparison is noise in numeric/engineering code
+    "PTH",     # os.path is used throughout; migrating is a separate refactor
+    "RUF001",  # ambiguous unicode: units and symbols (µ, Ω, °) are intentional
+    "RUF002",
+    "RUF003",
+    "S603",    # the Xyce subprocess call is the point of the simulator
+    "TRY003",  # external messages in exceptions are too verbose
+    "TD002",
+    "TD003",
+    "FIX002",  # too verbose descriptions of todos
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Examples are standalone scripts, not an importable package.
+"examples/*" = ["INP001", "T201"]
+# Tests assert, reach into private helpers deliberately, and use fixtures that
+# look like shadowed or unused arguments to the linter.
+"tests/*" = [
+    "S101",    # assert is how pytest works
+    "ARG001",
+    "ARG002",
+    "PLR6301",
+    "SLF001",  # pinning private behaviour (_tell, _parse_target) is the point
+    "TC003",
+    "T201",    # printing is how a test script reports
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

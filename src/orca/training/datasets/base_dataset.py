@@ -30,7 +30,7 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
             input_normalizer (Normalizer|None): Normalizer for input parameters.
             output_normalizer (Normalizer|None): Normalizer for output parameters.
         """
-        super(BaseDataset, self).__init__()
+        super().__init__()
 
         self.codec = codec
         self.samples: list[tuple[torch.Tensor, torch.Tensor]] = []
@@ -143,7 +143,6 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         Load samples from the dataset.
         This method should be implemented by subclasses to load data specific from its self.data_dir.
         """
-        pass
 
     def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
         return self.samples[idx]
@@ -165,6 +164,7 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
                 normalizers. Pass True for the training split and False for the
                 validation and test splits, which must reuse the training
                 statistics.
+
         Returns:
             BaseDataset: New dataset split instance.
         """

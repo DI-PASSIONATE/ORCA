@@ -10,7 +10,7 @@ declare them without importing each other.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict, fields
+from dataclasses import asdict, dataclass, fields
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,7 @@ class PhysicsGuarantees:
     causal: bool = False
     stable: bool = False
 
-    def __or__(self, other: "PhysicsGuarantees") -> "PhysicsGuarantees":
+    def __or__(self, other: PhysicsGuarantees) -> PhysicsGuarantees:
         """Combine two sets of guarantees, keeping every property either one promises.
 
         Used to merge what the architecture guarantees with what the output

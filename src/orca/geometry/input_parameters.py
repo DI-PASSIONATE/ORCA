@@ -1,6 +1,7 @@
 import threading
 from itertools import product
 from typing import Any
+
 import numpy as np
 
 
@@ -90,6 +91,7 @@ class InputParameterIterator:
         """
         Returns the minimum and maximum values for each input parameter.
         Useful for normalization purposes.
+
         Returns:
             tuple: A tuple containing two lists - (min_values, max_values).
         """
@@ -131,7 +133,6 @@ class InputParameterIterator:
         This method creates a grid by uniformly sampling each parameter's range by
         selecting values such that the total number of samples is approximately equal to num_samples.
         """
-
         # Calculate number of steps per parameter (nth root of n_samples)
         steps_per_param = int(np.ceil(self.n_samples ** (1 / self.n_inputs)))
 

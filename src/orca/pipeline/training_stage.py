@@ -1,13 +1,15 @@
-from typing import Optional, Any, Callable, TYPE_CHECKING
 import os
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
+
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from orca.pipeline.pipeline_stage import PipelineStage
 from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
-from orca.training.datasets.base_dataset import BaseDataset
+from orca.pipeline.pipeline_stage import PipelineStage
 from orca.training.basis_expansion import BasisExpansion, get_basis_class
+from orca.training.datasets.base_dataset import BaseDataset
 from orca.training.models.base_model import OrcaModel, get_model_class
 from orca.training.trainer import Trainer, TrainingConfig
 from orca.training.tuner import HyperparameterTuner
@@ -27,7 +29,7 @@ class ModelTrainer(PipelineStage):
         basis: str | type[BasisExpansion] | None = None,
         hyperparameters: dict[str, Any] | None = None,
         test_frac: float = 0.15,
-        n_train_samples: Optional[int] = None,
+        n_train_samples: int | None = None,
         n_fold_cv: int = 5,
         n_trials: int = 200,
     ):
@@ -61,7 +63,7 @@ class ModelTrainer(PipelineStage):
     def run(
         self,
         context: "PipelineContext",
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
     ) -> "PipelineContext":
         geometry: BaseGeometry = context.geometry
         result_dir = context.result_dir

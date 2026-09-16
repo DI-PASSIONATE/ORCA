@@ -79,10 +79,11 @@ def read_simconfig(simconfig_filename: str) -> dict:
 
     Args:
         simconfig_filename (str): Path to the simulation configuration file.
+
     Returns:
         dict: A dictionary containing simulation configuration parameters.
     """
-    with open(simconfig_filename, "r") as file:
+    with open(simconfig_filename) as file:
         simconfig = json.load(file)
 
     # Add e9 suffix to frequency values if they are in GHz

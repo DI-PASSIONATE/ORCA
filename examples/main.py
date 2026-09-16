@@ -1,6 +1,6 @@
-import orca
 import numpy as np
 
+import orca
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 
 PLOT = False
