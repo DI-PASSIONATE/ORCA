@@ -11,16 +11,18 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 import optuna
 import torch
-import torch.nn as nn
 import tqdm
 from torch.optim import AdamW, Optimizer
 from torch.utils.data import DataLoader, Dataset
 
-from orca.training.models.base_model import OrcaModel
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from orca.training.models.base_model import OrcaModel
 
 
 def default_device() -> torch.device:
@@ -36,7 +38,7 @@ class TrainingConfig:
         batch_size: Mini-batch size for both training and validation.
         learning_rate: Initial learning rate handed to the optimizer.
         patience: Epochs without validation improvement before stopping early.
-        optimizer_cls: Optimizer class, constructed as ``optimizer_cls(params, lr=...)``.
+        optimizer_cls: Optimizer factory, called as ``optimizer_cls(params, lr=...)``.
         scheduler_factor: Factor by which ReduceLROnPlateau scales the learning rate.
         scheduler_patience: Plateau length, in epochs, before the scheduler reacts.
         device: Device to train on.
@@ -46,13 +48,13 @@ class TrainingConfig:
     batch_size: int = 128
     learning_rate: float = 1e-3
     patience: int = 10
-    optimizer_cls: type[Optimizer] = AdamW
+    optimizer_cls: Callable[..., Optimizer] = AdamW
     scheduler_factor: float = 0.5
     scheduler_patience: int = 10
     device: torch.device = field(default_factory=default_device)
 
     @classmethod
-    def from_hyperparameters(cls, hyperparameters: dict[str, Any], **overrides) -> "TrainingConfig":
+    def from_hyperparameters(cls, hyperparameters: dict[str, Any], **overrides) -> TrainingConfig:
         """Build a config from a hyperparameter dict, ignoring architecture keys.
 
         Args:
@@ -95,7 +97,7 @@ class TrainingResult:
         stopped_early: Whether early stopping ended the run before ``epochs``.
     """
 
-    model: nn.Module
+    model: OrcaModel
     best_loss: float
     history: list[EpochResult]
     stopped_early: bool
@@ -121,8 +123,8 @@ class Trainer:
     def __init__(
         self,
         config: TrainingConfig | None = None,
-        criterion: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        criterion: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
         stage_name: str = "Training",
         verbose: bool = True,
     ):
@@ -132,24 +134,22 @@ class Trainer:
         self.stage_name = stage_name
         self.verbose = verbose
 
-    def resolve_criterion(self, model: nn.Module) -> Callable:
+    def resolve_criterion(self, model: OrcaModel) -> Callable:
         """The configured loss, or the one the model asks to be trained with."""
         if self.criterion is not None:
             return self.criterion
-        if isinstance(model, OrcaModel):
-            return model.default_loss()
-        return nn.L1Loss()
+        return model.default_loss()
 
     def fit(
         self,
-        model: nn.Module,
+        model: OrcaModel,
         train_dataset: Dataset,
         val_dataset: Dataset,
     ) -> TrainingResult:
         """Train ``model``, keeping the weights with the lowest validation loss.
 
         Args:
-            model (nn.Module): Model to train. Moved to the configured device.
+            model (OrcaModel): Model to train. Moved to the configured device.
             train_dataset (Dataset): Samples to optimize on.
             val_dataset (Dataset): Samples used for early stopping and scheduling.
 
@@ -200,12 +200,13 @@ class Trainer:
             message = f"Train: {train_loss:.4f} | Val: {val_loss:.4f}"
             self._report(epoch + 1, message)
             if self.verbose:
-                print(f"Epoch {epoch + 1:4d} | {message}")
+                # tqdm.write keeps the line clear of the epoch progress bar
+                tqdm.tqdm.write(f"Epoch {epoch + 1:4d} | {message}")
 
             if patience_counter >= config.patience:
                 stopped_early = True
                 if self.verbose:
-                    print("Early stopping triggered")
+                    tqdm.tqdm.write("Early stopping triggered")
                 break
 
         if best_state is not None:
@@ -217,9 +218,9 @@ class Trainer:
 
     def evaluate(
         self,
-        model: nn.Module,
+        model: OrcaModel,
         dataset: Dataset,
-        criterion: Optional[Callable] = None,
+        criterion: Callable | None = None,
         batch_size: int | None = None,
     ) -> float:
         """Mean loss of ``model`` over ``dataset``, without updating any weights."""
@@ -232,9 +233,11 @@ class Trainer:
         model.train()
         total = 0.0
 
-        for x, y in tqdm.tqdm(loader, desc="Training", leave=False, disable=not self.verbose):
-            x = x.to(self.config.device)
-            y = y.to(self.config.device)
+        for batch_x, batch_y in tqdm.tqdm(
+            loader, desc="Training", leave=False, disable=not self.verbose
+        ):
+            x = batch_x.to(self.config.device)
+            y = batch_y.to(self.config.device)
 
             optimizer.zero_grad()
             loss = criterion(model(x), y)
@@ -257,9 +260,9 @@ class Trainer:
             iterator = tqdm.tqdm(loader, desc=desc, leave=False, disable=not self.verbose)
 
         with torch.no_grad():
-            for x, y in iterator:
-                x = x.to(self.config.device)
-                y = y.to(self.config.device)
+            for batch_x, batch_y in iterator:
+                x = batch_x.to(self.config.device)
+                y = batch_y.to(self.config.device)
                 total += criterion(model(x), y).item()
 
         return total / len(loader)

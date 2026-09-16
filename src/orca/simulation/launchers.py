@@ -127,7 +127,7 @@ class SimulationLauncher(ABC):
     def command(self, slot: str, palace_executable: str, num_processes: int, config_name: str) -> str:
         """Shell command that runs `config_name` with `num_processes` MPI ranks in `slot`."""
 
-    def check(self, num_processes: int) -> None:
+    def check(self, num_processes: int) -> None:  # noqa: B027 - optional hook, not abstract
         """
         Pre-flight check run once before the first simulation, so a broken launch setup fails
         fast with a clear message instead of a hanging or failing simulation. No-op by default.

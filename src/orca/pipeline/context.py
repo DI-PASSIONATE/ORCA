@@ -19,10 +19,10 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import pandas as pd
-    import torch.nn as nn
 
     from orca.geometry.base_geometry import BaseGeometry
     from orca.training.datasets.base_dataset import BaseDataset
+    from orca.training.models.base_model import OrcaModel
     from orca.training.trainer import EpochResult
 
 #: Fields left out of :meth:`PipelineContext.to_json_dict`, because they are
@@ -87,7 +87,7 @@ class PipelineContext:
     """Parameter table for the generated Palace models."""
 
     # --- Written by ModelTrainer --------------------------------------------
-    trained_model: nn.Module | None = None
+    trained_model: OrcaModel | None = None
     """Best model from the training run, restored to its best-validation weights."""
     dataset: BaseDataset | None = None
     """The training split, carrying the feature pipeline and fitted normalizers.

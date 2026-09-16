@@ -1,7 +1,13 @@
+from __future__ import annotations
+
 import threading
 from itertools import product
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 class InputParameterIterator:
@@ -16,6 +22,7 @@ class InputParameterIterator:
         self,
         picking_strategy: str = "grid",
         frequency: list | range | np.ndarray | None = None,
+        seed: int | None = None,
         **input_values,
     ):
         """
@@ -24,16 +31,19 @@ class InputParameterIterator:
         Args:
             picking_strategy (str): Strategy for picking parameters ('grid', 'random', etc.).
             frequency (list|range|np.ndarray|None): Optional frequency values to include as an additional input dimension. Does not get returned by __next__ (since it's handled by palace) but is considered for min/max calculations.
+            seed (int|None): Seed for the 'random' picking strategy. None draws fresh entropy on every set_sample_count() call.
+            **input_values: One list, range or numpy array of possible values per geometry parameter.
         """
         # Check if all input_values are lists or ranges
         for name, values in input_values.items():
             if not isinstance(values, (list, range, np.ndarray)):
-                raise ValueError(
+                raise TypeError(
                     f"Input kwarg '{name}' must be a list, range, or numpy array of possible values. Found type: {type(values)} (value: {values})"
                 )
 
         self.picking_strategy = picking_strategy
         self.frequency = frequency
+        self.seed = seed
         self.n_inputs = len(input_values)
         self.input_values = input_values
         self.input_names = list(input_values.keys())
@@ -41,21 +51,24 @@ class InputParameterIterator:
         self._lock = threading.Lock()  # For thread-safe iteration
 
         # Created after set_sample_count is called
-        self._iterator = None
+        self._iterator: Iterator[Any] | None = None
 
-    def set_sample_count(self, n_samples: int):
+    def set_sample_count(self, n_samples: int, seed: int | None = None):
         """
         Sets the number of samples to generate. This is used for strategies
         that depend on the total number of samples, such as 'uniform_grid' and 'random'.
 
         Args:
             n_samples (int): Number of samples to generate.
+            seed (int|None): Overrides the seed given to __init__ for the 'random' strategy.
         """
         self.n_samples = n_samples
+        if seed is not None:
+            self.seed = seed
         # Reinitialize the iterator based on the picking strategy
         if self.picking_strategy == "step_grid":
             self._iterator = self.step_grid()
-        elif self.picking_strategy == "uniform_grid" or self.picking_strategy == "grid":
+        elif self.picking_strategy in ("uniform_grid", "grid"):
             self._iterator = self.uniform_grid()
         elif self.picking_strategy == "random":
             self._iterator = self.random_sampling()
@@ -72,24 +85,24 @@ class InputParameterIterator:
 
     def __next__(self) -> dict[str, Any]:
         with self._lock:  # Ensure thread-safe access
+            if self._iterator is None:
+                raise RuntimeError(
+                    "set_sample_count() must be called before iterating over the input parameters."
+                )
             self.n_geometries_created += 1  # May be used for logging or tracking
-            try:
-                params = next(
-                    self._iterator
-                )  # Raises StopIteration when exhausted, which is propagated to this iterator
-                # Convert numpy types to Python native types to avoid type issues with downstream libraries
-                params = [
-                    param.item() if isinstance(param, np.generic) else param
-                    for param in params
-                ]
-                return dict(zip(self.input_names, params))
-            except StopIteration:
-                raise
+            # Raises StopIteration when exhausted, which is propagated to this iterator
+            params = next(self._iterator)
+            # Convert numpy types to Python native types to avoid type issues with downstream libraries
+            params = [
+                param.item() if isinstance(param, np.generic) else param for param in params
+            ]
+            return dict(zip(self.input_names, params, strict=True))
 
     def get_min_max_values(self) -> tuple[list[float], list[float]]:
         """
         Returns the minimum and maximum values for each input parameter.
         Useful for normalization purposes.
+
         Returns:
             tuple: A tuple containing two lists - (min_values, max_values).
         """
@@ -131,7 +144,6 @@ class InputParameterIterator:
         This method creates a grid by uniformly sampling each parameter's range by
         selecting values such that the total number of samples is approximately equal to num_samples.
         """
-
         # Calculate number of steps per parameter (nth root of n_samples)
         steps_per_param = int(np.ceil(self.n_samples ** (1 / self.n_inputs)))
 
@@ -146,9 +158,7 @@ class InputParameterIterator:
                 sampled_values = values[indices]
             param_samples.append(sampled_values)
 
-        result = product(*param_samples)
-
-        return result
+        return product(*param_samples)
 
     def random_sampling(self):
         """
@@ -157,10 +167,11 @@ class InputParameterIterator:
         Given a dict of {"name": range(start, end)}, it randomly picks values from each range
         and returns a dict of {"name": value} for each sample.
         """
+        rng = np.random.default_rng(self.seed)
         for _ in range(self.n_samples):
             sampled_params = []
             for name in self.input_names:
                 values = self.input_values[name]
-                sampled_value = np.random.choice(values)
+                sampled_value = rng.choice(values)
                 sampled_params.append(sampled_value)
             yield sampled_params

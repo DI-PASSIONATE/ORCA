@@ -1,9 +1,10 @@
-from gds2palace import gds_reader, stackup_reader, utilities, simulation_setup
 import os
-from contextlib import redirect_stdout, ExitStack
+from contextlib import ExitStack, redirect_stdout
+from typing import Any
 
 import gmsh
-from typing import Any
+from gds2palace import gds_reader, simulation_setup, stackup_reader, utilities
+
 from orca.simulation.simulate import read_simconfig
 
 
@@ -23,11 +24,17 @@ def create_palace_model_from_gds(
     Based on: https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/blob/main/workflow/palace_L2n0.py
 
     Args:
+        geometry_name (str): Name of the sample; passed through to the result for bookkeeping.
+        params (dict[str, Any]): Input parameters of the sample; passed through to the result.
+        output_dir (str): Directory in which the Palace model directory is created.
         gds_filename (str): Path to the GDS file.
+        stackup_xml (str): Path to the XML file describing the layer stackup.
         simconfig_filename (str): Path to the simulation configuration file (json).
+        show_mesh_results (bool): Show the gmsh GUI with the mesh and keep gds2palace's console output.
 
     Returns:
-        tuple[str, str]: Palace config name and data directory of the created Palace model.
+        tuple[str, dict, str, str, str]: geometry_name, params, Palace config name, simulation
+        directory and data directory of the created Palace model.
     """
     # ExitStack is used to suppress stdout output in the conversion worker processes to avoid cluttering the console
     with ExitStack() as stack:

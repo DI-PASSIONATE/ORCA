@@ -125,7 +125,7 @@ def add_poly(all_geometries_list, layer, purpose, points):
     return p
 
 
-def add_via(all_geometries_list, layer, purpose, p1, p2, forEM):
+def add_via(all_geometries_list, layer, purpose, p1, p2):
     draw_via_array(all_geometries_list, layer, purpose, p1, p2)
 
 
@@ -172,8 +172,7 @@ def get_min_outer_diameter(N, w, s):
 
     min_crossover_size = (2 * s + w) * (math.sqrt(2) - 1) + (s + w) + 2 * overlap_size
 
-    if crossover_size < min_crossover_size:
-        crossover_size = min_crossover_size
+    crossover_size = max(crossover_size, min_crossover_size)
 
     if N < 3:
         inner_segment_size = crossover_size
@@ -181,15 +180,14 @@ def get_min_outer_diameter(N, w, s):
         feedline_spacing = crossover_size + w + 2 * s
         inner_segment_size = feedline_spacing
 
-    if N > 1:
-        Di_min = inner_segment_size * (1 + math.sqrt(2))
-    else:
-        Di_min = 2 * (w + s) * (1 + math.sqrt(2))  # for single turn inductor
+    # single turn inductors have no inner segment
+    Di_min = (
+        inner_segment_size * (1 + math.sqrt(2)) if N > 1 else 2 * (w + s) * (1 + math.sqrt(2))
+    )
 
     Do_min = (Di_min + 2 * N * w + 2 * (N - 1) * s)
     # round to 2 decimal digits
-    Do_min = math.ceil(100 * Do_min) / 100
-    return Do_min
+    return math.ceil(100 * Do_min) / 100
 
 
 def calculate_octa_diameter(N, w, s, Ltarget, K1=2.15522, K2=3.61868, L0=0):
@@ -203,8 +201,7 @@ def calculate_octa_diameter(N, w, s, Ltarget, K1=2.15522, K2=3.61868, L0=0):
     p = -(b + Lsyn / c)
     q = b * b / 4 - Lsyn * b * (K2 - 1) / (2 * c)
     Dout = (-p / 2 + math.sqrt(p * p / 4 - q)) / um  # output is in micron
-    Dout = math.ceil(Dout * 100) / 100
-    return Dout
+    return math.ceil(Dout * 100) / 100
 
 
 # ====================
@@ -235,7 +232,7 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
 
     try:
         cell = lib.new_cell(cellname, overwrite_duplicate=True)
-    except Exception:
+    except ValueError:
         cell = lib.new_cell("final_" + cellname, overwrite_duplicate=True)
 
     # list with all geometries that we created
@@ -268,29 +265,17 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
 
     # Ground-ring geometry (only present when forEM). Computed up front so the
     # feed length can reach the ring.
-    if ring_width is None:
-        frame_width = min(20, gridsnap(5 * w))
-    else:
-        frame_width = gridsnap(ring_width)
-    if ring_spacing is None:
-        frame_margin = gridsnap(D / 2)
-    else:
-        frame_margin = gridsnap(ring_spacing)
+    frame_width = min(20, gridsnap(5 * w)) if ring_width is None else gridsnap(ring_width)
+    frame_margin = gridsnap(D / 2) if ring_spacing is None else gridsnap(ring_spacing)
 
     # Feed length: when forEM, extend the feedlines so the pins/ports always
     # land on the OUTER edge of the ground ring; otherwise keep the default.
-    if forEM:
-        feed_length = gridsnap(frame_margin + frame_width)
-    else:
-        feed_length = 30
+    feed_length = gridsnap(frame_margin + frame_width) if forEM else 30
 
     # --- Feedline drawing  ---
-    if N == 1:
-        # for single turn, we draw everything on single layer TopMetal2
-        feed_layer = SPIRAL_LAYER_NUM
-    else:
-        # for multi turn, we draw trace on TopMetal2 and feedline on TopMetal1
-        feed_layer = CROSSOVER_LAYER_NUM
+    # for single turn, we draw everything on single layer TopMetal2;
+    # for multi turn, we draw trace on TopMetal2 and feedline on TopMetal1
+    feed_layer = SPIRAL_LAYER_NUM if N == 1 else CROSSOVER_LAYER_NUM
 
     add_box(all_geometries_list, layer=feed_layer, purpose=PURPOSE_DRAWING,
             p1=(x0 - w / 2 - feedline_spacing / 2, y0 - Di / 2),
@@ -304,13 +289,11 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
         # for all N except single turn, we need via from TopMetal1 feedline to TopMetal2 trace
         add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
                 p1=(x0 - w / 2 - feedline_spacing / 2, y0 - Di / 2),
-                p2=(x0 + w / 2 - feedline_spacing / 2, y0 - Di / 2 - w),
-                forEM=forEM)
+                p2=(x0 + w / 2 - feedline_spacing / 2, y0 - Di / 2 - w))
 
         add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
                 p1=(x0 - w / 2 + feedline_spacing / 2, y0 - Di / 2),
-                p2=(x0 + w / 2 + feedline_spacing / 2, y0 - Di / 2 - w),
-                forEM=forEM)
+                p2=(x0 + w / 2 + feedline_spacing / 2, y0 - Di / 2 - w))
 
     # create pin label in IHP PDK-style on layer IND.text
     cell.add(gdspy.Label("LA", (x0 - feedline_spacing / 2, y0 - D / 2 - feed_length + w / 4),
@@ -493,22 +476,18 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
             # add vias also
             add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
                     p1=(x0 - crossover_size / 2, y0 - D / 2 + 2 * i * (w + s) - s),
-                    p2=(x0 - crossover_size / 2 + via_size, y0 - D / 2 + 2 * i * (w + s) - w - s),
-                    forEM=forEM)
+                    p2=(x0 - crossover_size / 2 + via_size, y0 - D / 2 + 2 * i * (w + s) - w - s))
             add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
                     p1=(x0 + crossover_size / 2, y0 - D / 2 + (2 * i + 1) * (w + s) - s),
-                    p2=(x0 + crossover_size / 2 - via_size, y0 - D / 2 + (2 * i + 1) * (w + s) - w - s),
-                    forEM=forEM)
+                    p2=(x0 + crossover_size / 2 - via_size, y0 - D / 2 + (2 * i + 1) * (w + s) - w - s))
         else:
             # add vias also
             add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
                     p1=(x0 - crossover_size / 2, y0 - D / 2 - w - s + (2 * i - 1) * (w + s)),
-                    p2=(x0 - crossover_size / 2 + via_size, y0 - D / 2 + (2 * i - 1) * (w + s) - s),
-                    forEM=forEM)
+                    p2=(x0 - crossover_size / 2 + via_size, y0 - D / 2 + (2 * i - 1) * (w + s) - s))
             add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
                     p1=(x0 + crossover_size / 2, y0 - D / 2 - w - s + (2 * i) * (w + s)),
-                    p2=(x0 + crossover_size / 2 - via_size, y0 - D / 2 + (2 * i) * (w + s) - s),
-                    forEM=forEM)
+                    p2=(x0 + crossover_size / 2 - via_size, y0 - D / 2 + (2 * i) * (w + s) - s))
 
     # top side
     for i in range(1, num_top + 1):
@@ -549,22 +528,18 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
             # add via also
             add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
                     p1=(x0 - crossover_size / 2, y0 + D / 2 - (2 * i - 1) * (w + s) + w + s),
-                    p2=(x0 - crossover_size / 2 + via_size, y0 + D / 2 - (2 * i - 1) * (w + s) + s),
-                    forEM=forEM)
+                    p2=(x0 - crossover_size / 2 + via_size, y0 + D / 2 - (2 * i - 1) * (w + s) + s))
             add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
                     p1=(x0 + crossover_size / 2, y0 + D / 2 - (2 * i) * (w + s) + w + s),
-                    p2=(x0 + crossover_size / 2 - via_size, y0 + D / 2 - (2 * i) * (w + s) + s),
-                    forEM=forEM)
+                    p2=(x0 + crossover_size / 2 - via_size, y0 + D / 2 - (2 * i) * (w + s) + s))
         else:
             # add via also
             add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
                     p1=(x0 - crossover_size / 2, y0 + D / 2 - w - s - (2 * i - 1) * (w + s) + w + s),
-                    p2=(x0 - crossover_size / 2 + via_size, y0 + D / 2 - w - s - (2 * i - 1) * (w + s) + s),
-                    forEM=forEM)
+                    p2=(x0 - crossover_size / 2 + via_size, y0 + D / 2 - w - s - (2 * i - 1) * (w + s) + s))
             add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
                     p1=(x0 + crossover_size / 2, y0 + D / 2 - w - s - (2 * i) * (w + s) + w + s),
-                    p2=(x0 + crossover_size / 2 - via_size, y0 + D / 2 - w - s - (2 * i) * (w + s) + s),
-                    forEM=forEM)
+                    p2=(x0 + crossover_size / 2 - via_size, y0 + D / 2 - w - s - (2 * i) * (w + s) + s))
 
     # one straight segment at outer turn
     if is_even(N):

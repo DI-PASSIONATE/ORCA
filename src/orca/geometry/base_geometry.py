@@ -1,12 +1,12 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, TYPE_CHECKING
-
-from orca.geometry.input_parameters import InputParameterIterator
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from orca.geometry.input_parameters import InputParameterIterator
     from orca.training.datasets.base_dataset import BaseDataset
 
 

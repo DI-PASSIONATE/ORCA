@@ -33,7 +33,10 @@ def slurm_allocation() -> tuple[list[str], int]:
 
     # Expand the compact node list (e.g. "f[0101-0102,0110]") into hostnames
     ret = subprocess.run(
-        ["scontrol", "show", "hostnames", nodelist], capture_output=True, text=True, check=False
+        ["scontrol", "show", "hostnames", nodelist],  # noqa: S607 - scontrol comes from the Slurm PATH
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if ret.returncode != 0:
         raise RuntimeError(f"Could not expand Slurm node list '{nodelist}': {ret.stderr.strip()}")
@@ -186,7 +189,7 @@ class SlurmLauncher(SimulationLauncher):
             RuntimeError: If any test step fails or does not complete within `timeout`.
         """
         procs = {
-            slot: subprocess.Popen(
+            slot: subprocess.Popen(  # noqa: S602 - the srun prefix is built by this launcher
                 f"{self._srun_prefix(slot, num_processes)} hostname",
                 shell=True,
                 stdout=subprocess.PIPE,

@@ -1,7 +1,7 @@
-import torch
-import torch.nn as nn
 from abc import ABC, abstractmethod
-import numpy as np
+
+import torch
+from torch import nn
 
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.logger import logger
@@ -21,6 +21,7 @@ class Normalizer(nn.Module, ABC):
 
         Args:
             x (torch.Tensor): Input tensor of shape (batch_size, n_input_parameters).
+
         Returns:
             torch.Tensor: Normalized tensor of shape (batch_size, n_input_parameters).
         """
@@ -32,6 +33,7 @@ class Normalizer(nn.Module, ABC):
 
         Args:
             x (torch.Tensor): Normalized tensor of shape (batch_size, n_output_parameters).
+
         Returns:
             torch.Tensor: Denormalized tensor of shape (batch_size, n_output_parameters).
         """
@@ -42,6 +44,7 @@ class Normalizer(nn.Module, ABC):
 
         Args:
             x (torch.Tensor): Input tensor of shape (batch_size, n_input_parameters).
+
         Returns:
             torch.Tensor: Normalized tensor of shape (batch_size, n_input_parameters).
         """
@@ -106,20 +109,23 @@ class OutputNormalizer(Normalizer):
         return getattr(self, "_fitted", False)
 
     @abstractmethod
-    def process_samples(self, samples: list):
+    def process_samples(self, samples: list[torch.Tensor]):
         """
         Process the samples to compute normalization statistics.
 
         Args:
             samples (list): List of output parameter samples.
         """
-        pass
 
 
 class MinMaxNormalizer(InputNormalizer):
     """
     A normalizer that applies min-max normalization to input parameters.
     """
+
+    # Buffers registered in __init__; declared here so they are typed as tensors
+    input_mins: torch.Tensor
+    input_maxs: torch.Tensor
 
     def __init__(self, input_parameter_iterator: InputParameterIterator):
         """
@@ -151,12 +157,16 @@ class OutputMinMaxNormalizer(OutputNormalizer):
     A normalizer that applies min-max normalization to output parameters.
     """
 
-    def process_samples(self, samples: list[tuple[np.ndarray, np.ndarray]]):
+    # Buffers registered by process_samples; declared here so they are typed as tensors
+    output_mins: torch.Tensor
+    output_maxs: torch.Tensor
+
+    def process_samples(self, samples: list[torch.Tensor]):
         output_mins, output_maxs = self.get_output_min_max(samples)
         self.register_buffer("output_mins", output_mins)
         self.register_buffer("output_maxs", output_maxs)
 
-    def get_output_min_max(self, samples) -> tuple[list[float], list[float]]:
+    def get_output_min_max(self, samples: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
         """Calculate min and max of output parameters for normalization."""
         stacked_samples = torch.vstack(samples)
         mins = torch.min(stacked_samples, dim=0).values
@@ -177,12 +187,18 @@ class StandardNormalizer(OutputNormalizer):
     A normalizer that applies standard score normalization to input parameters.
     """
 
-    def process_samples(self, samples: list[tuple[np.ndarray, np.ndarray]]):
+    # Buffers registered by process_samples; declared here so they are typed as tensors
+    input_means: torch.Tensor
+    input_stds: torch.Tensor
+
+    def process_samples(self, samples: list[torch.Tensor]):
         input_means, input_stds = self.get_output_means_stds(samples)
         self.register_buffer("input_means", input_means)
         self.register_buffer("input_stds", input_stds)
 
-    def get_output_means_stds(self, samples) -> tuple[list[float], list[float]]:
+    def get_output_means_stds(
+        self, samples: list[torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Calculate means and standard deviations of output parameters for normalization."""
         stacked_samples = torch.vstack(samples)
         means = torch.mean(stacked_samples, dim=0)

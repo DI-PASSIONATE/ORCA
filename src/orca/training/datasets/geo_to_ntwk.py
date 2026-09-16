@@ -1,17 +1,17 @@
+import os
+
+import numpy as np
 import pandas as pd
 import skrf as rf
-import os
-import numpy as np
 import torch
 import tqdm
 
-from orca.training.normalize import Normalizer
 from orca.logger import logger
 
 
-class GeoToNtwkDataset(torch.utils.data.Dataset):
+class GeoToNtwkDataset(torch.utils.data.Dataset[tuple[np.ndarray, rf.Network]]):
     """
-    This dataset class is designed to load a scikit-rf Network object from a .snp file and associate it with the corresponding geometry parameters. 
+    This dataset class is designed to load a scikit-rf Network object from a .snp file and associate it with the corresponding geometry parameters.
     This can be used in the testing stage to compare the predicted S-parameters with the actual S-parameters from the .snp file.
     """
 
@@ -20,7 +20,7 @@ class GeoToNtwkDataset(torch.utils.data.Dataset):
         directory: str,
         data_df: pd.DataFrame,
     ):
-        self.samples = []
+        self.samples: list[tuple[np.ndarray, rf.Network]] = []
         self.load_samples(directory, data_df)
 
 
@@ -28,7 +28,7 @@ class GeoToNtwkDataset(torch.utils.data.Dataset):
         self.input_param_names = list(data_df.columns)
         self.input_param_names.remove("name")  # Remove 'name' column
 
-        for idx, row in tqdm.tqdm(
+        for _, row in tqdm.tqdm(
             data_df.iterrows(), total=len(data_df), desc="Loading test network samples"
         ):
             snp_path = os.path.join(directory, row["name"])
@@ -46,11 +46,10 @@ class GeoToNtwkDataset(torch.utils.data.Dataset):
         self, sparam_path: str, geometry_params: np.ndarray
     ) -> list[tuple[np.ndarray, rf.Network]]:
         """Load S-parameter data from a Touchstone file."""
-
         return [(geometry_params, rf.Network(sparam_path, f_unit="Hz"))]
-        
+
     def __len__(self):
         return len(self.samples)
-    
-    def __getitem__(self, idx):
-        return self.samples[idx]
+
+    def __getitem__(self, index) -> tuple[np.ndarray, rf.Network]:
+        return self.samples[index]

@@ -1,14 +1,16 @@
 import gdsfactory as gf
 import klayout.db as kdb
 import numpy as np
+
 from orca.geometry.layers import SG13G2
 
 GRID_NM = 10  # 10 nm manufacturing grid = 0.01 µm
 
 
 def _ensure_active_pdk() -> None:
-    """gdsfactory refuses to extrude paths without an active PDK. We only use it as a
-    polygon generator with explicit SG13G2 layer tuples, so its generic PDK is enough."""
+    """Gdsfactory refuses to extrude paths without an active PDK. We only use it as a
+    polygon generator with explicit SG13G2 layer tuples, so its generic PDK is enough.
+    """
     try:
         gf.get_active_pdk()
     except ValueError:
@@ -61,20 +63,24 @@ def tf_octa_c(
     Octagon Transformer Component with Feed Extensions and Overlap Checks.
 
     Args:
-        di: Diameter of input (lower/bot) winding (trace center to center).
-        do: Diameter of output (upper/top) winding (trace center to center).
-        dis: Displacement (offset between winding centers).
-        wi: Trace width of lower winding.
-        wic: Trace width of lower center tap.
-        fi: Feed type lower (0=no, 1=fwd, 2=rev, 3=both).
-        wo: Trace width of upper winding.
-        woc: Trace width of upper center tap.
-        fo: Feed type upper (0=no, 1=fwd, 2=rev, 3=both).
-        fs: Feedline spacing (gap between inner sides of feed lines).
-        ro: Ring spacing on upper winding side.
-        ri: Ring spacing on lower winding side.
-        rs: Ring spacing at side.
-        rw: Ring width.
+        name: Name of the generated cell.
+        bottom_winding_diameter: Diameter of the input (lower/bot) winding (trace center to center).
+        top_winding_diameter: Diameter of the output (upper/top) winding (trace center to center).
+        center_displacement: Displacement (offset between winding centers).
+        bottom_linewidth: Trace width of the lower winding.
+        bottom_center_tap_width: Trace width of the lower center tap (<= 0.1 uses bottom_linewidth).
+        lower_feed_type: Center tap of the lower winding: 0 = none, 1 = tap from the back of
+            the winding to the right ring edge (port ``ico`` on layer 206). 2 (tap through
+            the winding's own feed gap) and 3 (both) are not implemented.
+        top_linewidth: Trace width of the upper winding.
+        upper_center_tap_width: Trace width of the upper center tap (<= 0.1 uses top_linewidth).
+        upper_feed_type: Center tap of the upper winding, same encoding as lower_feed_type
+            (port ``oci`` on layer 205 when set to 1).
+        feedline_spacing: Feedline spacing (gap between inner sides of feed lines).
+        gnd_upper_spacing: Ring spacing on the upper winding side.
+        gnd_lower_spacing: Ring spacing on the lower winding side.
+        gnd_side_spacing: Ring spacing at the side.
+        gnd_ring_width: Ring width.
     """
     _ensure_active_pdk()
 
@@ -92,17 +98,22 @@ def tf_octa_c(
     top_centertap_width = (
         upper_center_tap_width if upper_center_tap_width > 0.1 else top_linewidth
     )
-    fo_int = int(round(upper_feed_type))
-    fi_int = int(round(lower_feed_type))
+    for label, feed_type in (("lower_feed_type", lower_feed_type), ("upper_feed_type", upper_feed_type)):
+        if feed_type not in (0, 1):
+            raise NotImplementedError(
+                f"{label}={feed_type}: only 0 (no center tap) and 1 (center tap) are implemented."
+            )
+    draw_bottom_tap = lower_feed_type == 1
+    draw_top_tap = upper_feed_type == 1
 
     # --- Safety Check: Octagon Opening Width ---
     # Top Winding Gap is on the RIGHT.
-    # Bot Center Tap (if fi_int & 1) goes RIGHT. It crosses Top Gap.
-    fs_top = max(feedline_spacing, bottom_centertap_width)
+    # Bot Center Tap goes RIGHT. It crosses Top Gap.
+    fs_top = max(feedline_spacing, bottom_centertap_width) if draw_bottom_tap else feedline_spacing
 
     # Bot Winding Gap is on the LEFT.
-    # Top Center Tap (if fo_int & 2) goes LEFT. It crosses Bot Gap.
-    fs_bot = max(feedline_spacing, top_centertap_width)
+    # Top Center Tap goes LEFT. It crosses Bot Gap.
+    fs_bot = max(feedline_spacing, top_centertap_width) if draw_top_tap else feedline_spacing
 
     # Geometry Limits
     tf_y = max(top_winding_diameter, bottom_winding_diameter) / 2.0 + gnd_side_spacing
@@ -120,18 +131,18 @@ def tf_octa_c(
     # Check if linewidth is too large for winding diameter
     if bottom_linewidth > bottom_winding_diameter / 3.0:
         raise ValueError("bottom_linewidth is too large for input_winding_diameter.")
-    elif top_linewidth > top_winding_diameter / 3.0:
+    if top_linewidth > top_winding_diameter / 3.0:
         raise ValueError("upper_linewidth is too large for output_winding_diameter.")
     # Check if center tap width is too large for winding diameter of the other winding
-    if bottom_centertap_width > top_winding_diameter / 3.0:
+    if draw_bottom_tap and bottom_centertap_width > top_winding_diameter / 3.0:
         raise ValueError(
             "bottom_center_tap_width is too large for output_winding_diameter."
         )
-    elif top_centertap_width > bottom_winding_diameter / 3.0:
+    if draw_top_tap and top_centertap_width > bottom_winding_diameter / 3.0:
         raise ValueError(
             "upper_center_tap_width is too large for input_winding_diameter."
         )
-    elif abs(bottom_winding_diameter - top_winding_diameter) > 40.0:
+    if abs(bottom_winding_diameter - top_winding_diameter) > 40.0:
         raise ValueError(
             "input_winding_diameter and output_winding_diameter difference is too large. No sufficient coupling."
         )
@@ -149,10 +160,12 @@ def tf_octa_c(
         rotation_deg,
         feed_target_x,
         centertap_target_x,
+        centertap_width,
     ):
         """
         Creates octagon winding AND the feed extension lines (rectangles) to the port.
         gap_size: spacing between inner edges of feed lines.
+        centertap_target_x: x of the center tap port, or None for no center tap.
         """
         r = diameter / 2.0
         # Feed Y positions (Trace Centers)
@@ -219,13 +232,14 @@ def tf_octa_c(
         path_l = gf.Path([start_lo, end_lo])
         c << path_l.extrude(width=width, layer=layer)
 
-        # Create center tap - find point
-        p_center_local = (round(x_end + width / 2.0, 2), round(center_y, 2))
-        start_ct = transform(p_center_local)
-        end_ct = (round(centertap_target_x, 2), round(center_y, 2))
+        # Center tap (optional): from the back of the winding straight out to its port
+        if centertap_target_x is not None:
+            p_center_local = (round(x_end + width / 2.0, 2), round(center_y, 2))
+            start_ct = transform(p_center_local)
+            end_ct = (round(centertap_target_x, 2), round(center_y, 2))
 
-        path_ct = gf.Path([start_ct, end_ct])
-        c << path_ct.extrude(width=width, layer=layer)
+            path_ct = gf.Path([start_ct, end_ct])
+            c << path_ct.extrude(width=centertap_width, layer=layer)
 
         return start_up, start_lo  # Return actual start points for reference if needed
 
@@ -243,7 +257,8 @@ def tf_octa_c(
         center_y=0,
         rotation_deg=0,
         feed_target_x=port_xr - gnd_ring_width,
-        centertap_target_x=port_xl + gnd_ring_width,
+        centertap_target_x=port_xl + gnd_ring_width if draw_top_tap else None,
+        centertap_width=top_centertap_width,
     )
 
     # Bot Winding (Rot 180, Gap Left -> connects to port_xl)
@@ -256,7 +271,8 @@ def tf_octa_c(
         center_y=0,
         rotation_deg=180,
         feed_target_x=port_xl + gnd_ring_width,
-        centertap_target_x=port_xr - gnd_ring_width,
+        centertap_target_x=port_xr - gnd_ring_width if draw_bottom_tap else None,
+        centertap_width=bottom_centertap_width,
     )
 
     # -------------------------------------------------
@@ -287,7 +303,7 @@ def tf_octa_c(
         c.shapes(layer_index).insert(kdb.Path([start, end], 0))
 
     ### TOP LAYER (ports on the RIGHT) -> Port 1 and 2 -> Layer 201, 202
-    # OP (Top, Right, Upper)
+    # OP: top winding, right side, upper port
     c.add_port(
         name="op",
         center=(round(port_xr - gnd_ring_width, 2), round(y_top_p, 2)),
@@ -301,7 +317,7 @@ def tf_octa_c(
         (201, 0),
         0,
     )
-    # ON (Top, Right, Lower)
+    # ON: top winding, right side, lower port
     c.add_port(
         name="on",
         center=(round(port_xr - gnd_ring_width, 2), round(y_top_n, 2)),
@@ -315,20 +331,21 @@ def tf_octa_c(
         (202, 0),
         0,
     )
-    # Center Tap (Top, Center)
-    c.add_port(
-        name="oci",
-        center=(round(port_xl + gnd_ring_width, 2), 0.0),
-        width=top_centertap_width,
-        orientation=180,
-        layer=(205, 0),
-    )
-    add_port_marker(
-        (round(port_xl + gnd_ring_width, 2), 0.0), top_centertap_width, (205, 0), 180
-    )
+    # Center Tap (Top, Center) -> Layer 205
+    if draw_top_tap:
+        c.add_port(
+            name="oci",
+            center=(round(port_xl + gnd_ring_width, 2), 0.0),
+            width=top_centertap_width,
+            orientation=180,
+            layer=(205, 0),
+        )
+        add_port_marker(
+            (round(port_xl + gnd_ring_width, 2), 0.0), top_centertap_width, (205, 0), 180
+        )
 
     ### BOT LAYER (ports on the LEFT) -> Port 3 and 4 -> Layer 203, 204
-    # IP (Bot, Left, Upper)
+    # IP: bottom winding, left side, upper port
     c.add_port(
         name="ip",
         center=(round(port_xl + gnd_ring_width, 2), round(y_bot_p, 2)),
@@ -342,7 +359,7 @@ def tf_octa_c(
         (203, 0),
         180,
     )
-    # IN (Bot, Left, Lower)
+    # IN: bottom winding, left side, lower port
     c.add_port(
         name="in",
         center=(round(port_xl + gnd_ring_width, 2), round(y_bot_n, 2)),
@@ -356,60 +373,18 @@ def tf_octa_c(
         (204, 0),
         180,
     )
-    # Center Tap (Bot, Center)
-    c.add_port(
-        name="ico",
-        center=(round(port_xr - gnd_ring_width, 2), 0.0),
-        width=bottom_centertap_width,
-        orientation=0,
-        layer=(206, 0),
-    )
-    add_port_marker(
-        (round(port_xr - gnd_ring_width, 2), 0.0), bottom_centertap_width, (206, 0), 0
-    )
-
-    # -------------------------------------------------
-    # 5. Center Taps (ici, ico, oci, oco)
-    # -------------------------------------------------
-    # Top Winding (Layer Top)
-    # "Left" edge of Top winding (Back of C-shape)
-    # top_back_x = center_displacement/2.0 - output_winding_diameter/2.0
-
-    # OCI (Top, goes Left?)
-    # if fo_int & 1:
-
-    # else:
-    #     # Default placeholder port
-    #     c.add_port(name="oci", center=(top_back_x - upper_linewidth/2.0 , 0), width=0.25, orientation=180, layer=(205, 0))
-    #     add_port_marker((top_back_x - upper_linewidth/2.0 , 0), 0.25, (205, 0))
-
-    # # OCO (Top, goes Right)
-    # if fo_int & 2:
-    #     c << gf.Path([(top_back_x, 0), (port_xr, 0)]).extrude(width=woc_int, layer=LAYER_TOP)
-    #     c.add_port(name="oco", center=(port_xr, 0), width=woc_int, orientation=0, layer=(207, 0))
-    #     add_port_marker((port_xr, 0), woc_int, (207, 0))
-    # else:
-    # c.add_port(name="oco", center=(top_back_x + upper_linewidth/2.0, 0), width=0.25, orientation=0, layer=(207, 0))
-    # add_port_marker((top_back_x + upper_linewidth/2.0, 0), 0.25, (207, 0))
-
-    # Bot Winding (Layer Bot)
-    # bot_back_x = -center_displacement/2.0 + input_winding_diameter/2
-
-    # ICO (Bot, goes Right)
-    # if fi_int & 1:
-
-    # else:
-    #     c.add_port(name="ico", center=(bot_back_x + bottom_linewidth/2.0, 0), width=0.25, orientation=0, layer=(206, 0))
-    #     add_port_marker((bot_back_x + bottom_linewidth/2.0, 0), 0.25, (206, 0))
-
-    # # ICI (Bot, goes Left)
-    # if fi_int & 2:
-    #     c << gf.Path([(port_xl, 0), (bot_back_x, 0)]).extrude(width=wic_int, layer=LAYER_BOT)
-    #     c.add_port(name="ici", center=(port_xl, 0), width=wic_int, orientation=180, layer=(208, 0))
-    #     add_port_marker((port_xl, 0), wic_int, (208, 0))
-    # else:
-    #     c.add_port(name="ici", center=(bot_back_x - bottom_linewidth/2.0, 0), width=0.25, orientation=180, layer=(208, 0))
-    #     add_port_marker((bot_back_x - bottom_linewidth/2.0, 0), 0.25, (208, 0))
+    # Center Tap (Bot, Center) -> Layer 206
+    if draw_bottom_tap:
+        c.add_port(
+            name="ico",
+            center=(round(port_xr - gnd_ring_width, 2), 0.0),
+            width=bottom_centertap_width,
+            orientation=0,
+            layer=(206, 0),
+        )
+        add_port_marker(
+            (round(port_xr - gnd_ring_width, 2), 0.0), bottom_centertap_width, (206, 0), 0
+        )
 
     # -------------------------------------------------
     # 6. Ground Ring

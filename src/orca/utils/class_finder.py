@@ -6,17 +6,17 @@ import importlib
 import inspect
 import os
 from pathlib import Path
-from typing import Type, Dict, Any
+from typing import Any
 
 from orca.logger import logger
 
 
 def discover_classes(
-    base_class: Type,
+    base_class: type,
     search_dir: str,
     module_prefix: str,
     extract_default_params: bool = False,
-) -> Dict[str, Dict[str, Any]]:
+) -> dict[str, dict[str, Any]]:
     """
     Automatically discover and load classes that inherit from a specified base class.
 
@@ -85,10 +85,10 @@ def discover_classes(
                             f"Discovered {base_class.__name__} subclass: {display_name}"
                         )
 
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 - skip the class, keep discovering
                         logger.warning(f"Could not process {name}: {e}")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - a broken plugin file must not stop discovery
             logger.warning(f"Failed to load classes from {py_file.name}: {e}")
 
     if not classes:

@@ -10,7 +10,7 @@ from orca.training.normalize import Normalizer
 from orca.training.spec import FrequencyMode, IOSpec
 
 
-class BaseDataset(ABC, torch.utils.data.Dataset):
+class BaseDataset(ABC, torch.utils.data.Dataset[tuple[torch.Tensor, torch.Tensor]]):
     #: Frequency layout of the samples this dataset produces.
     frequency_mode: ClassVar[FrequencyMode]
 
@@ -30,7 +30,7 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
             input_normalizer (Normalizer|None): Normalizer for input parameters.
             output_normalizer (Normalizer|None): Normalizer for output parameters.
         """
-        super(BaseDataset, self).__init__()
+        super().__init__()
 
         self.codec = codec
         self.samples: list[tuple[torch.Tensor, torch.Tensor]] = []
@@ -105,7 +105,7 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
                 "directory and the CSV describe the same set of simulations."
             )
 
-        inputs, outputs = zip(*self.samples)
+        inputs, outputs = zip(*self.samples, strict=True)
 
         # The normalizers are shared across the splits of a run, so only the split
         # that owns them fits; the rest reuse those statistics unchanged.
@@ -123,19 +123,13 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
                     "training split first with new_split(..., fit_normalizers=True)."
                 )
 
-        self.samples = list(
-            map(
-                lambda s: (
-                    self.input_normalizer.normalize(s[0])
-                    if self.input_normalizer is not None
-                    else s[0],
-                    self.output_normalizer.normalize(s[1])
-                    if self.output_normalizer is not None
-                    else s[1],
-                ),
-                self.samples,
+        self.samples = [
+            (
+                self.input_normalizer.normalize(x) if self.input_normalizer is not None else x,
+                self.output_normalizer.normalize(y) if self.output_normalizer is not None else y,
             )
-        )
+            for x, y in self.samples
+        ]
 
     @abstractmethod
     def load_samples(self, directory: str, data_df: pd.DataFrame) -> None:
@@ -143,10 +137,9 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
         Load samples from the dataset.
         This method should be implemented by subclasses to load data specific from its self.data_dir.
         """
-        pass
 
-    def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
-        return self.samples[idx]
+    def __getitem__(self, index) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.samples[index]
 
     def __len__(self):
         return len(self.samples)
@@ -165,6 +158,7 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
                 normalizers. Pass True for the training split and False for the
                 validation and test splits, which must reuse the training
                 statistics.
+
         Returns:
             BaseDataset: New dataset split instance.
         """
@@ -173,5 +167,5 @@ class BaseDataset(ABC, torch.utils.data.Dataset):
             input_normalizer=self.input_normalizer,
             output_normalizer=self.output_normalizer,
         )
-        new_dataset._load_samples_and_normalize(directory, data_df, fit_normalizers)
+        new_dataset._load_samples_and_normalize(directory, data_df, fit_normalizers)  # noqa: SLF001 - same class
         return new_dataset

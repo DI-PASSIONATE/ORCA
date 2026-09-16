@@ -1,17 +1,18 @@
-from concurrent.futures import as_completed
-import multiprocessing
-import pandas as pd
 import os
+from collections.abc import Callable
+from concurrent.futures import as_completed
+from typing import TYPE_CHECKING, Any
+
+import pandas as pd
 import tqdm
 from pebble import ProcessPool
 
-from typing import Any, Callable, Optional, TYPE_CHECKING
-from orca.geometry.base_geometry import BaseGeometry
-from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger
+from orca.pipeline.pipeline_stage import PipelineStage
 from orca.simulation.gds_converter import create_palace_model_from_gds
 
 if TYPE_CHECKING:
+    from orca.geometry.base_geometry import BaseGeometry
     from orca.pipeline.context import PipelineContext
 
 
@@ -38,7 +39,7 @@ class GDSConverter(PipelineStage):
     def run(
         self,
         context: "PipelineContext",
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
     ) -> "PipelineContext":
         geometry: BaseGeometry = context.geometry
         cpu_cores: int = context.num_processes
@@ -65,7 +66,7 @@ class GDSConverter(PipelineStage):
         ) as pool:
             futures = {}
             gds_dir = os.path.dirname(gds_csv)
-            for i, row in gds_data.iterrows():
+            for _, row in gds_data.iterrows():
                 # CSV layout:
                 # name,input_winding_diameter,output_winding_diameter,center_displacement,bottom_linewidth,upper_linewidth
                 # everything after name is input parameters
@@ -77,15 +78,15 @@ class GDSConverter(PipelineStage):
                 # Submit GDS conversion tasks
                 future = pool.schedule(
                     create_palace_model_from_gds,
-                    kwargs=dict(
-                        geometry_name=name,
-                        params=params,
-                        output_dir=base_dir,
-                        gds_filename=gds_path,
-                        stackup_xml=geometry.stackup_xml,
-                        simconfig_filename=geometry.simconfig_filename,
-                        show_mesh_results=False,
-                    ),
+                    kwargs={
+                        "geometry_name": name,
+                        "params": params,
+                        "output_dir": base_dir,
+                        "gds_filename": gds_path,
+                        "stackup_xml": geometry.stackup_xml,
+                        "simconfig_filename": geometry.simconfig_filename,
+                        "show_mesh_results": False,
+                    },
                     timeout=self.timeout,
                 )
                 futures[future] = name
@@ -109,7 +110,7 @@ class GDSConverter(PipelineStage):
                         f"GDS conversion of {name} exceeded {self.timeout:g} s "
                         "(gmsh did not finish meshing); skipping this sample."
                     )
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - one bad sample must not abort the batch
                     logger.error(f"GDS conversion failed for {name} with error: {e}")
                 finally:  # and call progress_callback even on failure
                     if progress_callback:
@@ -143,6 +144,7 @@ class GDSConverter(PipelineStage):
             params (dict[str, Any]): Input parameters to save.
             data_dir (str): Directory where data is stored.
             sim_path (str): Path to the simulation file.
+            config_name (str): Name of the Palace config file written for this sample.
         """
         df = pd.DataFrame(
             [

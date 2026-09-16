@@ -1,10 +1,9 @@
-from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
-import numpy as np
 import os
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from orca import BaseGeometry
-from orca.geometry.cells.inductor import symmetric_octa_IHP, get_min_outer_diameter
+from orca.geometry.cells.inductor import get_min_outer_diameter, symmetric_octa_IHP
 from orca.geometry.input_parameters import InputParameterIterator
 
 if TYPE_CHECKING:
@@ -31,7 +30,6 @@ def _input_parameters() -> InputParameterIterator:
         space=[x / 100 for x in range(201, 601, 1)],    # 2.01 ..  6.00 µm
         diameter=[float(x) for x in range(30, 301, 1)],  # 30 .. 300 µm
     )
-
 
 
 @dataclass
@@ -71,16 +69,15 @@ class InductorOcta(BaseGeometry):
         )
 
     @staticmethod
-    def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:
-        N = int(round(params["turns"]))
+    def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:  # noqa: ARG004 - the cell name is derived from the parameters
+        N = round(params["turns"])
         w = float(params["width"])
         s = float(params["space"])
         D = float(params["diameter"])
 
         # clamp the outer diameter to the minimum buildable (DRC-valid) value
         do_min = get_min_outer_diameter(N, w, s)
-        if D < do_min:
-            D = do_min
+        D = max(D, do_min)
 
         symmetric_octa_IHP(
             N=N, D=D, w=w, s=s,

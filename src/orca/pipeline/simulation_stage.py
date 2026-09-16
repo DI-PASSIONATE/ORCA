@@ -1,16 +1,18 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from queue import Queue
-from typing import Optional, Any, Callable, TYPE_CHECKING
 import json
 import os
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from queue import Queue
+from typing import TYPE_CHECKING, Any
+
 import pandas as pd
 import tqdm
 
-from orca.pipeline.pipeline_stage import PipelineStage
 from orca.logger import logger
+from orca.pipeline.pipeline_stage import PipelineStage
+from orca.simulation.combine_snp_results import touchstone_filename
 from orca.simulation.launchers import BIND_CHOICES, LocalLauncher, SimulationLauncher
 from orca.simulation.simulate import run_palace
-from orca.simulation.combine_snp_results import touchstone_filename
 
 if TYPE_CHECKING:
     from orca.pipeline.context import PipelineContext
@@ -97,7 +99,7 @@ class PalaceSimulator(PipelineStage):
     def run(
         self,
         context: "PipelineContext",
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
     ) -> "PipelineContext":
         num_processes: int = context.num_processes
         output_dir = context.result_dir
@@ -235,7 +237,7 @@ class PalaceSimulator(PipelineStage):
         Args:
             config_path (str): Path to the Palace config.json file to patch.
         """
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         config.setdefault("Problem", {})["OutputFormats"] = {"Paraview": False}

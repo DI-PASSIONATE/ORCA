@@ -1,0 +1,33 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_PYTHON: "3.12"
+
+jobs:
+  lint:
+    name: lint and type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install dependencies
+        # The train extra is needed for ty to resolve torch & co.; the cpu selector
+        # keeps that to the small CPU-only wheel, which setup-uv caches.
+        run: uv sync --locked --extra train --extra cpu
+      - name: Ruff
+        run: uv run ruff check .
+      - name: Ty
+        run: uv run ty check

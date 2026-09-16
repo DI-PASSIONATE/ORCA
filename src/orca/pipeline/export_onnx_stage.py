@@ -1,15 +1,17 @@
 import json
-from typing import Optional, Callable, TYPE_CHECKING
 import os
-import torch
-import onnx
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from orca.pipeline.pipeline_stage import PipelineStage
-from orca.geometry.base_geometry import BaseGeometry
+import onnx
+import torch
+
 from orca.logger import logger
+from orca.pipeline.pipeline_stage import PipelineStage
 from orca.training.onnx_wrapper import ONNXWrapper
 
 if TYPE_CHECKING:
+    from orca.geometry.base_geometry import BaseGeometry
     from orca.pipeline.context import PipelineContext
 
 
@@ -24,7 +26,7 @@ class OnnxExporter(PipelineStage):
     def run(
         self,
         context: "PipelineContext",
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
     ) -> "PipelineContext":
         geometry: BaseGeometry = context.geometry
 
@@ -93,6 +95,9 @@ class OnnxExporter(PipelineStage):
             meta.value = json.dumps(guarantees.as_dict())
 
         onnx.save(onnx_model, output_path)
+
+        if progress_callback:
+            progress_callback(self.name, 1, 1, f"Exported ONNX model to {output_path}.")
 
         context.model_path = output_path
         return context

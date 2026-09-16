@@ -9,10 +9,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import TYPE_CHECKING
 
-import numpy as np
+if TYPE_CHECKING:
+    import numpy as np
 
-from orca.training.codecs import OutputCodec
+    from orca.training.codecs import OutputCodec
 
 
 class FrequencyMode(Enum):

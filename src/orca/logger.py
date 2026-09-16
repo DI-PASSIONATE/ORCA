@@ -1,6 +1,7 @@
 import logging
-import colorlog
 import sys
+
+import colorlog
 
 logger = logging.getLogger("ORCA")
 

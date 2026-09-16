@@ -1,12 +1,12 @@
-from typing import Optional, Any, Dict, Callable, TYPE_CHECKING
 import os
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 import tqdm
 from sklearn.model_selection import train_test_split
 
-from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.training.datasets.geo_to_ntwk import GeoToNtwkDataset
@@ -22,6 +22,7 @@ from orca.utils.postprocessing import (
 )
 
 if TYPE_CHECKING:
+    from orca.geometry.base_geometry import BaseGeometry
     from orca.pipeline.context import PipelineContext
 
 
@@ -34,7 +35,7 @@ class ModelTester(PipelineStage):
     physical units, on geometries the model was never trained on.
     """
 
-    def __init__(self, n_test_samples: Optional[int] = None, plot: bool = False):
+    def __init__(self, n_test_samples: int | None = None, plot: bool = False):
         """
         Args:
             n_test_samples: Limit the evaluation to the first N held-out geometries.
@@ -49,7 +50,7 @@ class ModelTester(PipelineStage):
     def run(
         self,
         context: "PipelineContext",
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
     ) -> "PipelineContext":
         result_dir = context.result_dir
         test_df = context.test_df
@@ -123,8 +124,8 @@ class ModelTester(PipelineStage):
         self,
         test_dataset: GeoToNtwkDataset,
         predictor: NetworkPredictor,
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-    ) -> Dict[str, Any]:
+        progress_callback: Callable[[str, int, int, str], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Evaluates the predictor on the test dataset.
 
@@ -155,7 +156,7 @@ class ModelTester(PipelineStage):
             try:
                 predicted = calculate_electrical_parameters(ntwk_pred)
                 reference = calculate_electrical_parameters(ntwk_gt)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - skip samples whose metrics cannot be derived
                 logger.debug(f"Could not compute electrical parameters for sample {i}: {e}")
                 continue
 

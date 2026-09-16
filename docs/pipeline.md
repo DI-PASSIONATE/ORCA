@@ -21,7 +21,7 @@ flowchart TB
 
 ## Stage 1 — GDS generation (`GDSGenerator`)
 
-The geometry class's `input_parameter_iterator` samples parameter combinations (randomly or on a grid). For each combination, `create_gds_file()` is called to produce a GDS layout file. The number of samples is set by `num_samples`.
+The geometry class's `input_parameter_iterator` samples parameter combinations (randomly or on a grid). For each combination, `create_gds_file()` is called to produce a GDS layout file. The number of samples is set by `num_samples`; `seed` makes the `"random"` picking strategy reproducible.
 
 ## Stage 2 — GDS conversion (`GDSConverter`)
 

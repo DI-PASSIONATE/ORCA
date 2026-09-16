@@ -9,15 +9,17 @@
 # updated 13-Nov-2025 Mue: added simple de-embedding of parasitic port inductance (flat ribbon calculation)
 # updated 26-Nov-2025 Mue: also read Elmer FEM files
 
-import os
-import re
 import json
 import math
+import os
+import re
+import sys
+
+import numpy as np
 import skrf as rf
 from skrf.network import connect
-import numpy as np
-from orca.logger import logger
 
+from orca.logger import logger
 
 #: Filename suffix written for each touchstone_type, appended before the .sNp extension.
 #: "all" writes every variant; the fully corrected one is treated as canonical.
@@ -67,7 +69,7 @@ def parse_elmer_results(found_filename, freq, S_dB, S_arg):
 
     # Parse column names
     column_names = []
-    with open(names_filename, "r") as namesfile:
+    with open(names_filename) as namesfile:
         for line in namesfile:
             if ":" in line and line.strip()[0].isdigit():
                 parts = line.split(":")
@@ -98,17 +100,13 @@ def parse_elmer_results(found_filename, freq, S_dB, S_arg):
         logger.debug(
             "Incorrect number of values in data file, does not match port count"
         )
-        exit(1)
+        sys.exit(1)
 
     # read data file
     data = np.loadtxt(data_filename)
 
-    if data.ndim == 2:
-        # we have multiple frequencies
-        omegalist = data[:, omega_column]
-    else:
-        # we have only one freqiency point
-        omegalist = [data[omega_column]]
+    # 2D data holds multiple frequencies, 1D data a single frequency point
+    omegalist = data[:, omega_column] if data.ndim == 2 else [data[omega_column]]
     for omega in omegalist:
         freq.append(omega / (1e9 * 2 * math.pi))
 
@@ -232,9 +230,7 @@ def traverse_directories(path, level=0):
 
             if os.path.isdir(item_path):
                 traverse_directories(item_path, level + 1)
-            elif item == "port-S.csv":
-                found_datafiles.append(item_path)
-            elif item == "scalar_results.names":
+            elif item in ("port-S.csv", "scalar_results.names"):
                 found_datafiles.append(item_path)
 
     except PermissionError:
@@ -257,19 +253,13 @@ def extrapolate_to_DC(snp_filename):
     if nw.frequency.npoints > 20:
         if nw.frequency.start <= 1e9:
             # extrapolate to DC
-            extrapolated = nw.extrapolate_to_dc(
-                points=None, dc_sparam=None, kind="cubic", coords="polar"
-            )
-            filename, file_extension = os.path.splitext(snp_filename)
+            extrapolated = nw.extrapolate_to_dc(kind="cubic", coords="polar")
+            filename, _ = os.path.splitext(snp_filename)
             out_filename = filename + "_dc"  # without extension
-            extrapolated.write_touchstone(
-                out_filename,
-                skrf_comment="DC point added by extrapolation",
-                form="db",
-                write_noise=True,
-            )
+            extrapolated.comments = "DC point added by extrapolation"
+            extrapolated.write_touchstone(out_filename, form="db", write_noise=True)
             returnval = out_filename
-            logger.debug("Created file with DC extrapolation: ", out_filename, "\n")
+            logger.debug(f"Created file with DC extrapolation: {out_filename}")
         else:
             logger.debug("No data at low frequency, skipping DC extrapolation")
     else:
@@ -319,16 +309,14 @@ def port_deembedding(snp_filename, port_info_available, port_info_data):
                 Lport[str(portnum)] = L
 
         # convert the dict with port L into a list, to have the final values in correct order
-        L_values = []
-        for key in Lport.keys():
-            L_values.append(-Lport[key])
+        L_values = [-L for L in Lport.values()]
 
         # load SnP data and apply negative series L at each port
         ntwk = rf.Network(snp_filename)
         freq = ntwk.frequency
 
-        # Create a Media object (needed for Media.inductor)
-        media = rf.media.DefinedGammaZ0(frequency=freq, z0=50)
+        # Create a Media object (needed for Media.inductor), z0 defaults to 50 Ohm
+        media = rf.media.DefinedGammaZ0(frequency=freq)
 
         for n, L in enumerate(L_values):
             logger.debug(f"Cascading L= {L * 1e12:.2f} pH at port {n + 1}")
@@ -339,19 +327,11 @@ def port_deembedding(snp_filename, port_info_available, port_info_data):
             # after iterating over all ports we have the correct order again
             ntwk = connect(inductor, 0, ntwk, 0)
 
-        filename, file_extension = os.path.splitext(snp_filename)
+        filename, _ = os.path.splitext(snp_filename)
         out_filename = filename + "_deembedded"  # without extension
-        ntwk.write_touchstone(
-            out_filename,
-            skrf_comment="De-embedded by adding negative series L at ports",
-            form="db",
-            write_noise=True,
-        )
-        logger.debug(
-            "Created file with de-embedding (cascaded negative port L): ",
-            out_filename,
-            "\n",
-        )
+        ntwk.comments = "De-embedded by adding negative series L at ports"
+        ntwk.write_touchstone(out_filename, form="db", write_noise=True)
+        logger.debug(f"Created file with de-embedding (cascaded negative port L): {out_filename}")
     else:
         logger.debug(
             "Skipping port de-embedding, not port geometry information available"
@@ -368,8 +348,6 @@ def convert_to_touchstone(workdir, output_dir, touchstone_type: str):
 
     # evaluate the found data files
     for found_filename in found_datafiles:
-        # logger.debug(str(f))
-
         # Before we evaluate S-parameters, also check if we have a file port_information.json
         port_info_available = False
         # Get the directory two levels up
@@ -395,7 +373,7 @@ def convert_to_touchstone(workdir, output_dir, touchstone_type: str):
             )
 
             # Load the JSON data
-            with open(port_info_filename, "r") as f:
+            with open(port_info_filename) as f:
                 port_info_data = json.load(f)
 
             # Extract all Z0 values
@@ -406,7 +384,7 @@ def convert_to_touchstone(workdir, output_dir, touchstone_type: str):
 
             Z0_string = str(Z0_values[0])
             for Z in Z0_values:
-                if Z != Z0_values[0]:
+                if Z0_values[0] != Z:
                     Z0_string = Z0_string + " " + str(Z)
             # If string is filled, we have a Z0 parameter for Touchstone header line.
             # For mixed port impedance, we have multiple values there
@@ -439,23 +417,18 @@ def convert_to_touchstone(workdir, output_dir, touchstone_type: str):
             )
         else:
             logger.debug("Invalid file, exit")
-            exit(1)
+            sys.exit(1)
 
         data_lines = []
 
         for frequency in freq:
-            # line = str(frequency)
-
             index = freq.index(frequency)
             data_line = [frequency]
 
             for i in range(1, num_ports + 1):
                 for j in range(1, num_ports + 1):
                     # special case 2-port data: the output is S11 S21 S12 S22
-                    if num_ports == 2:
-                        param = str(j) + " " + str(i)
-                    else:
-                        param = str(i) + " " + str(j)
+                    param = f"{j} {i}" if num_ports == 2 else f"{i} {j}"
 
                     found_params = S_dB[index].keys()
                     # assume that we also have phase data then
@@ -492,22 +465,18 @@ def convert_to_touchstone(workdir, output_dir, touchstone_type: str):
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        output_file = open(output_filename, "w")
-        # write Touchstone header line
-        output_file.write(f"#  {freq_unit.upper()} S DB R {Z0_string}\n")
+        with open(output_filename, "w") as output_file:
+            # write Touchstone header line
+            output_file.write(f"#  {freq_unit.upper()} S DB R {Z0_string}\n")
 
-        for data_line in data_lines:
-            line = ""
-            for value in data_line:
-                line = line + " " + str(value)
-            output_file.write(line + "\n")
+            for data_line in data_lines:
+                line = ""
+                for value in data_line:
+                    line = line + " " + str(value)
+                output_file.write(line + "\n")
 
-        output_file.close()
         logger.debug(
-            "Created combined S-parameter file for ",
-            num_ports,
-            "ports, filename: ",
-            output_filename,
+            f"Created combined S-parameter file for {num_ports} ports, filename: {output_filename}"
         )
 
         if not port_info_available:
