@@ -1,16 +1,18 @@
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
-    QVBoxLayout,
     QWidget,
 )
 
 from orca.geometry.base_geometry import BaseGeometry
+from orca.gui.help_texts import tooltip
+from orca.gui.theme import manager as theme_manager
+from orca.gui.theme import refresh_style
 from orca.gui.utils import get_preset_geometries, load_class_from_file
 
 
@@ -28,37 +30,48 @@ class GeometrySelector(QWidget):
         self.load_presets()
 
     def init_ui(self):
-        layout = QVBoxLayout()
-        self.setLayout(layout)
+        theme = theme_manager()
+        layout = QFormLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.tokens.space_2)
 
-        # Selection Mode
-        mode_layout = QHBoxLayout()
+        # Preset combo box next to the custom-file button
+        source_layout = QHBoxLayout()
+        source_layout.setSpacing(theme.tokens.space_2)
         self.combo_presets = QComboBox()
+        self.combo_presets.setToolTip(tooltip("geometry_combo"))
         self.combo_presets.currentIndexChanged.connect(self.on_preset_changed)
 
-        self.btn_load_custom = QPushButton("Load Custom .py")
+        self.btn_load_custom = QPushButton("Load custom file")
+        self.btn_load_custom.setToolTip(tooltip("geometry_file_btn"))
         self.btn_load_custom.clicked.connect(self.load_custom_file)
+        theme.bind_icon(self.btn_load_custom, "folder-open-outline")
 
-        layout.addWidget(QLabel("Select Geometry:"))
-        layout.addLayout(mode_layout)
-        mode_layout.addWidget(self.combo_presets)
-        mode_layout.addWidget(self.btn_load_custom)
+        source_layout.addWidget(self.combo_presets, 1)
+        source_layout.addWidget(self.btn_load_custom)
+        layout.addRow("Geometry", source_layout)
 
-        # Name Override
-        name_layout = QHBoxLayout()
+        # Name override
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Geometry Name")
+        self.name_input.setPlaceholderText("Geometry name")
+        self.name_input.setToolTip(tooltip("geometry_name_edit"))
+        layout.addRow("Name", self.name_input)
 
-        name_layout.addWidget(QLabel("Geometry Name:"))
-        name_layout.addWidget(self.name_input)
-        layout.addLayout(name_layout)
+        # Status: colour follows the role property, the text says the same thing.
+        self.lbl_status = QLabel()
+        self.lbl_status.setWordWrap(True)
+        layout.addRow(self.lbl_status)
+        self.set_status("No geometry loaded", "muted")
 
-        self.lbl_status = QLabel("No geometry loaded")
-        layout.addWidget(self.lbl_status)
+    def set_status(self, text: str, role: str = "muted") -> None:
+        """Show *text* under the form; *role* is ``muted``, ``success`` or ``error``."""
+        self.lbl_status.setText(text)
+        self.lbl_status.setProperty("role", role)
+        refresh_style(self.lbl_status)
 
     def load_presets(self):
         self.combo_presets.clear()
-        self.combo_presets.addItem("Select a preset...", None)
+        self.combo_presets.addItem("Select a preset…", None)
 
         presets = get_preset_geometries()
         for cls in presets:
@@ -74,14 +87,13 @@ class GeometrySelector(QWidget):
 
     def load_custom_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open Geometry File", "", "Python Files (*.py)"
+            self, "Open geometry file", "", "Python files (*.py)"
         )
         if file_path:
             self.combo_presets.setCurrentIndex(0) # Reset preset selection
             cls = load_class_from_file(file_path, BaseGeometry)
             if not cls:
-                QMessageBox.warning(self, "Error", f"Could not find valid BaseGeometry subclass in {file_path}")
-                self.lbl_status.setText("Error loading geometry")
+                self.set_status(f"No BaseGeometry subclass found in {file_path}", "error")
                 return
             self.load_geometry_from_class(cls)
 
@@ -92,10 +104,9 @@ class GeometrySelector(QWidget):
             self.current_geometry_class = cls
             self.current_geometry_instance = instance
             self.name_input.setText(instance.name)
-            self.lbl_status.setText(f"Loaded: {cls.__name__}")
+            self.set_status(f"Loaded {cls.__name__}", "success")
         except Exception as e:  # noqa: BLE001 - user-supplied class: show the error instead of crashing
-            QMessageBox.critical(self, "Error", f"Failed to instantiate geometry class: {e}")
-            self.lbl_status.setText("Error instantiating class")
+            self.set_status(f"Could not instantiate {cls.__name__}: {e}", "error")
 
     def get_geometry(self):
         if not self.current_geometry_instance:

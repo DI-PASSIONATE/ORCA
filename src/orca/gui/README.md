@@ -1,2 +1,2 @@
 ## GUI
-This file contains the GUI of ORCA. It allows the user to use the trained models for inference on new data.
+PySide6 pipeline window of ORCA: pick a geometry, enable and configure the stages, run them, and follow the log.

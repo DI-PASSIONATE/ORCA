@@ -155,9 +155,10 @@ orca
 The GUI lets you:
 
 - select a geometry preset or load a custom geometry class,
-- configure pipeline stages and parameters,
-- monitor simulation and training progress in real time,
-- inspect and test the trained model.
+- configure pipeline stages and parameters (each field has a tooltip),
+- monitor simulation and training progress and the log in real time,
+- test the trained model,
+- switch between a light and a dark theme, or follow the system setting.
 
 ### 2. Python script mode
 

@@ -277,17 +277,16 @@ never the only signal · sentence case, units, tooltip · docs touched.
 
 ## 9. Known deviations in the current GUI
 
-To be resolved in one GUI update step, not incrementally by unrelated changes:
+The GUI update of September 2026 resolved the original list (tokens, both
+themes, `ThemeManager`, application-level stylesheet, QSS properties instead of
+inline styles, no success modal, sentence-case labels, icons, theme toggle,
+`help_texts.py`). What remains, by design rather than by omission:
 
-- `theme.py` is light-only with Material-blue literals (the file COBRA's theme
-  started from); it has no tokens, no dark theme, no `ThemeManager`.
-- The stylesheet is applied to the main window (`apply_theme(window)` in
-  `app.py`) rather than the `QApplication`, so dialogs and message boxes miss it.
-- `pipeline_window.py` styles the run button with a per-widget `setStyleSheet`
-  and uses `<h2>` HTML in labels for headings; both become QSS properties
-  (`primaryAction`, `role="heading"`).
-- No `actionState` on the run button, no `progressState` on the progress bar.
-- Pipeline success is announced with a modal `QMessageBox`; it should be the
-  status label plus the `finished` progress state.
-- Labels use trailing colons and Title Case ("Select Geometry:", "Geometry Name:").
-- No icons, no theme toggle, no persisted appearance setting, no `help_texts.py`.
+- No plots, so `theme.py` has no `style_plot` and ORCA does not depend on
+  pyqtgraph. Add both together with the first plot.
+- No pause/stop: `ORCA.run` cannot be interrupted, so the run button only uses
+  the `start` action state and is disabled while a run is in progress.
+- The stage forms are derived from the constructor signatures, so their labels
+  are the parameter names in sentence case without units; a stage option that
+  wants a unit or a friendlier label gets it in its `Args:` docstring, which
+  is what the tooltip shows.

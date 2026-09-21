@@ -1,5 +1,7 @@
 import inspect
 import json
+import types
+import typing
 
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -13,6 +15,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from orca.gui.help_texts import parameter_tooltips, tooltip
+from orca.gui.theme import manager as theme_manager
 from orca.pipeline.pipeline_stage import PipelineStage
 
 
@@ -28,25 +32,36 @@ class StageConfigWidget(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        tokens = theme_manager().tokens
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
         self.group_box = QGroupBox(self.stage_class.__name__)
         self.group_box.setCheckable(True)
         self.group_box.setChecked(True)
+        self.group_box.setToolTip(tooltip("stage_group"))
 
         form_layout = QFormLayout()
+        form_layout.setSpacing(tokens.space_2)
+        form_layout.setContentsMargins(
+            tokens.space_3, tokens.space_2, tokens.space_3, tokens.space_3
+        )
         self.group_box.setLayout(form_layout)
 
-        # Introspect __init__
+        # Introspect __init__; the Args docstring supplies the tooltips
         sig = inspect.signature(self.stage_class.__init__)
+        tips = parameter_tooltips(self.stage_class)
 
         for name, param in sig.parameters.items():
             if name == "self":
                 continue
 
-            label = QLabel(name)
+            label = QLabel(name.replace("_", " ").capitalize())
             input_widget = self.create_input_widget(param)
+            if name in tips:
+                label.setToolTip(tips[name])
+                input_widget.setToolTip(tips[name])
 
             self.parameter_inputs[name] = {"widget": input_widget, "type": param.annotation}
             form_layout.addRow(label, input_widget)
@@ -94,6 +109,14 @@ class StageConfigWidget(QWidget):
             return widget.isChecked()
         if isinstance(widget, QLineEdit):
             text = widget.text()
+            # Optional parameters (`int | None`) are edited as text; an empty field or
+            # the literal "None" means None, anything else is parsed as the other type.
+            if typing.get_origin(annotation) in (types.UnionType, typing.Union):
+                members = [m for m in typing.get_args(annotation) if m is not type(None)]
+                if text.strip() in ("", "None"):
+                    return None
+                if len(members) == 1:
+                    annotation = members[0]
             if annotation is int:
                 return int(text)
             if annotation is float:
