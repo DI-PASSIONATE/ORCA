@@ -57,10 +57,14 @@ class GDSGenerator(PipelineStage):
 
         os.makedirs(output_dir)
 
-        # Tell the input parameter iterator the number of samples to generate
-        geometry.input_parameter_iterator.set_sample_count(self.num_samples, seed=self.seed)
+        # Tell the input parameter iterator the number of samples to generate; draws
+        # the geometry cannot build are rejected there and, for the random
+        # strategy, redrawn, so the requested number of layouts is met.
+        iterator = geometry.input_parameter_iterator
+        iterator.set_sample_count(self.num_samples, seed=self.seed, feasible=geometry.is_feasible)
 
         futures = []
+        failed = 0
         with ProcessPoolExecutor(max_workers=cpu_cores) as executor:
             # Create cpu_cores processes to generate GDS files in parallel
             for i, input_params in enumerate(geometry.input_iterator):
@@ -93,6 +97,7 @@ class GDSGenerator(PipelineStage):
                     # import); nothing else will finish, so abort instead of skipping
                     raise
                 except Exception as e:  # noqa: BLE001 - one bad sample must not abort the batch
+                    failed += 1
                     logger.debug(f"Worker task failed: {e}")
                 finally:
                     if progress_callback:
@@ -103,7 +108,22 @@ class GDSGenerator(PipelineStage):
                             f"GDS Generation Progress: {i + 1}/{len(futures)}",
                         )
 
-        logger.info("GDS generation completed.")
+        drawn = len(futures) - failed
+        if iterator.n_rejected:
+            logger.info(
+                f"{iterator.n_rejected} infeasible parameter combinations were rejected by "
+                f"{type(geometry).__name__}.is_feasible and redrawn."
+            )
+        if failed or drawn < self.num_samples:
+            # A geometry that raises for a draw its is_feasible accepted, or a grid
+            # strategy with infeasible points, yields fewer layouts than requested;
+            # that should not go unnoticed.
+            logger.warning(
+                f"GDS generation completed: {drawn} of {self.num_samples} requested layouts "
+                f"drawn; {failed} draws failed in create_gds_file (see the debug log)."
+            )
+        else:
+            logger.info(f"GDS generation completed: {drawn} layouts drawn.")
         context.gds_csv = gds_csv
         return context
 

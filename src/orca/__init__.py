@@ -4,6 +4,7 @@ from .geometry.base_geometry import BaseGeometry
 from .geometry.input_parameters import InputParameterIterator
 from .orca import ORCA
 from .pipeline.context import PipelineContext
+from .pipeline.drc_stage import DRCChecker
 from .pipeline.gds_conversion_stage import GDSConverter
 from .pipeline.gds_gen_stage import GDSGenerator
 from .pipeline.pipeline_stage import PipelineStage
@@ -15,6 +16,7 @@ from .training.spec import FrequencyMode, IOSpec
 __all__ = [
     "ORCA",
     "BaseGeometry",
+    "DRCChecker",
     "FlatReImCodec",
     "FrequencyMode",
     "GDSConverter",

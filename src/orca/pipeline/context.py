@@ -82,6 +82,12 @@ class PipelineContext:
     gds_csv: str | None = None
     """Parameter table for the generated GDS files. ``None`` until the stage runs."""
 
+    # --- Written by DRCChecker ----------------------------------------------
+    drc_csv: str | None = None
+    """Parameter table of the layouts that passed DRC; GDSConverter reads it instead of the GDS table."""
+    drc_summary: dict[str, int] = field(default_factory=dict)
+    """Violation counts per design rule over all checked layouts; empty when all were clean."""
+
     # --- Written by GDSConverter --------------------------------------------
     palace_csv: str | None = None
     """Parameter table for the generated Palace models."""
@@ -120,6 +126,16 @@ class PipelineContext:
     def gds_csv_path(self) -> str:
         """Where the GDS generation stage writes its parameter table."""
         return os.path.join(self.geometry_dir, f"{self.geometry.name}.csv")
+
+    @property
+    def drc_csv_path(self) -> str:
+        """Where the DRC stage writes the parameter table of the layouts that passed."""
+        return os.path.join(self.geometry_dir, f"{self.geometry.name}_drc.csv")
+
+    @property
+    def drc_report_path(self) -> str:
+        """Where the DRC stage writes the per-layout violation counts."""
+        return os.path.join(self.geometry_dir, f"{self.geometry.name}_drc_report.csv")
 
     @property
     def palace_sim_dir(self) -> str:
@@ -167,6 +183,7 @@ class PipelineContext:
         record["geometry"] = self.geometry.name
         record["paths"] = {
             "geometry_dir": self.geometry_dir,
+            "drc_report": self.drc_report_path,
             "palace_sim_dir": self.palace_sim_dir,
             "result_dir": self.result_dir,
             "result_csv": self.result_csv,
