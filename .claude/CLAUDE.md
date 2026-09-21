@@ -5,17 +5,20 @@ models of RFIC passives. A run is a pipeline: generate GDS layouts with
 gdsfactory → convert them for Palace (`gds2palace`) → EM-simulate with Palace →
 train a PyTorch model on the S-parameters → export it to ONNX → test it. The
 ONNX models are consumed by COBRA (`../COBRA`), which reads the
-`input_parameter_ranges` and `physics_guarantees` metadata ORCA writes.
+`input_parameter_ranges`, `input_constraints` and `physics_guarantees` metadata
+ORCA writes.
 
 ## Repository Structure
 
 - `src/orca/orca.py`: the `ORCA` runner; sorts stages by `index` and runs them
   over one `PipelineContext`. Output goes to `output/<geometry name>/`.
 - `src/orca/pipeline/`: `PipelineStage` base, `PipelineContext`, and the stages
-  in fixed order: `GDSGenerator` (0), `GDSConverter` (1), `PalaceSimulator` (2),
-  `ModelTrainer` (4), `OnnxExporter` (5), `ModelTester` (6).
+  in fixed order: `GDSGenerator` (0), `DRCChecker` (1), `GDSConverter` (2),
+  `PalaceSimulator` (3), `ModelTrainer` (4), `OnnxExporter` (5), `ModelTester` (6).
 - `src/orca/geometry/`: `BaseGeometry` contract, `InputParameterIterator`,
-  layer stackups, reusable cells, and presets (`inductor_octa`,
+  layer stackups, the SG13G2 design rules (`drc.py`: grid snapping and KLayout
+  checks used by `DRCChecker`; geometry code does not snap itself), reusable
+  cells, and presets (`inductor_octa`,
   `tf_octa_c_ports`) with their `.simcfg`/`.xml` package data.
 - `src/orca/simulation/`: GDS→Palace conversion, Palace launchers (local,
   Apptainer, Slurm), and Touchstone result merging.
@@ -38,7 +41,12 @@ pipeline orchestration, and GUI stay in their own packages.
   say which stage was skipped, not fail on a `KeyError`.
 - **Geometries:** a `BaseGeometry` subclass provides `name`, `stackup_xml`,
   `simconfig_filename`, `input_parameter_iterator`, `create_gds_file`, and
-  `create_dataset`. Presets are examples of the contract; a change to the
+  `create_dataset`; `is_feasible(params)` is optional and rejects draws before
+  they are drawn, and `feasibility_constraints()` states the same rules as
+  expressions (`geometry/constraints.py` grammar) for the ONNX metadata — a
+  test must keep the two in agreement. Never clamp or repair parameters inside `create_gds_file` —
+  the parameter table records the requested values, so the model would learn a
+  geometry that was not built. Presets are examples of the contract; a change to the
   contract updates the presets and `docs/custom_class.md`.
 - **Public API:** everything importable as `orca.X` is listed in
   `src/orca/__init__.py`. Anything that needs PyTorch goes in

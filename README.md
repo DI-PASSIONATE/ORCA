@@ -174,6 +174,7 @@ geometry = TransformerOcta()
 orca_instance = ORCA(
     [
         orca.GDSGenerator(num_samples=1000),
+        orca.DRCChecker(),
         orca.GDSConverter(),
         orca.PalaceSimulator(palace_executable="palace"),
         orca.ModelTrainer(),
@@ -200,6 +201,7 @@ For large-scale simulation runs, we provide an OpenStack VM image and a CLI cont
 | Stage | Class | Description |
 |-------|-------|-------------|
 | GDS generation | `GDSGenerator` | Creates parameterized GDS layout files from a geometry class |
+| Design-rule check | `DRCChecker` | Snaps layouts to the manufacturing grid and drops those violating the IHP SG13G2 rules |
 | GDS conversion | `GDSConverter` | Converts GDS files to Palace-compatible simulation meshes using gds2palace |
 | EM simulation | `PalaceSimulator` | Runs full-wave EM simulations in Palace and stores results as Touchstone files |
 | Model training | `ModelTrainer` | Trains a PyTorch MLP to map geometry parameters + frequency to S-parameters |
@@ -217,10 +219,16 @@ ORCA runs a linear pipeline. Each stage receives a context dictionary and adds i
 │                        ORCA pipeline                         │
 │                                                              │
 │  ┌──────────────┐   GDS files    ┌──────────────────┐        │
-│  │ GDSGenerator │───────────────▶│   GDSConverter   │        │
-│  │              │                │ (gds2palace mesh) │        │
+│  │ GDSGenerator │───────────────▶│    DRCChecker    │        │
+│  │              │                │ (grid + SG13G2)  │        │
 │  └──────────────┘                └────────┬─────────┘        │
-│                                           │ mesh files        │
+│                                           │ clean layouts    │
+│                                           ▼                  │
+│                                  ┌──────────────────┐        │
+│                                  │   GDSConverter   │        │
+│                                  │ (gds2palace mesh)│        │
+│                                  └────────┬─────────┘        │
+│                                           │ mesh files       │
 │                                           ▼                  │
 │                                  ┌──────────────────┐        │
 │                                  │ PalaceSimulator  │        │
@@ -247,13 +255,17 @@ ORCA runs a linear pipeline. Each stage receives a context dictionary and adds i
 
 ### Stage 1 — GDS generation (`GDSGenerator`)
 
-The geometry class's `input_parameter_iterator` samples parameter combinations (randomly or on a grid). For each combination, `create_gds_file()` is called to produce a GDS layout file. The number of samples is set by `num_samples`; `seed` makes the `"random"` picking strategy reproducible.
+The geometry class's `input_parameter_iterator` samples parameter combinations (randomly or on a grid). For each combination, `create_gds_file()` is called to produce a GDS layout file. The number of samples is set by `num_samples`; `seed` makes the `"random"` picking strategy reproducible. Every draw is first passed to the geometry's `is_feasible()`; combinations it rejects (a winding that does not fit its diameter, a feed gap wider than the octagon's side) are counted and, with the `"random"` strategy, redrawn, so `num_samples` buildable layouts come out. A geometry that still raises `ValueError` in `create_gds_file()` costs a sample, and the stage warns when it delivered fewer layouts than requested.
 
-### Stage 2 — GDS conversion (`GDSConverter`)
+### Stage 2 — Design-rule check (`DRCChecker`)
 
-Each GDS file is converted to a Palace-ready simulation setup using [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2). The geometry's `stackup_xml` defines the physical layer stackup and material properties; the `simconfig_filename` defines the simulation parameters (port positions, frequency sweep, mesh settings).
+Every generated layout is snapped to the manufacturing grid (5 nm for SG13G2) and checked against the IHP SG13G2 back-end design rules with KLayout: off-grid vertices, edge angles, acute corners, minimum metal width and spacing, and via size, spacing and enclosure. The rule names follow the PDK's KLayout deck (`TM2.a`, `TV2.d`, ...). Off-grid vertices are repaired in place; layouts with remaining violations are reported in `<name>_drc_report.csv` and left out of the later stages, so parameter combinations that draw unbuildable geometry never reach the simulator or the model.
 
-### Stage 3 — EM simulation (`PalaceSimulator`)
+### Stage 3 — GDS conversion (`GDSConverter`)
+
+Each GDS file that passed DRC is converted to a Palace-ready simulation setup using [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2). The geometry's `stackup_xml` defines the physical layer stackup and material properties; the `simconfig_filename` defines the simulation parameters (port positions, frequency sweep, mesh settings).
+
+### Stage 4 — EM simulation (`PalaceSimulator`)
 
 Palace runs a full-wave finite-element EM simulation for each layout variant and writes the S-parameters to a Touchstone file (`.sNp`). Simulations are distributed across available CPU cores. The `palace_executable` argument can point to a local binary or a container invocation (e.g. `apptainer exec palace.sif palace`).
 
@@ -264,15 +276,15 @@ Several simulations can run at once, each already parallelized internally with M
 
 Palace is memory-bandwidth bound, so several smaller simulations confined to their own NUMA domain usually give a higher throughput than one simulation spread over a whole node — as long as one simulation fits into a domain's memory (use `bind="socket"` otherwise). The layout is derived from the machine or allocation at runtime, so `num_parallel_sims` and `num_processes` are capped to what is actually available. Pass `save_log=True` to keep each simulation's full Palace output in `palace.log` in its simulation folder (off by default, Palace prints a lot); failures are reported either way.
 
-### Stage 4 — Model training (`ModelTrainer`)
+### Stage 5 — Model training (`ModelTrainer`)
 
 A PyTorch MLP is trained on the simulation data. Inputs are geometry parameters and frequency; outputs are the real and imaginary parts of each S-parameter entry. Normalization is defined in the geometry's dataset and applied automatically. An optional basis expansion of the inputs — for example a Chebyshev expansion of frequency — is chosen on the stage itself with `ModelTrainer(basis="chebyshev")`; it lives inside the model, so it is tuned with it and exported into the ONNX graph. Hyperparameters such as learning rate, batch size, and network depth can be passed to `ModelTrainer`.
 
-### Stage 5 — ONNX export (`OnnxExporter`)
+### Stage 6 — ONNX export (`OnnxExporter`)
 
-The trained PyTorch model is exported to ONNX format with a fixed frequency sweep as part of the model signature. The resulting `.onnx` file is self-contained and can be run with `onnxruntime` — no PyTorch installation required at inference time.
+The trained PyTorch model is exported to ONNX format with a fixed frequency sweep as part of the model signature. The resulting `.onnx` file is self-contained and can be run with `onnxruntime` — no PyTorch installation required at inference time. The metadata carries `input_parameter_ranges`, `input_constraints` (which part of those ranges is buildable — the part the model was trained on) and `physics_guarantees` for the consumer.
 
-### Stage 6 — Model testing (`ModelTester`)
+### Stage 7 — Model testing (`ModelTester`)
 
 The ONNX model is loaded and evaluated against held-out simulation data. Prediction errors are logged to help assess whether the surrogate is accurate enough for use in COBRA.
 

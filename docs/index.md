@@ -67,7 +67,8 @@ ORCA automates the full loop from geometry to a trained, exported surrogate mode
 ```mermaid
 flowchart LR
 		A[Geometry Class] --> B[GDSGenerator]
-		B --> C[GDSConverter]
+		B --> X[DRCChecker]
+		X --> C[GDSConverter]
 		C --> D[PalaceSimulator]
 		D --> E[S-Parameter Dataset]
 		E --> F[ModelTrainer]
@@ -81,6 +82,7 @@ flowchart LR
 | Stage | Purpose |
 |---|---|
 | `GDSGenerator` | Samples geometry parameters and writes GDS layout files |
+| `DRCChecker` | Snaps layouts to the manufacturing grid and drops those violating the SG13G2 design rules |
 | `GDSConverter` | Converts GDS files to Palace-compatible mesh inputs |
 | `PalaceSimulator` | Runs full-wave EM simulations and stores Touchstone results |
 | `ModelTrainer` | Trains a PyTorch neural network on the simulation dataset |

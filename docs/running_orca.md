@@ -50,6 +50,7 @@ geometry = TransformerOcta()
 orca_instance = ORCA(
     [
         orca.GDSGenerator(num_samples=1000),
+        orca.DRCChecker(),
         orca.GDSConverter(),
         orca.PalaceSimulator(
             palace_executable="apptainer exec ~/palace/palace.sif palace",
@@ -75,14 +76,15 @@ Wrap the call in `if __name__ == "__main__":` (or a `main()` function) as shown:
 This will:
 
 1. Generate 1000 parameterised GDS layout variants.
-2. Convert each to a Palace mesh and run full-wave EM simulation.
-3. Store results in Touchstone format under `output/<geometry_name>/`.
-4. Train a neural network on the simulation dataset.
-5. Export the trained model to ONNX format.
-6. Test prediction accuracy against held-out simulation data.
+2. Snap them to the manufacturing grid and drop those violating the SG13G2 design rules.
+3. Convert each to a Palace mesh and run full-wave EM simulation.
+4. Store results in Touchstone format under `output/<geometry_name>/`.
+5. Train a neural network on the simulation dataset.
+6. Export the trained model to ONNX format.
+7. Test prediction accuracy against held-out simulation data.
 
 !!! tip
-	You can run only a subset of pipeline stages by modifying the list passed to `ORCA(...)`. Stages are sorted by their internal index and some depend on outputs of earlier stages. Stage indices: `GDSGenerator=0`, `GDSConverter=1`, `PalaceSimulator=2`, `ModelTrainer=4`, `OnnxExporter=5`, `ModelTester=6`.
+	You can run only a subset of pipeline stages by modifying the list passed to `ORCA(...)`. Stages are sorted by their internal index and some depend on outputs of earlier stages. Stage indices: `GDSGenerator=0`, `DRCChecker=1`, `GDSConverter=2`, `PalaceSimulator=3`, `ModelTrainer=4`, `OnnxExporter=5`, `ModelTester=6`.
 
 ## 4. Run at Scale with OpenStack
 
