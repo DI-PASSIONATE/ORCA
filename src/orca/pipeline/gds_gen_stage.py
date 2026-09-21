@@ -27,6 +27,11 @@ class GDSGenerator(PipelineStage):
     """
 
     def __init__(self, num_samples: int = 1000, seed: int | None = None):
+        """
+        Args:
+            num_samples (int): Number of parameter samples, and thus GDS layouts, to generate.
+            seed (int | None): Seed of the parameter sampler; None draws a fresh sample each run.
+        """
         super().__init__(name="GDS Generator", index=0)
         self.num_samples = num_samples
         self.seed = seed

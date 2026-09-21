@@ -29,10 +29,12 @@ orca
 
 In GUI mode:
 
-1. Select a geometry class.
-2. Configure pipeline stages and parameters.
-3. Set Palace executable path.
-4. Start the pipeline.
+1. Select a geometry preset, or load a custom `.py` file that defines a `BaseGeometry` subclass. The name field sets the output folder (`output/<name>/`).
+2. Tick the pipeline stages to run and set their parameters. Every field has a tooltip taken from the stage's documentation; leave an optional field empty (or `None`) to use the default.
+3. Set the Palace executable path in the `PalaceSimulator` stage.
+4. Click **Run pipeline**. Progress, the current stage, and the outcome show next to the progress bar (green when finished, red text on an error); the log panel mirrors what ORCA prints on the console. Validation problems, such as no geometry selected, appear inline instead of in a dialog. If the output directory already exists you are asked once before it is overwritten.
+
+The button in the top-right corner switches the appearance between *system* (follows the OS colour scheme), *light* (Sandbank) and *dark* (Deepwater). The choice is remembered across sessions.
 
 ## 3. Run Script Mode
 

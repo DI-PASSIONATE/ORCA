@@ -63,6 +63,7 @@ dependencies = [
     "tqdm",
     "pandas",
     "PySide6",
+    "qtawesome",
     "colorlog",
     "matplotlib",
     "pebble>=5.2.2",
@@ -89,10 +90,11 @@ cu126 = ["torch"]
 cu130 = ["torch"]
 
 [dependency-groups]
-# Installed by `uv sync` (not by `pip install`): the linters CI runs, pinned by uv.lock.
+# Installed by `uv sync` (not by `pip install`): the linters and test runner CI uses, pinned by uv.lock.
 dev = [
     "ruff",
     "ty",
+    "pytest",
 ]
 
 [tool.uv]

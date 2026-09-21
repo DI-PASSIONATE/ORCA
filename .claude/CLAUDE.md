@@ -66,9 +66,7 @@ pipeline orchestration, and GUI stay in their own packages.
   `uv run ty check`; CI fails on either. Ruff runs with `select = ALL`
   and a curated ignore list in `pyproject.toml` — add to that list only with a
   one-line reason, as the existing entries do.
-- There is no test suite yet (`tests/` is empty, pytest is configured). When
-  adding tests, put them in `tests/`, add `pytest` to the `dev` group, and keep
-  them free of Palace, torch training, and network access.
+- Tests live in `tests/` and run with `uv run pytest` (`pytest` is in the `dev`
 
 ## Simulation and Training
 
