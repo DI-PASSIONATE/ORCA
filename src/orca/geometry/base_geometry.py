@@ -48,6 +48,42 @@ class BaseGeometry(ABC):
 
         return len(read_simconfig(self.simconfig_filename)["ports"])
 
+    def is_feasible(self, params: dict[str, Any]) -> bool:  # noqa: ARG002 - hook with a default
+        """
+        Whether a parameter combination describes a layout that can be drawn.
+
+        Called before :meth:`create_gds_file`, for every draw of the input
+        parameter iterator; infeasible draws are rejected and redrawn, so the
+        requested number of samples is met and only buildable layouts are
+        simulated. Override this for cheap, closed-form constraints between
+        parameters (a winding that must fit its diameter, a via array that must
+        fit its trace). Do not clamp or repair parameters instead: the parameter
+        table records the requested values, and a repaired layout would train
+        the model on a geometry it does not have.
+
+        The default accepts everything. :meth:`create_gds_file` should still
+        raise ``ValueError`` for a combination it cannot draw; that is the
+        safety net, this is the filter.
+        """
+        return True
+
+    def feasibility_constraints(self) -> list[str]:
+        """
+        :meth:`is_feasible` as expressions a consumer of the model can evaluate.
+
+        Each string is a boolean expression over the input parameter names in
+        the grammar of :mod:`orca.geometry.constraints`, for example
+        ``"bottom_linewidth <= bottom_winding_diameter / 3"``. The ONNX
+        exporter writes them to the ``input_constraints`` metadata key, so
+        COBRA can refuse a query for a geometry that cannot be built rather
+        than return a prediction the model was never trained for.
+
+        They must accept exactly the parameter sets :meth:`is_feasible`
+        accepts; derive both from the same numbers. The default declares no
+        constraints, which a consumer reads as "the whole parameter box".
+        """
+        return []
+
     @staticmethod
     @abstractmethod
     def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:

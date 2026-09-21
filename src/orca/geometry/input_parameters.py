@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
+
+#: Draws the 'random' strategy may spend per requested sample before giving up
+#: on a constraint that rejects almost everything.
+MAX_DRAWS_PER_SAMPLE = 100
 
 
 class InputParameterIterator:
@@ -52,8 +56,15 @@ class InputParameterIterator:
 
         # Created after set_sample_count is called
         self._iterator: Iterator[Any] | None = None
+        self.feasible: Callable[[dict[str, Any]], bool] | None = None
+        self.n_rejected = 0
 
-    def set_sample_count(self, n_samples: int, seed: int | None = None):
+    def set_sample_count(
+        self,
+        n_samples: int,
+        seed: int | None = None,
+        feasible: Callable[[dict[str, Any]], bool] | None = None,
+    ):
         """
         Sets the number of samples to generate. This is used for strategies
         that depend on the total number of samples, such as 'uniform_grid' and 'random'.
@@ -61,8 +72,16 @@ class InputParameterIterator:
         Args:
             n_samples (int): Number of samples to generate.
             seed (int|None): Overrides the seed given to __init__ for the 'random' strategy.
+            feasible (Callable|None): Constraint between parameters, typically a geometry's
+                ``is_feasible``. Combinations it rejects are skipped and counted in
+                :attr:`n_rejected`. The 'random' strategy redraws until ``n_samples``
+                feasible combinations were produced (up to :data:`MAX_DRAWS_PER_SAMPLE`
+                draws per sample); the grid strategies simply yield fewer points.
         """
         self.n_samples = n_samples
+        self.feasible = feasible
+        self.n_rejected = 0
+        self.n_accepted = 0
         if seed is not None:
             self.seed = seed
         # Reinitialize the iterator based on the picking strategy
@@ -89,14 +108,22 @@ class InputParameterIterator:
                 raise RuntimeError(
                     "set_sample_count() must be called before iterating over the input parameters."
                 )
-            self.n_geometries_created += 1  # May be used for logging or tracking
-            # Raises StopIteration when exhausted, which is propagated to this iterator
-            params = next(self._iterator)
-            # Convert numpy types to Python native types to avoid type issues with downstream libraries
-            params = [
-                param.item() if isinstance(param, np.generic) else param for param in params
-            ]
-            return dict(zip(self.input_names, params, strict=True))
+            while True:
+                if self.picking_strategy == "random" and self.n_accepted >= self.n_samples:
+                    raise StopIteration
+                # Raises StopIteration when exhausted, which is propagated to this iterator
+                params = next(self._iterator)
+                # Convert numpy types to Python native types to avoid type issues with downstream libraries
+                params = [
+                    param.item() if isinstance(param, np.generic) else param for param in params
+                ]
+                sample = dict(zip(self.input_names, params, strict=True))
+                if self.feasible is not None and not self.feasible(sample):
+                    self.n_rejected += 1
+                    continue
+                self.n_accepted += 1
+                self.n_geometries_created += 1  # May be used for logging or tracking
+                return sample
 
     def get_min_max_values(self) -> tuple[list[float], list[float]]:
         """
@@ -168,7 +195,10 @@ class InputParameterIterator:
         and returns a dict of {"name": value} for each sample.
         """
         rng = np.random.default_rng(self.seed)
-        for _ in range(self.n_samples):
+        # With a constraint, draw past n_samples so rejected draws can be replaced;
+        # __next__ stops once n_samples were accepted, so the stream stays the same.
+        n_draws = self.n_samples * (MAX_DRAWS_PER_SAMPLE if self.feasible is not None else 1)
+        for _ in range(n_draws):
             sampled_params = []
             for name in self.input_names:
                 values = self.input_values[name]
