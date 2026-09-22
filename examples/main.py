@@ -1,5 +1,6 @@
 import orca
-from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
+
+# from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 from orca.geometry.presets.inductor_octa import InductorOcta
 
 PLOT = False
