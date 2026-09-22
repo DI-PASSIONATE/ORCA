@@ -1,5 +1,6 @@
 import orca
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
+from orca.geometry.presets.inductor_octa import InductorOcta
 
 PLOT = False
 
@@ -23,7 +24,7 @@ def main():
         torch.manual_seed(40)
     except ModuleNotFoundError:
         pass
-    geometry = TransformerOcta()
+    geometry = InductorOcta()
 
     orca_instance = orca.ORCA(
         [

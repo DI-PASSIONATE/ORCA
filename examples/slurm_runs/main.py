@@ -1,5 +1,6 @@
 import orca
 from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
+#from orca.geometry.presets.inductor_octa import InductorOcta
 
 
 def main():
@@ -9,11 +10,14 @@ def main():
         torch.manual_seed(40)
     except ModuleNotFoundError:
         pass
+
     geometry = TransformerOcta(name="tf_octa_c_ports")
+    # geometry = InductorOcta(name="inductor_octa")
 
     orca_instance = orca.ORCA(
         [
             orca.GDSGenerator(num_samples=6000, seed=40),
+            orca.DRCChecker(),
             orca.GDSConverter(),
             # launcher="slurm" runs the simulations as srun job steps on the nodes of this allocation
             # (#SBATCH --nodes in the job script). bind="numa" with num_parallel_sims=0 runs one
