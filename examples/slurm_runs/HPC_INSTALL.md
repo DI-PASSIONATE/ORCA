@@ -17,8 +17,7 @@ Now you have two options: Either perform the following steps by hand on the allo
 3. Make the internet accessible from the allocated node by running:
 
 ```sh
-export http_proxy=http://proxy.nhr.fau.de:80
-export https_proxy=http://proxy.nhr.fau.de:80
+export http_proxy=http://proxy.nhr.fau.de:80 && export https_proxy=http://proxy.nhr.fau.de:80
 ```
 
 4. Load compilers and MPI modules

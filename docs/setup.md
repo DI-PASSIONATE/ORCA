@@ -1,7 +1,7 @@
 ---
 title: Installation
 description: >-
-  Install ORCA with uv or pip on Python 3.11+, set up the Palace
+  Install ORCA with uv or pip on Python 3.11–3.13, set up the Palace
   electromagnetic solver, and verify the installation before your first
   surrogate model run.
 ---
@@ -10,7 +10,7 @@ description: >-
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.11–3.13
 - Palace EM simulation software
 
 Optional:
@@ -18,7 +18,20 @@ Optional:
 - COBRA installed/importable if you use ORCA surrogate outputs in circuit optimization
 
 !!! note
-	ORCA supports Python 3.11 to 3.14.
+	ORCA supports Python 3.11 to 3.13; Python 3.14 is not supported yet.
+
+## Install from PyPI
+
+ORCA is published as [`orca-rfic`](https://pypi.org/project/orca-rfic/). The import package and the GUI command are both still called `orca`.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install "orca-rfic[train]"   # full pipeline
+pip install orca-rfic            # simulation only, no PyTorch
+```
+
+To work on ORCA itself, install from source instead, as described below.
 
 ## Clone Repository
 

@@ -3,9 +3,10 @@
 **An open-source EDA tool for AI-assisted RFIC design: a surrogate modelling pipeline for RF integrated circuit components — from parametric GDS layout to full-wave EM simulation to a trained ONNX model for COBRA.**
 
 [![Documentation](https://img.shields.io/badge/docs-di--passionate.github.io%2FORCA-green?logo=materialformkdocs&logoColor=white)](https://di-passionate.github.io/ORCA/)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white)](pyproject.toml)
-[![Cite this repository](https://img.shields.io/badge/cite-CITATION.cff-lightgrey)](CITATION.cff)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/DI-PASSIONATE/ORCA/blob/main/LICENSE)
+[![Python 3.11–3.13](https://img.shields.io/badge/python-3.11%E2%80%933.13-blue?logo=python&logoColor=white)](https://github.com/DI-PASSIONATE/ORCA/blob/main/pyproject.toml)
+[![PyPI](https://img.shields.io/pypi/v/orca-rfic?logo=pypi)](https://pypi.org/project/orca-rfic/)
+[![Cite this repository](https://img.shields.io/badge/cite-CITATION.cff-lightgrey)](https://github.com/DI-PASSIONATE/ORCA/blob/main/CITATION.cff)
 [![GitHub stars](https://img.shields.io/github/stars/DI-PASSIONATE/ORCA?style=social)](https://github.com/DI-PASSIONATE/ORCA/stargazers)
 
 ©2026
@@ -38,7 +39,7 @@ Given a geometry class with configurable parameters, ORCA automatically:
 
 The resulting ONNX model can then be loaded by [COBRA](https://github.com/DI-PASSIONATE/COBRA) for fast circuit-level optimization — no EM simulation required at optimization time. Created models can easily be shared via Hugging Face Hub for others to use in their own design flows and reduce redundant EM simulations across the community.
 
-![ORCA pipeline overview: parametric GDS generation, Palace EM simulation, PyTorch training and ONNX export of an RFIC component surrogate model](docs/orca.png)
+![ORCA pipeline overview: parametric GDS generation, Palace EM simulation, PyTorch training and ONNX export of an RFIC component surrogate model](https://github.com/DI-PASSIONATE/ORCA/raw/main/docs/orca.png)
 
 ## Key Features
 
@@ -65,13 +66,27 @@ In short: **ORCA builds the model, COBRA uses it** to optimize circuits quickly 
 
 ### Requirements
 
-- Python 3.11+
+- Python 3.11–3.13
 - [Palace](https://awslabs.github.io/palace/stable/) (for running EM simulations)
 
 Install Palace separately by following [the Palace installation instructions](https://awslabs.github.io/palace/stable/install/index.html). Recommendations: apptainer for local installation / testing, spack for HPC clusters.
 
+### For users: install from PyPI
 
-### Option A: Using `uv` (recommended)
+ORCA is published as [`orca-rfic`](https://pypi.org/project/orca-rfic/). The import package and the GUI command are both still called `orca`.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install "orca-rfic[train]"   # full pipeline
+pip install orca-rfic            # simulation only, no PyTorch
+```
+
+Upgrade later with `pip install -U "orca-rfic[train]"`.
+
+### For developers: install from source
+
+#### Option A: Using `uv` (recommended)
 
 1. Clone the repository:
 
@@ -114,7 +129,7 @@ uv sync --extra train --extra cu130   # CUDA 13.0 wheels (driver >= 580)
 uv sync --extra train --extra cu126   # CUDA 12.6 wheels for older drivers
 ```
 
-### Option B: Using standard `venv` + `pip`
+#### Option B: Using standard `venv` + `pip`
 
 1. Clone the repository:
 
@@ -272,7 +287,7 @@ Palace runs a full-wave finite-element EM simulation for each layout variant and
 Several simulations can run at once, each already parallelized internally with MPI (`num_processes` ranks per simulation). `bind` chooses what one simulation gets — a whole `"node"`, one `"socket"` or one `"numa"` domain — and `num_parallel_sims=0` uses all such slots:
 
 - `PalaceSimulator(num_parallel_sims=0, bind="numa")` runs one simulation per NUMA domain of the current machine, each pinned with `numactl` (e.g. 2 or 4 at once on a multi-socket workstation).
-- `PalaceSimulator(launcher="slurm", num_parallel_sims=0, bind="numa")` does the same on every node of a Slurm allocation (`sbatch --nodes=N`), each simulation launched as an `srun` job step pinned to its node and cores. See [examples/slurm_runs](examples/slurm_runs) for a job script.
+- `PalaceSimulator(launcher="slurm", num_parallel_sims=0, bind="numa")` does the same on every node of a Slurm allocation (`sbatch --nodes=N`), each simulation launched as an `srun` job step pinned to its node and cores. See [examples/slurm_runs](https://github.com/DI-PASSIONATE/ORCA/tree/main/examples/slurm_runs) for a job script.
 
 Palace is memory-bandwidth bound, so several smaller simulations confined to their own NUMA domain usually give a higher throughput than one simulation spread over a whole node — as long as one simulation fits into a domain's memory (use `bind="socket"` otherwise). The layout is derived from the machine or allocation at runtime, so `num_parallel_sims` and `num_processes` are capped to what is actually available. Pass `save_log=True` to keep each simulation's full Palace output in `palace.log` in its simulation folder (off by default, Palace prints a lot); failures are reported either way.
 
@@ -296,7 +311,7 @@ To train a surrogate for your own component, create three files:
 2. **A stackup XML file** — defines the physical layer stack (materials, thicknesses, conductor layers).
 3. **A simulation config file** (`.simcfg`) — defines port positions, frequency sweep, and mesh settings for Palace.
 
-See the [Custom Classes documentation](docs/custom_class.md) for a full walkthrough and examples.
+See the [Custom Classes documentation](https://di-passionate.github.io/ORCA/custom_class/) for a full walkthrough and examples.
 
 The built-in `TransformerOcta` preset (`src/orca/geometry/presets/tf_octa_c_ports.py`) is a good reference implementation.
 
@@ -361,7 +376,7 @@ Once uploaded, COBRA can query all public `orca-surrogate` models or load a spec
 
 ## Cite This Work
 
-If you use ORCA in your research, please cite our upcoming SBCCI 2026 paper (or use GitHub's **Cite this repository** button, backed by [`CITATION.cff`](CITATION.cff)):
+If you use ORCA in your research, please cite our upcoming SBCCI 2026 paper (or use GitHub's **Cite this repository** button, backed by [`CITATION.cff`](https://github.com/DI-PASSIONATE/ORCA/blob/main/CITATION.cff)):
 
 ```bibtex
 @INPROCEEDINGS{2026_COBRA,
@@ -387,16 +402,18 @@ This work was supported by the Bundesministerium für Forschung, Technologie und
 - [OpenStack](https://opendev.org/openstack)
 - [Hugging Face Hub](https://github.com/huggingface/huggingface_hub)
 
+The authors gratefully acknowledge the scientific support and HPC resources provided by the Erlangen National High Performance Computing Center (NHR@FAU) of the Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU). The hardware is partially funded by the German Research Foundation (DFG).
+
 <table width="100%">
   <tr>
     <td align="left" width="50%">
       <a href="https://www.lites.tf.fau.de/" target="_blank">
-        <img src="docs/lites.png" alt="Lehrstuhl für Intelligente Technische Elektronik und Systeme @ FAU" width="94%"/>
+        <img src="https://github.com/DI-PASSIONATE/ORCA/raw/main/docs/lites.png" alt="Lehrstuhl für Intelligente Technische Elektronik und Systeme @ FAU" width="94%"/>
       </a>
     </td>
     <td align="right" width="50%">
       <a href="https://www.elektronikforschung.de/projekte/di-passionate" target="_blank">
-        <img src="docs/bmftr.jpg" alt="DI-PASSIONATE Project (funded by BMFTR)" width="94%"/>
+        <img src="https://github.com/DI-PASSIONATE/ORCA/raw/main/docs/bmftr.jpg" alt="DI-PASSIONATE Project (funded by BMFTR)" width="94%"/>
       </a>
     </td>
   </tr>
