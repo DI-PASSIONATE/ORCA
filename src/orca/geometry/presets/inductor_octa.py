@@ -3,7 +3,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from orca import BaseGeometry
-from orca.geometry.cells.inductor import get_min_outer_diameter, symmetric_octa_IHP
+from orca.geometry.cells.inductor import (
+    VIA_GAP,
+    VIA_MARGIN,
+    VIA_SIZE,
+    get_min_outer_diameter,
+    symmetric_octa_IHP,
+)
 from orca.geometry.input_parameters import InputParameterIterator
 
 if TYPE_CHECKING:
@@ -68,6 +74,28 @@ class InductorOcta(BaseGeometry):
             output_normalizer=StandardNormalizer(),
         )
 
+    def feasibility_constraints(self) -> list[str]:
+        # get_min_outer_diameter as one expression; kept in step with it by a test.
+        two_vias = 2 * VIA_SIZE + VIA_GAP + 2 * VIA_MARGIN
+        overlap = f"(width if width >= {two_vias:g} else 1.1 * {two_vias:g})"
+        crossover = (
+            f"max(3 * width + 2 * space, "
+            f"(2 * space + width) * (sqrt2 - 1) + (space + width) + 2 * {overlap})"
+        )
+        inner_segment = f"({crossover} + (0 if turns < 3 else width + 2 * space))"
+        inner_diameter = (
+            f"({inner_segment} * (1 + sqrt2) if turns > 1 else 2 * (width + space) * (1 + sqrt2))"
+        )
+        outer_diameter = f"{inner_diameter} + 2 * turns * width + 2 * (turns - 1) * space"
+        return [f"diameter >= ceil(100 * ({outer_diameter})) / 100"]
+
+    def is_feasible(self, params: dict[str, Any]) -> bool:
+        # The windings, crossovers and feed vias must fit inside the outer diameter.
+        N = round(params["turns"])
+        return float(params["diameter"]) >= get_min_outer_diameter(
+            N, float(params["width"]), float(params["space"])
+        )
+
     @staticmethod
     def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:  # noqa: ARG004 - the cell name is derived from the parameters
         N = round(params["turns"])
@@ -75,9 +103,16 @@ class InductorOcta(BaseGeometry):
         s = float(params["space"])
         D = float(params["diameter"])
 
-        # clamp the outer diameter to the minimum buildable (DRC-valid) value
+        # Refuse, rather than clamp, a diameter below the buildable minimum: the
+        # parameter table records the requested value, so a clamped layout would
+        # train the model on a diameter the layout does not have. is_feasible
+        # rejects such draws before they get here.
         do_min = get_min_outer_diameter(N, w, s)
-        D = max(D, do_min)
+        if do_min > D:
+            raise ValueError(
+                f"diameter={D:g} is below the minimum {do_min:g} for turns={N}, "
+                f"width={w:g}, space={s:g}."
+            )
 
         symmetric_octa_IHP(
             N=N, D=D, w=w, s=s,

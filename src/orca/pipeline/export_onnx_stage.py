@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import onnx
 import torch
 
+from orca.geometry.constraints import validate_constraint
 from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.training.onnx_wrapper import ONNXWrapper
@@ -82,6 +83,17 @@ class OnnxExporter(PipelineStage):
         meta = onnx_model.metadata_props.add()
         meta.key = "input_parameter_ranges"
         meta.value = json.dumps(ranges)
+
+        # The ranges are a box; the geometry may only be buildable in part of it,
+        # and the model was trained on that part alone. Record the constraints so
+        # a consumer can tell an unbuildable query from a bad prediction.
+        constraints = geometry.feasibility_constraints()
+        if constraints:
+            for expression in constraints:
+                validate_constraint(expression, list(ranges))
+            meta = onnx_model.metadata_props.add()
+            meta.key = "input_constraints"
+            meta.value = json.dumps(constraints)
 
         # Record which physical properties are guaranteed by construction, so consumers
         # (e.g. COBRA) know whether the predicted S-matrix is passive/reciprocal by

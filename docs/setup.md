@@ -64,7 +64,7 @@ cd ORCA
 	pip installs the PyPI build of PyTorch (CUDA-bundled on Linux). For a CPU-only or a specific CUDA build, install torch first with the command from [PyTorch.org](https://pytorch.org/get-started/locally/); pip then keeps that version.
 
 !!! tip "Simulation-only install"
-	PyTorch and the other model-training packages are an optional extra. If you only want to generate layouts and run Palace simulations — on an HPC cluster, say — drop the `[train]` extra: `pip install -e .`. `GDSGenerator`, `GDSConverter` and `PalaceSimulator` work without it; `ModelTrainer`, `OnnxExporter` and `ModelTester` report the missing packages when used.
+	PyTorch and the other model-training packages are an optional extra. If you only want to generate layouts and run Palace simulations — on an HPC cluster, say — drop the `[train]` extra: `pip install -e .`. `GDSGenerator`, `DRCChecker`, `GDSConverter` and `PalaceSimulator` work without it; `ModelTrainer`, `OnnxExporter` and `ModelTester` report the missing packages when used.
 
 ## Verify Setup
 

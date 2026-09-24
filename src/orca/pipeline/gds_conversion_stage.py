@@ -33,7 +33,7 @@ class GDSConverter(PipelineStage):
             timeout (float): Maximum seconds a single GDS conversion may take
                 before its worker is killed and the sample is skipped.
         """
-        super().__init__(name="GDS Converter", index=1)
+        super().__init__(name="GDS Converter", index=2)
         self.timeout = timeout
 
     def run(
@@ -44,7 +44,19 @@ class GDSConverter(PipelineStage):
         geometry: BaseGeometry = context.geometry
         cpu_cores: int = context.num_processes
         base_dir: str = context.base_dir
+        # The DRC stage leaves the table of the layouts that passed next to the GDS
+        # table; the GDS Generator wipes that folder, so a present table belongs to
+        # the current layouts even when the DRC stage ran in an earlier session.
         gds_csv = context.gds_csv_path
+        if os.path.exists(context.drc_csv_path):
+            gds_csv = context.drc_csv_path
+            logger.info(f"Converting the layouts that passed DRC, listed in {gds_csv}.")
+        elif not os.path.exists(gds_csv):
+            logger.error(
+                f"No GDS parameter table found at {gds_csv}. The GDS Generator stage was "
+                "skipped or produced no layouts; nothing to convert."
+            )
+            return context
         output_dir = context.palace_sim_dir
         palace_csv = context.palace_csv_path
 

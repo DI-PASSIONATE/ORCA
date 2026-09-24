@@ -53,6 +53,30 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 - `create_gds_file(name, output_path, params) -> str` — Generates a GDS layout file from geometry parameters. Returns the path to the created file.
 - `create_dataset() -> BaseDataset` — Builds the dataset (e.g. `GeoToSParamDatasetSingleFrequency`) with its output codec and normalizers, used for training. It is called once per geometry instance, the first time `geometry.dataset` is read, so each instance gets its own dataset and normalizer statistics.
 
+**Optional methods:**
+
+- `feasibility_constraints() -> list[str]` — The same rules as `is_feasible()`, written as boolean expressions over the input parameter names, e.g. `"bottom_linewidth <= bottom_winding_diameter / 3"`. `OnnxExporter` stores them in the model's `input_constraints` metadata, so COBRA can refuse a query for a geometry that cannot be built instead of returning a prediction the model was never trained for. The grammar is a small subset of Python (arithmetic, comparisons, `and`/`or`/`not`, `a if c else b`, and `abs min max sqrt sin cos tan radians ceil floor round`, plus `pi` and `sqrt2`), documented in `orca.geometry.constraints`; anything else is rejected at export. Derive the strings from the same numbers as `is_feasible()` and add a test that they agree on random draws (see `tests/test_constraints.py` for the presets' version).
+- `is_feasible(params) -> bool` — Whether a parameter combination describes a layout that can be drawn (default: always `True`). `GDSGenerator` calls it for every draw of the iterator; rejected draws are counted and, with the `"random"` strategy, redrawn, so the requested number of samples is met with buildable layouts only. Put cheap, closed-form constraints between parameters here — a winding that must fit its diameter, a feed gap that must fit the octagon's side. The presets derive it from the same check their cell code runs, so the two cannot disagree.
+
+!!! warning "Reject, never clamp"
+
+    Do not repair a bad parameter inside `create_gds_file()` (for example clamp a
+    too-small diameter to the buildable minimum). The parameter table records the
+    *requested* values, so a repaired layout trains the model on a geometry it does
+    not have, and the surrogate then returns confident results for inputs that
+    were never built. Reject the draw in `is_feasible()` and raise `ValueError`
+    in `create_gds_file()` as the safety net.
+
+!!! note "Grid snapping and design rules are not the geometry's job"
+
+    Draw the layout and return; do not snap vertices to the manufacturing grid or
+    re-implement design-rule checks in `create_gds_file()`. The `DRCChecker` stage
+    snaps every generated GDS file to the SG13G2 grid and drops layouts that break
+    the PDK's metal and via rules (see [Pipeline Stages](pipeline.md)). It is the
+    safety net behind `is_feasible()`, not a substitute for it: a rule that can be
+    written down belongs in `is_feasible()`, where it costs nothing and keeps the
+    sample count honest.
+
 !!! tip "Keep the training imports inside `create_dataset()`"
 
     The dataset classes and normalizers need PyTorch, which is an optional

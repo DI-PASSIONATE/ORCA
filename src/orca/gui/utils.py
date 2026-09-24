@@ -7,6 +7,7 @@ from typing import Any
 from orca.geometry.base_geometry import BaseGeometry
 from orca.geometry.presets.inductor_octa import InductorOcta
 from orca.logger import logger
+from orca.pipeline.drc_stage import DRCChecker
 from orca.pipeline.gds_conversion_stage import GDSConverter
 
 # Import all pipeline stages
@@ -66,7 +67,7 @@ def get_available_stages() -> list[type[PipelineStage]]:
     """
     Returns a list of available PipelineStage subclasses.
     """
-    return [GDSGenerator, GDSConverter, PalaceSimulator, *_TRAINING_STAGES]
+    return [GDSGenerator, DRCChecker, GDSConverter, PalaceSimulator, *_TRAINING_STAGES]
 
 def get_preset_geometries() -> list[type[BaseGeometry]]:
     """

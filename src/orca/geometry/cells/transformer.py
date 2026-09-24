@@ -4,8 +4,6 @@ import numpy as np
 
 from orca.geometry.layers import SG13G2
 
-GRID_NM = 10  # 10 nm manufacturing grid = 0.01 µm
-
 
 def _ensure_active_pdk() -> None:
     """Gdsfactory refuses to extrude paths without an active PDK. We only use it as a
@@ -16,31 +14,101 @@ def _ensure_active_pdk() -> None:
     except ValueError:
         gf.gpdk.PDK.activate()
 
-def _snap_inplace(c: gf.Component) -> None:
-    """Snap all polygon vertices to GRID_NM across the component hierarchy.
+def check_tf_octa_c_parameters(
+    bottom_winding_diameter: float = 50.0,
+    top_winding_diameter: float = 50.0,
+    center_displacement: float = 15.0,
+    bottom_linewidth: float = 5.0,
+    bottom_center_tap_width: float = 0.0,
+    lower_feed_type: int = 1,
+    top_linewidth: float = 5.0,
+    upper_center_tap_width: float = 0.0,
+    upper_feed_type: int = 1,
+    feedline_spacing: float = 6.0,
+    gnd_upper_spacing: float = 10.0,
+    gnd_lower_spacing: float = 10.0,
+    gnd_side_spacing: float = 10.0,
+    gnd_ring_width: float = 10.0,
+) -> None:
+    """Raise ``ValueError`` if :func:`tf_octa_c` cannot draw these parameters.
 
-    gf.Path.extrude() computes perpendicular offsets for angled segments
-    (e.g. the 22.5° octagon sides) that land off the 10 nm grid.
-    This iterates every cell in the component's call tree and snaps
-    each polygon vertex in-place — without flattening, so the cutout
-    geometry and all reference offsets stay untouched.
+    Same arguments as :func:`tf_octa_c`. Called by it, and by
+    ``TransformerOcta.is_feasible`` to reject a draw before anything is drawn.
     """
-    layout = c.layout()
-    all_cell_idxs = set(c.called_cells())
-    all_cell_idxs.add(c.cell_index())
+    bottom_centertap_width = (
+        bottom_center_tap_width if bottom_center_tap_width > 0.1 else bottom_linewidth
+    )
+    top_centertap_width = (
+        upper_center_tap_width if upper_center_tap_width > 0.1 else top_linewidth
+    )
+    for label, feed_type in (("lower_feed_type", lower_feed_type), ("upper_feed_type", upper_feed_type)):
+        if feed_type not in (0, 1):
+            raise NotImplementedError(
+                f"{label}={feed_type}: only 0 (no center tap) and 1 (center tap) are implemented."
+            )
+    draw_bottom_tap = lower_feed_type == 1
+    draw_top_tap = upper_feed_type == 1
+    # The center tap of one winding crosses the feed gap of the other, which widens that gap.
+    fs_top = max(feedline_spacing, bottom_centertap_width) if draw_bottom_tap else feedline_spacing
+    fs_bot = max(feedline_spacing, top_centertap_width) if draw_top_tap else feedline_spacing
 
-    for idx in all_cell_idxs:
-        cell = layout.cell(idx)
-        for layer_idx in layout.layer_indexes():
-            for shape in cell.shapes(layer_idx).each(kdb.Shapes.SPolygons):
-                pts = [
-                    kdb.Point(
-                        round(p.x / GRID_NM) * GRID_NM,
-                        round(p.y / GRID_NM) * GRID_NM,
-                    )
-                    for p in shape.polygon.each_point_hull()
-                ]
-                shape.polygon = kdb.Polygon(pts)
+    # Check if linewidth is too large for winding diameter
+    if bottom_linewidth > bottom_winding_diameter / 3.0:
+        raise ValueError("bottom_linewidth is too large for input_winding_diameter.")
+    if top_linewidth > top_winding_diameter / 3.0:
+        raise ValueError("upper_linewidth is too large for output_winding_diameter.")
+    # Check if center tap width is too large for winding diameter of the other winding
+    if draw_bottom_tap and bottom_centertap_width > top_winding_diameter / 3.0:
+        raise ValueError(
+            "bottom_center_tap_width is too large for output_winding_diameter."
+        )
+    if draw_top_tap and top_centertap_width > bottom_winding_diameter / 3.0:
+        raise ValueError(
+            "upper_center_tap_width is too large for input_winding_diameter."
+        )
+    if abs(bottom_winding_diameter - top_winding_diameter) > 40.0:
+        raise ValueError(
+            "input_winding_diameter and output_winding_diameter difference is too large. No sufficient coupling."
+        )
+
+    # The winding path starts at the feed gap and runs along the octagon's vertical
+    # side to the first vertex, where it bends by 45 degrees. That first segment must
+    # be at least as long as the miter reach of the bend (w/2 * tan 22.5 deg), or
+    # gf.Path.extrude() folds the trace into a zero-width spike; a gap wider than
+    # the side is not a transformer at all.
+    miter_reach = np.tan(np.radians(22.5)) / 2.0
+    half_side = np.sin(np.radians(22.5)) / 2.0
+    for label, diameter, width, gap in (
+        ("top", top_winding_diameter, top_linewidth, fs_top),
+        ("bottom", bottom_winding_diameter, bottom_linewidth, fs_bot),
+    ):
+        if diameter * half_side - gap / 2.0 < width * miter_reach:
+            raise ValueError(
+                f"The {label} winding's feed gap of {gap:g} plus the miter of its {width:g} wide "
+                f"trace does not fit in the flat side of a {diameter:g} octagon."
+            )
+
+    # Ground ring: the ports on both sides and the ring bars must leave a positive opening.
+    tf_y = max(top_winding_diameter, bottom_winding_diameter) / 2.0 + gnd_side_spacing
+    port_xr = (
+        max(
+            center_displacement / 2.0 + top_winding_diameter / 2.0,
+            -center_displacement / 2.0 + bottom_winding_diameter / 2.0,
+        )
+        + gnd_upper_spacing
+    )
+    port_xl = (
+        min(
+            center_displacement / 2.0 - top_winding_diameter / 2.0,
+            -center_displacement / 2.0 - bottom_winding_diameter / 2.0,
+        )
+        - gnd_lower_spacing
+    )
+    if not (port_xr - gnd_ring_width > port_xl + gnd_ring_width and tf_y - gnd_ring_width > 0):
+        raise ValueError(
+            "Ground ring dimensions are invalid due to port spacing. Adjust parameters."
+        )
+
 
 def tf_octa_c(
     name: str = "tf_octa_c",
@@ -83,6 +151,22 @@ def tf_octa_c(
         gnd_ring_width: Ring width.
     """
     _ensure_active_pdk()
+    check_tf_octa_c_parameters(
+        bottom_winding_diameter=bottom_winding_diameter,
+        top_winding_diameter=top_winding_diameter,
+        center_displacement=center_displacement,
+        bottom_linewidth=bottom_linewidth,
+        bottom_center_tap_width=bottom_center_tap_width,
+        lower_feed_type=lower_feed_type,
+        top_linewidth=top_linewidth,
+        upper_center_tap_width=upper_center_tap_width,
+        upper_feed_type=upper_feed_type,
+        feedline_spacing=feedline_spacing,
+        gnd_upper_spacing=gnd_upper_spacing,
+        gnd_lower_spacing=gnd_lower_spacing,
+        gnd_side_spacing=gnd_side_spacing,
+        gnd_ring_width=gnd_ring_width,
+    )
 
     LAYER_BOT = SG13G2.TopMetal1
     LAYER_TOP = SG13G2.TopMetal2
@@ -98,11 +182,6 @@ def tf_octa_c(
     top_centertap_width = (
         upper_center_tap_width if upper_center_tap_width > 0.1 else top_linewidth
     )
-    for label, feed_type in (("lower_feed_type", lower_feed_type), ("upper_feed_type", upper_feed_type)):
-        if feed_type not in (0, 1):
-            raise NotImplementedError(
-                f"{label}={feed_type}: only 0 (no center tap) and 1 (center tap) are implemented."
-            )
     draw_bottom_tap = lower_feed_type == 1
     draw_top_tap = upper_feed_type == 1
 
@@ -127,25 +206,6 @@ def tf_octa_c(
     top_left_x = (center_displacement / 2.0) - (top_winding_diameter / 2.0)
     bot_left_x = (-center_displacement / 2.0) - (bottom_winding_diameter / 2.0)
     port_xl = min(top_left_x, bot_left_x) - gnd_lower_spacing
-
-    # Check if linewidth is too large for winding diameter
-    if bottom_linewidth > bottom_winding_diameter / 3.0:
-        raise ValueError("bottom_linewidth is too large for input_winding_diameter.")
-    if top_linewidth > top_winding_diameter / 3.0:
-        raise ValueError("upper_linewidth is too large for output_winding_diameter.")
-    # Check if center tap width is too large for winding diameter of the other winding
-    if draw_bottom_tap and bottom_centertap_width > top_winding_diameter / 3.0:
-        raise ValueError(
-            "bottom_center_tap_width is too large for output_winding_diameter."
-        )
-    if draw_top_tap and top_centertap_width > bottom_winding_diameter / 3.0:
-        raise ValueError(
-            "upper_center_tap_width is too large for input_winding_diameter."
-        )
-    if abs(bottom_winding_diameter - top_winding_diameter) > 40.0:
-        raise ValueError(
-            "input_winding_diameter and output_winding_diameter difference is too large. No sufficient coupling."
-        )
 
     # -------------------------------------------------
     # 2. Helper: Winding Generator
@@ -432,10 +492,6 @@ def tf_octa_c(
             "Ground ring dimensions are invalid due to port spacing. Adjust parameters."
         )
 
-    # Snap all polygon vertices to the 10 nm manufacturing grid.
-    # gf.Path.extrude() produces off-grid vertices for angled segments.
-    # _snap_inplace iterates the component's cell hierarchy without flattening,
-    # so the cutout geometry and reference offsets stay untouched.
-    _snap_inplace(c)
-
+    # gf.Path.extrude() leaves off-grid vertices on the angled segments; the
+    # DRCChecker stage snaps them to the manufacturing grid (orca.geometry.drc).
     return c

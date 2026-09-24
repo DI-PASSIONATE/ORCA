@@ -65,7 +65,7 @@ class PalaceSimulator(PipelineStage):
                 ranks then share one core's execution units, caches and bandwidth), so this is
                 off by default; enable it to measure the difference on your machine.
         """
-        super().__init__(name="Palace EM Simulator", index=2)
+        super().__init__(name="Palace EM Simulator", index=3)
         self.palace_executable = palace_executable
         self.touchstone_type = touchstone_type
         if launcher not in ("local", "slurm"):
