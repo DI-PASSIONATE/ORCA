@@ -86,13 +86,6 @@ This will:
 !!! tip
 	You can run only a subset of pipeline stages by modifying the list passed to `ORCA(...)`. Stages are sorted by their internal index and some depend on outputs of earlier stages. Stage indices: `GDSGenerator=0`, `DRCChecker=1`, `GDSConverter=2`, `PalaceSimulator=3`, `ModelTrainer=4`, `OnnxExporter=5`, `ModelTester=6`.
 
-## 4. Run at Scale with OpenStack
-
-For large-scale simulation campaigns, we provide an OpenStack VM image and a REST API with corresponding client CLI.
-See the [ORCA-OpenStack repository](https://github.com/DavidL-11/ORCA-OpenStack) for details.
-
-## 5. Inspect Results
-
 Each run stores artifacts under `output/<geometry_name>/`:
 
 ```text

@@ -37,5 +37,4 @@ This work was supported by the Bundesministerium für Forschung, Technologie und
 - [PyTorch](https://github.com/pytorch/pytorch)
 - [ONNX](https://github.com/onnx/onnx)
 - [scikit-rf](https://github.com/scikit-rf/scikit-rf)
-- [OpenStack](https://opendev.org/openstack)
 - [Hugging Face Hub](https://github.com/huggingface/huggingface_hub)

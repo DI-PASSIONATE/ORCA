@@ -207,10 +207,6 @@ Wrap the call in `if __name__ == "__main__":` (or a `main()` function) as shown:
 This generates 1000 parameterized layout variants, runs EM simulations, trains a model, exports it to ONNX, and evaluates its accuracy.
 You can omit any stage (e.g. skip `GDSGenerator` and `GDSConverter` if simulation data already exists).
 
-### 3. OpenStack remote execution
-
-For large-scale simulation runs, we provide an OpenStack VM image and a CLI controller in the [ORCA-OpenStack repository](https://github.com/DI-PASSIONATE/ORCA-OpenStack). This lets you launch simulation and training jobs on a remote server without managing the environment manually.
-
 ## Pipeline Stages
 
 | Stage | Class | Description |
@@ -399,7 +395,6 @@ This work was supported by the Bundesministerium für Forschung, Technologie und
 - [PyTorch](https://github.com/pytorch/pytorch)
 - [ONNX](https://github.com/onnx/onnx)
 - [scikit-rf](https://github.com/scikit-rf/scikit-rf)
-- [OpenStack](https://opendev.org/openstack)
 - [Hugging Face Hub](https://github.com/huggingface/huggingface_hub)
 
 The authors gratefully acknowledge the scientific support and HPC resources provided by the Erlangen National High Performance Computing Center (NHR@FAU) of the Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU). The hardware is partially funded by the German Research Foundation (DFG).
