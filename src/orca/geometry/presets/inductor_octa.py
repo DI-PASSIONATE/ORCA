@@ -116,7 +116,7 @@ class InductorOcta(BaseGeometry):
 
         symmetric_octa_IHP(
             N=N, D=D, w=w, s=s,
-            includeCenterTap=False,
+            includeCenterTap=True,
             LBE=False,
             forEM=True,
             ground_layer=GROUND_LAYER,

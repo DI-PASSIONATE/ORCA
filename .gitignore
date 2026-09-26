@@ -24,3 +24,9 @@ output/
 *.csv
 Inductor_ORCA/
 research/
+run_sim
+context.json
+config.json
+port_information.json
+*.tar.gz
+*.zip
