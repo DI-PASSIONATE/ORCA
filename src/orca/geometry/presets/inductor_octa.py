@@ -15,15 +15,18 @@ from orca.geometry.input_parameters import InputParameterIterator
 if TYPE_CHECKING:
     from orca.training.datasets.base_dataset import BaseDataset
 
-# The ports run from a ground strip on SUBGND (matches "from_layername": "SUBGND"
-# in the simcfg) up to the feed on TopMetal1. SUBGND is the near-lossless
-# LOWLOSS material in SG13G2_200um.xml, so the port reference adds no series
-# resistance, and a strip below the feeds (not a ring) leaves no closed loop
+# All ports run up from a ground on SUBGND (matches "from_layername": "SUBGND" in
+# the simcfg): ports 1/2 to the feeds on TopMetal1, port 3 to the center tap on
+# TopMetal2. SUBGND is the near-lossless LOWLOSS material of the stackup, so the
+# port reference adds no series resistance. For even N the center tap leaves
+# between the feeds and one strip below them is the whole ground. For odd N it
+# leaves at the top, so the ground is a frame with a slot: one connected
+# reference for all three ports, but no closed loop acting as a shorted turn
 # around the spiral. The feed on TopMetal1 requires N >= 2 turns (see
 # symmetric_octa_IHP: N == 1 feeds on TopMetal2 instead).
 GROUND_LAYER = 250      # SUBGND
-GROUND_SPACING = 20.0   # µm, gap between inductor outer edge and ground strip
-GROUND_DEPTH = 20.0     # µm, ground-strip extent below the feed ends
+GROUND_SPACING = 20.0   # µm, gap between inductor outer edge and the ground
+GROUND_DEPTH = 20.0     # µm, width of the ground strip / frame bars
 
 
 # Built per instance rather than shared as a class attribute - see the note in
@@ -48,8 +51,8 @@ class InductorOcta(BaseGeometry):
     """
     Represents a symmetric octagonal spiral inductor geometry (IHP SG13G2).
 
-    2-port (LA/LB) spiral inductor, ported from the gds2palace IHP example by
-    Volker Muehlhaus. Requires N >= 2 turns, since the feedline sits on
+    3-port spiral inductor (LA, LB and the center tap LC), ported from the
+    gds2palace IHP example by Volker Muehlhaus. Requires N >= 2 turns, since the feedline sits on
     TopMetal1 (single-turn inductors feed on TopMetal2 instead).
     """
 
@@ -78,7 +81,7 @@ class InductorOcta(BaseGeometry):
         from orca.training.normalize import MinMaxNormalizer, StandardNormalizer
 
         return GeoToSParamDatasetSingleFrequency(
-            codec=FlatReImCodec(n_ports=2),
+            codec=FlatReImCodec(n_ports=3),
             # Scale inputs with the declared parameter ranges rather than the
             # min/max of whatever subset happens to be trained on.
             input_normalizer=MinMaxNormalizer(self.input_parameter_iterator),
@@ -131,7 +134,7 @@ class InductorOcta(BaseGeometry):
             LBE=False,
             forEM=True,
             ground_layer=GROUND_LAYER,
-            ground_style="strip",
+            ground_style="strip" if N % 2 == 0 else "slotted_ring",
             ring_spacing=GROUND_SPACING,
             ring_width=GROUND_DEPTH,
             filename=output_path,

@@ -86,6 +86,7 @@ VIA_MARGIN = 0.5        # IHP TopVia2 rule TV2.c, TV2.d
 
 DELTA = 0.1             # size of EM port perpendicular to width
 GROUND_STRIP_OVERLAP = 2.0  # ground strip reaches this far past the feed ends
+GROUND_SLOT_WIDTH = 10.0    # gap cut into the right bar of a "slotted_ring" ground
 
 MU0 = 4 * math.pi * 1e-7
 
@@ -220,15 +221,20 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
     # ground_style: "ring" draws a closed frame around the inductor with the
     #   ports on its outer edge. "strip" draws one plate below the feed ends
     #   only, so no closed loop surrounds the spiral; use it with a lossless
-    #   ground layer (SUBGND) as the common port reference.
+    #   ground layer (SUBGND) as the common port reference. "slotted_ring" draws
+    #   the ring with a GROUND_SLOT_WIDTH gap in its right bar, so it is not a
+    #   closed loop either, and the ports sit on its inner part like on the
+    #   strip; use it when ports are on opposite sides (a center tap at the top
+    #   for odd N) and need one connected ground.
     # ring_spacing: gap [um] from the inductor outer radius (D/2) to the inner
     #   edge of the ground (forEM=True). None -> D/2 (original behaviour,
     #   scales with diameter). Set e.g. 10 or 20 for a fixed clearance.
     # ring_width: thickness [um] of the ground-ring frame, or depth of the
     #   ground strip below the feed ends (forEM=True).
     #   None -> min(20, 5*w) (original behaviour). Set e.g. 10 for a fixed width.
-    if ground_style not in ("ring", "strip"):
-        raise ValueError(f"ground_style must be 'ring' or 'strip', not {ground_style!r}")
+    if ground_style not in ("ring", "strip", "slotted_ring"):
+        raise ValueError(
+            f"ground_style must be 'ring', 'strip' or 'slotted_ring', not {ground_style!r}")
     if ground_layer is None:
         ground_layer = FRAME_LAYER_NUM
 
@@ -280,10 +286,10 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
 
     # Feed length: when forEM, extend the feedlines so the pins/ports always
     # land on the OUTER edge of the ground ring, or just inside the ground
-    # strip; otherwise keep the default.
+    # strip / slotted ring; otherwise keep the default.
     if not forEM:
         feed_length = 30
-    elif ground_style == "strip":
+    elif ground_style in ("strip", "slotted_ring"):
         feed_length = gridsnap(frame_margin + GROUND_STRIP_OVERLAP)
     else:
         feed_length = gridsnap(frame_margin + frame_width)
@@ -639,9 +645,18 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
         add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
                 p1=(xmin_frame_outer, ymin_frame_outer),
                 p2=(xmin_frame_inner, ymax_frame_outer))
-        add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
-                p1=(xmax_frame_inner, ymin_frame_outer),
-                p2=(xmax_frame_outer, ymax_frame_outer))
+        if ground_style == "slotted_ring":
+            # right bar in two pieces, so the frame is not a closed loop
+            add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
+                    p1=(xmax_frame_inner, ymin_frame_outer),
+                    p2=(xmax_frame_outer, gridsnap(y0 - GROUND_SLOT_WIDTH / 2)))
+            add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
+                    p1=(xmax_frame_inner, gridsnap(y0 + GROUND_SLOT_WIDTH / 2)),
+                    p2=(xmax_frame_outer, ymax_frame_outer))
+        else:
+            add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
+                    p1=(xmax_frame_inner, ymin_frame_outer),
+                    p2=(xmax_frame_outer, ymax_frame_outer))
         add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
                 p1=(xmin_frame_inner, ymin_frame_inner),
                 p2=(xmax_frame_inner, ymin_frame_outer))

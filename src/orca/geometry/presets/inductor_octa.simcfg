@@ -50,6 +50,16 @@
             "direction": "Z",
             "port_Z0": 50.0,
             "voltage": 1.0
+        },
+        {
+            "portnumber": 3,
+            "source_layernum": 203,
+            "target_layername": null,
+            "from_layername": "SUBGND",
+            "to_layername": "TopMetal2",
+            "direction": "Z",
+            "port_Z0": 50.0,
+            "voltage": 1.0
         }
     ]
 }
