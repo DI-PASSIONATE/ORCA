@@ -15,12 +15,15 @@ from orca.geometry.input_parameters import InputParameterIterator
 if TYPE_CHECKING:
     from orca.training.datasets.base_dataset import BaseDataset
 
-# Ground ring is drawn on Metal5 (matches "from_layername": "Metal5" in the
-# simcfg). Feed is on TopMetal1, which requires N >= 2 turns (see
+# The ports run from a ground strip on SUBGND (matches "from_layername": "SUBGND"
+# in the simcfg) up to the feed on TopMetal1. SUBGND is the near-lossless
+# LOWLOSS material in SG13G2_200um.xml, so the port reference adds no series
+# resistance, and a strip below the feeds (not a ring) leaves no closed loop
+# around the spiral. The feed on TopMetal1 requires N >= 2 turns (see
 # symmetric_octa_IHP: N == 1 feeds on TopMetal2 instead).
-GROUND_LAYER = 67       # Metal5
-RING_SPACING = 20.0     # µm, gap between inductor outer edge and ground ring
-RING_WIDTH = 20.0       # µm, ground-ring thickness
+GROUND_LAYER = 250      # SUBGND
+GROUND_SPACING = 20.0   # µm, gap between inductor outer edge and ground strip
+GROUND_DEPTH = 20.0     # µm, ground-strip extent below the feed ends
 
 
 # Built per instance rather than shared as a class attribute - see the note in
@@ -32,9 +35,11 @@ def _input_parameters() -> InputParameterIterator:
         picking_strategy="random",
         frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
         turns=[2, 3, 4, 5],
-        width=[x / 100 for x in range(201, 1501, 1)],   # 2.01 .. 15.00 µm
-        space=[x / 100 for x in range(201, 601, 1)],    # 2.01 ..  6.00 µm
-        diameter=[float(x) for x in range(30, 301, 1)],  # 30 .. 300 µm
+        # 0.02 µm steps: symmetric_octa_IHP draws w and s on even hundredths,
+        # so odd values would be built 0.01 µm off from what the table records.
+        width=[x / 100 for x in range(200, 1501, 2)],   # 2.00 .. 15.00 µm
+        space=[x / 100 for x in range(200, 601, 2)],    # 2.00 ..  6.00 µm
+        diameter=[float(x) for x in range(30, 301, 2)],  # 30 .. 300 µm
     )
 
 
@@ -49,7 +54,13 @@ class InductorOcta(BaseGeometry):
     """
 
     name: str = "inductor_octa"
-    stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml")
+    # Conformal SiO2/passivation over TopMetal2 (gds2palace L6n2 study): the planar
+    # stackup fills the gaps between turns with oxide and overstates the turn-to-turn
+    # capacitance. Paired with refined_cellsize = 5 in the simcfg, the study's fast
+    # "daily driver" setting; it meshes smaller than planar at 2 µm.
+    stackup_xml: str = os.path.join(
+        os.path.dirname(__file__), "SG13G2_200um_conformal.xml"
+    )
     simconfig_filename: str = os.path.join(
         os.path.dirname(__file__), "inductor_octa.simcfg"
     )
@@ -120,8 +131,9 @@ class InductorOcta(BaseGeometry):
             LBE=False,
             forEM=True,
             ground_layer=GROUND_LAYER,
-            ring_spacing=RING_SPACING,
-            ring_width=RING_WIDTH,
+            ground_style="strip",
+            ring_spacing=GROUND_SPACING,
+            ring_width=GROUND_DEPTH,
             filename=output_path,
         )
         return output_path

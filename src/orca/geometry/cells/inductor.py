@@ -22,7 +22,8 @@ the upstream code does.  Layers (IHP SG13G2):
     TopMetal2 (134)  spiral windings
     TopMetal1 (126)  crossovers + feedlines
     TopVia2   (133)  vias
-    Metal1    (8)    ground frame (only when forEM=True)
+    Metal1    (8)    ground frame (only when forEM=True; ``ground_layer`` picks
+                     another layer, ``ground_style`` a strip instead of a ring)
     201/202/203      EM ports (only when forEM=True)
 
 Standalone GDS build (just gdspy + matplotlib):
@@ -84,6 +85,7 @@ VIA_GAP = 1.06          # IHP TopVia2 rule TV2.b
 VIA_MARGIN = 0.5        # IHP TopVia2 rule TV2.c, TV2.d
 
 DELTA = 0.1             # size of EM port perpendicular to width
+GROUND_STRIP_OVERLAP = 2.0  # ground strip reaches this far past the feed ends
 
 MU0 = 4 * math.pi * 1e-7
 
@@ -210,15 +212,23 @@ def calculate_octa_diameter(N, w, s, Ltarget, K1=2.15522, K2=3.61868, L0=0):
 
 def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=False,
                        include_nofill=True, ground_layer=None, ring_spacing=None,
-                       ring_width=None, filename="inductor.gds", textlabel=""):
+                       ring_width=None, ground_style="ring", filename="inductor.gds",
+                       textlabel=""):
     # Drawing unit and parameter unit is micron
-    # ground_layer: GDS layer number for the EM ground frame (forEM=True).
-    #   None -> FRAME_LAYER_NUM (8 = Metal1). Use 67 for Metal5.
+    # ground_layer: GDS layer number for the EM ground (forEM=True).
+    #   None -> FRAME_LAYER_NUM (8 = Metal1). Use 67 for Metal5, 250 for SUBGND.
+    # ground_style: "ring" draws a closed frame around the inductor with the
+    #   ports on its outer edge. "strip" draws one plate below the feed ends
+    #   only, so no closed loop surrounds the spiral; use it with a lossless
+    #   ground layer (SUBGND) as the common port reference.
     # ring_spacing: gap [um] from the inductor outer radius (D/2) to the inner
-    #   edge of the ground ring (forEM=True). None -> D/2 (original behaviour,
+    #   edge of the ground (forEM=True). None -> D/2 (original behaviour,
     #   scales with diameter). Set e.g. 10 or 20 for a fixed clearance.
-    # ring_width: thickness [um] of the ground-ring frame (forEM=True).
+    # ring_width: thickness [um] of the ground-ring frame, or depth of the
+    #   ground strip below the feed ends (forEM=True).
     #   None -> min(20, 5*w) (original behaviour). Set e.g. 10 for a fixed width.
+    if ground_style not in ("ring", "strip"):
+        raise ValueError(f"ground_style must be 'ring' or 'strip', not {ground_style!r}")
     if ground_layer is None:
         ground_layer = FRAME_LAYER_NUM
 
@@ -269,8 +279,14 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
     frame_margin = gridsnap(D / 2) if ring_spacing is None else gridsnap(ring_spacing)
 
     # Feed length: when forEM, extend the feedlines so the pins/ports always
-    # land on the OUTER edge of the ground ring; otherwise keep the default.
-    feed_length = gridsnap(frame_margin + frame_width) if forEM else 30
+    # land on the OUTER edge of the ground ring, or just inside the ground
+    # strip; otherwise keep the default.
+    if not forEM:
+        feed_length = 30
+    elif ground_style == "strip":
+        feed_length = gridsnap(frame_margin + GROUND_STRIP_OVERLAP)
+    else:
+        feed_length = gridsnap(frame_margin + frame_width)
 
     # --- Feedline drawing  ---
     # for single turn, we draw everything on single layer TopMetal2;
@@ -599,9 +615,17 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
     if LBE:
         add_poly(all_geometries_list, layer=LBE_LAYER_NUM, purpose=PURPOSE_DRAWING, points=points)
 
-    # --- ground frame for EM simulation using gds2palace -------
+    # --- ground for EM simulation using gds2palace -------
     # (frame_width / frame_margin were computed up front, near the feed length)
-    if forEM:
+    if forEM and ground_style == "strip":
+        # One plate below the feed ends, as in the gds2palace L6n2 study. It
+        # reaches GROUND_STRIP_OVERLAP past the feed ends so the port boxes sit
+        # on it, and its inner edge is frame_margin from the outer diameter.
+        y_feed_end = y0 - D / 2 - feed_length
+        add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
+                p1=(gridsnap(x0 - D / 2), gridsnap(y_feed_end + GROUND_STRIP_OVERLAP)),
+                p2=(gridsnap(x0 + D / 2), gridsnap(y_feed_end - frame_width)))
+    elif forEM:
         xmin_frame_inner = gridsnap(x0 - D / 2 - frame_margin)
         xmax_frame_inner = gridsnap(x0 + D / 2 + frame_margin)
         ymin_frame_inner = gridsnap(y0 - D / 2 - frame_margin)
