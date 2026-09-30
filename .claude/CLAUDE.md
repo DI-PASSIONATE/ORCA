@@ -18,10 +18,10 @@ ORCA writes.
 - `src/orca/geometry/`: `BaseGeometry` contract, `InputParameterIterator`,
   layer stackups, the SG13G2 design rules (`drc.py`: grid snapping and KLayout
   checks used by `DRCChecker`; geometry code does not snap itself), reusable
-  cells, and presets: classes in `presets/geometries/` (`inductor_octa`,
-  `tf_octa_c_ports`), their `.simcfg` in `presets/simcfgs/`, and unmodified copies of
-  gds2palace's `XML_stackup/latest/IHP` stackups in `presets/stackups/` (the PyPI
-  wheel does not ship them), all located via `presets.PRESETS_DIR`.
+  cells, and presets: one folder per device (`presets/inductor/`,
+  `presets/transformer/`) holding each class next to its `.simcfg`, and unmodified
+  copies of gds2palace's `XML_stackup/latest/IHP` stackups in `presets/stackups/`
+  (the PyPI wheel does not ship them), referenced as `presets.StackupXML` members.
 - `src/orca/simulation/`: GDS→Palace conversion, Palace launchers (local,
   Apptainer, Slurm), and Touchstone result merging.
 - `src/orca/training/`: models, datasets, output codecs, basis expansions,

@@ -182,7 +182,7 @@ For direct integration into scripts or automated workflows:
 ```python
 import orca
 from orca import ORCA
-from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
+from orca.geometry.presets import TransformerOcta
 
 geometry = TransformerOcta()
 
@@ -309,7 +309,7 @@ To train a surrogate for your own component, create three files:
 
 See the [Custom Classes documentation](https://di-passionate.github.io/ORCA/custom_class/) for a full walkthrough and examples.
 
-The built-in `TransformerOcta` preset (`src/orca/geometry/presets/tf_octa_c_ports.py`) is a good reference implementation.
+The built-in `TransformerOcta` preset (`src/orca/geometry/presets/transformer/tf_octa_c_ports.py`) is a good reference implementation.
 
 ## Sharing Models on Hugging Face
 

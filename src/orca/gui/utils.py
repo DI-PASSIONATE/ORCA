@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from orca.geometry.base_geometry import BaseGeometry
-from orca.geometry.presets.inductor_octa import InductorOcta
+from orca.geometry.presets import InductorOcta, TransformerOcta
 from orca.logger import logger
 from orca.pipeline.drc_stage import DRCChecker
 from orca.pipeline.gds_conversion_stage import GDSConverter
@@ -29,9 +29,6 @@ except ModuleNotFoundError as e:
     )
 else:
     _TRAINING_STAGES = [ModelTrainer, OnnxExporter, ModelTester]
-
-# Import all preset geometries
-from orca.geometry.presets.tf_octa_c_ports import TransformerOcta
 
 
 def load_class_from_file(file_path: str, base_class: type) -> type[Any] | None:

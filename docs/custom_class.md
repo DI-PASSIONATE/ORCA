@@ -112,7 +112,7 @@ class TransformerOcta(BaseGeometry):
     """
 
     name: str = "tf_octa_c_ports"
-    stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_nosub.xml")
+    stackup_xml: str = StackupXML.SG13G2_FEM_200um  # from orca.geometry.presets
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
     input_parameter_iterator: InputParameterIterator = field(default_factory=_input_parameters)
 
@@ -202,58 +202,26 @@ the training range saturates rather than diverging.
 | `OutputMinMaxNormalizer` | Min-max normalisation |
 
 ### Stackup XML File
-There are multiple examples of stackup XML files in the `src/orca/geometry/examples/` directory. Often these are sufficient to get started. You can also create your own stackup XML file or adjust [one of the examples here](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/tree/main/workflow) to fit your needs.
+The stackup XML describes the physical layer stack for [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2): materials, dielectric thicknesses, and which GDS layer is drawn as which conductor, via or sheet.
 
-Example:
+The presets use unmodified copies of gds2palace's current IHP stackups, in `src/orca/geometry/presets/stackups/`. Reference them through the `StackupXML` enum, whose members are the absolute paths as `str`:
 
-```xml
-<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
-  <Stackup schemaVersion="2.0">
-    <Materials>
-      <Material Name="Activ" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="357141.0" Color="00ff00"/>
-      <Material Name="Metal1" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="21640000.0" Color="39bfff"/>
-      <Material Name="Metal2" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="23190000.0" Color="ccccd9"/>
-      <Material Name="TopMetal1" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="27800000.0" Color="ffe6bf"/>
-      <Material Name="TopMetal2" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="30300000.0" Color="ff8000"/>
-      <Material Name="TopVia1" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="2191000.0" Color="ffe6bf"/>
-      <Material Name="Via2" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="1660000.0" Color="ff3736"/>
-      <Material Name="Via1" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="1660000.0" Color="ccccff"/>
-      <Material Name="Cont" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="2390000.0" Color="00ffff"/>
-      <Material Name="Passive" Type="Dielectric" Permittivity="6.6" DielectricLossTangent="0.0" Conductivity="0" Color="a0a0f0"/>
-      <Material Name="SiO2" Type="Dielectric" Permittivity="4.1" DielectricLossTangent="0.0" Conductivity="0" Color="fffcad"/>
-      <Material Name="AIR" Type="Dielectric" Permittivity="1.0" DielectricLossTangent="0.0" Conductivity="0" Color="d0d0d0"/>
-      <Material Name="Vmim" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="2191000.0" Color="ffe6bf"/>
-      <Material Name="MIM" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="500000.0" Color="e6ffbf"/>
-      <Material Name="LOWLOSS" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="1E10" Color="ff0000"/>
-    </Materials>
-    <ELayers LengthUnit="um">
-      <Dielectrics>
-        <Dielectric Name="AIR" Material="AIR" Thickness="200.0000" />
-        <Dielectric Name="Passive" Material="Passive" Thickness="0.4000" />
-        <Dielectric Name="SiO2" Material="SiO2" Thickness="15.7303" />
-        <Dielectric Name="EPI" Material="EPI" Thickness="3.7500" />
-        <Dielectric Name="Substrate" Material="Substrate" Thickness="180.0000" />
-      </Dielectrics>
-      <Layers>
-        <Substrate Offset="183.75"/>
-        <Layer Name="Activ" Type="conductor" Zmin="0.0000" Zmax="0.4000" Material="Activ" Layer="1" />
-        <Layer Name="Metal1" Type="conductor" Zmin="1.0400" Zmax="1.4600" Material="Metal1" Layer="8" />
-        <Layer Name="Metal2" Type="conductor" Zmin="2.0000" Zmax="2.4900" Material="Metal2" Layer="10" />
-        <Layer Name="TopMetal1" Type="conductor" Zmin="6.4303" Zmax="8.4303" Material="TopMetal1" Layer="126" />
-        <Layer Name="TopMetal2" Type="conductor" Zmin="11.2303" Zmax="14.2303" Material="TopMetal2" Layer="134" />
-        <Layer Name="SUBGND" Type="conductor" Zmin="-3.75" Zmax="0" Material="LOWLOSS" Layer="250" />
-        <Layer Name="BACKSIDEGND" Type="conductor" Zmin="-190" Zmax="-183.75" Material="LOWLOSS" Layer="251" />
-        <Layer Name="MIM" Type="conductor" Zmin="5.6043" Zmax="5.7540" Material="MIM" Layer="36" />
-        <Layer Name="Vmim" Type="via" Zmin="5.7540" Zmax="6.4303" Material="Vmim" Layer="129" />
-        <Layer Name="LBE" Type="dielectric" Zmin="-183.75" Zmax="0" Material="Air" Layer="157" />
-      </Layers>
-    </ELayers>
-  </Stackup>
+```python
+from orca.geometry.presets import StackupXML
+
+stackup_xml: str = StackupXML.SG13G2_FEM_200um
 ```
+
+| `StackupXML` member | File | Technology |
+|---|---|---|
+| `SG13G2_FEM_200um` | `SG13G2_FEM_200um.xml` | SG13G2, planar SiO2 + passivation over TopMetal2, 200 µm chip |
+| `SG13G2_FEM_200um_passi3D` | `SG13G2_FEM_200um_passi3D.xml` | SG13G2, conformal SiO2 around TopMetal2 (derived layers), 200 µm chip |
+
+The gds2palace package on PyPI does not ship stackup files. For another technology or variant, copy one from the [`XML_stackup/latest`](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/tree/main/XML_stackup/latest) folder of the gds2palace repository, next to your geometry class, and point `stackup_xml` at it. Avoid the files in `XML_stackup/legacy`; they are kept upstream only for older models. The format is described in the [XML stackup format description](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/blob/main/doc/XML_stackup_format/XML_stackup_format.md).
 
 ### Simulation Configuration File
 The simulation configuration file (.simcfg) defines how to mesh and run the electromagnetic simulation in Palace. 
-You can either tweak existing .simcfg files from the `src/orca/geometry/examples/` directory, create your own from scratch,
+You can either tweak the preset .simcfg files next to their geometry classes in `src/orca/geometry/presets/inductor/` and `src/orca/geometry/presets/transformer/`, create your own from scratch,
 or use the GUI provided by [setupEM](https://github.com/VolkerMuehlhaus/setupEM/tree/main) to create the .simcfg file interactively.
 
 Example:

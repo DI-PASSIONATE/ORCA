@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 from orca import BaseGeometry
 from orca.geometry.cells.transformer import check_tf_octa_c_parameters, tf_octa_c
 from orca.geometry.input_parameters import InputParameterIterator
+from orca.geometry.presets.paths import StackupXML
 
 if TYPE_CHECKING:
     from orca.training.datasets.base_dataset import BaseDataset
@@ -39,10 +40,8 @@ class TransformerOcta(BaseGeometry):
     """
 
     name: str = "tf_octa_c_ports"
-    stackup_xml: str = os.path.join(os.path.dirname(__file__), "SG13G2_200um.xml")
-    simconfig_filename: str = os.path.join(
-        os.path.dirname(__file__), "tf_octa_c_ports.simcfg"
-    )
+    stackup_xml: str = StackupXML.SG13G2_FEM_200um
+    simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
     input_parameter_iterator: InputParameterIterator = field(
         default_factory=_input_parameters
     )

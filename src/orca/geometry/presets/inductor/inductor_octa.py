@@ -11,14 +11,15 @@ from orca.geometry.cells.inductor import (
     symmetric_octa_IHP,
 )
 from orca.geometry.input_parameters import InputParameterIterator
+from orca.geometry.presets.paths import StackupXML
 
 if TYPE_CHECKING:
     from orca.training.datasets.base_dataset import BaseDataset
 
 # All ports run up from a ground on SUBGND (matches "from_layername": "SUBGND" in
 # the simcfg): ports 1/2 to the feeds on TopMetal1, port 3 to the center tap on
-# TopMetal2. SUBGND is the near-lossless LOWLOSS material of the stackup, so the
-# port reference adds no series resistance. For even N the center tap leaves
+# TopMetal2. SUBGND is an ideal conductor (PEC) sheet on top of the EPI layer, so
+# the port reference adds no series resistance. For even N the center tap leaves
 # between the feeds and one strip below them is the whole ground. For odd N it
 # leaves at the top, so the ground is a frame with a slot: one connected
 # reference for all three ports, but no closed loop acting as a shorted turn
@@ -61,12 +62,8 @@ class InductorOcta(BaseGeometry):
     # stackup fills the gaps between turns with oxide and overstates the turn-to-turn
     # capacitance. Paired with refined_cellsize = 5 in the simcfg, the study's fast
     # "daily driver" setting; it meshes smaller than planar at 2 µm.
-    stackup_xml: str = os.path.join(
-        os.path.dirname(__file__), "SG13G2_200um_conformal.xml"
-    )
-    simconfig_filename: str = os.path.join(
-        os.path.dirname(__file__), "inductor_octa.simcfg"
-    )
+    stackup_xml: str = StackupXML.SG13G2_FEM_200um_passi3D
+    simconfig_filename: str = os.path.join(os.path.dirname(__file__), "inductor_octa.simcfg")
     input_parameter_iterator: InputParameterIterator = field(
         default_factory=_input_parameters
     )
