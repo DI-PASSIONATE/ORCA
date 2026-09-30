@@ -19,15 +19,15 @@ if TYPE_CHECKING:
 # All ports run up from a ground on SUBGND (matches "from_layername": "SUBGND" in
 # the simcfg): ports 1/2 to the feeds on TopMetal1, port 3 to the center tap on
 # TopMetal2. SUBGND is an ideal conductor (PEC) sheet on top of the EPI layer, so
-# the port reference adds no series resistance. For even N the center tap leaves
-# between the feeds and one strip below them is the whole ground. For odd N it
-# leaves at the top, so the ground is a frame with a slot: one connected
-# reference for all three ports, but no closed loop acting as a shorted turn
-# around the spiral. The feed on TopMetal1 requires N >= 2 turns (see
+# the port reference adds no series resistance. The ground is a closed square
+# ring around the spiral for every N, so one connected reference serves all
+# three ports whether the center tap leaves between the feeds (even N) or at the
+# top (odd N). The feeds and the center tap run out to the ring's outer edge,
+# where the ports sit. The feed on TopMetal1 requires N >= 2 turns (see
 # symmetric_octa_IHP: N == 1 feeds on TopMetal2 instead).
 GROUND_LAYER = 250      # SUBGND
 GROUND_SPACING = 20.0   # µm, gap between inductor outer edge and the ground
-GROUND_DEPTH = 20.0     # µm, width of the ground strip / frame bars
+GROUND_DEPTH = 20.0     # µm, width of the ground ring bars
 
 
 # Built per instance rather than shared as a class attribute - see the note in
@@ -131,7 +131,7 @@ class InductorOcta(BaseGeometry):
             LBE=False,
             forEM=True,
             ground_layer=GROUND_LAYER,
-            ground_style="strip" if N % 2 == 0 else "slotted_ring",
+            ground_style="ring",
             ring_spacing=GROUND_SPACING,
             ring_width=GROUND_DEPTH,
             filename=output_path,
