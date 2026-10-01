@@ -173,9 +173,24 @@ class PipelineContext:
         return os.path.join(self.model_dir, f"{self.geometry.name}_split.csv")
 
     @property
+    def hyperparameters_json_path(self) -> str:
+        """Where the training stage saves the hyperparameters it trained with."""
+        return os.path.join(self.model_dir, f"{self.geometry.name}_hyperparameters.json")
+
+    @property
     def test_errors_csv_path(self) -> str:
         """Where the testing stage writes the errors of every test geometry."""
         return os.path.join(self.model_dir, f"{self.geometry.name}_test_errors.csv")
+
+    @property
+    def errors_vs_frequency_csv_path(self) -> str:
+        """Where the testing stage writes the error percentiles at every frequency point."""
+        return os.path.join(self.model_dir, f"{self.geometry.name}_errors_vs_frequency.csv")
+
+    @property
+    def errors_vs_frequency_plot_path(self) -> str:
+        """Where the testing stage saves the plot of the errors against frequency."""
+        return os.path.join(self.model_dir, f"{self.geometry.name}_errors_vs_frequency.png")
 
     @property
     def onnx_path(self) -> str:
@@ -204,7 +219,10 @@ class PipelineContext:
             "result_csv": self.result_csv,
             "model_dir": self.model_dir,
             "split_csv": self.split_csv_path,
+            "hyperparameters_json": self.hyperparameters_json_path,
             "test_errors_csv": self.test_errors_csv_path,
+            "errors_vs_frequency_csv": self.errors_vs_frequency_csv_path,
+            "errors_vs_frequency_plot": self.errors_vs_frequency_plot_path,
             "onnx_path": self.onnx_path,
         }
         return record

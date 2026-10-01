@@ -1,6 +1,8 @@
 import itertools
 import os
+import warnings
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -18,8 +20,9 @@ from orca.training.predictors import (
 )
 from orca.utils.postprocessing import (
     calculate_electrical_parameters,
-    median_relative_error,
+    plot_errors_vs_frequency,
     plot_rfic_transformer_metrics,
+    pointwise_relative_error,
 )
 
 if TYPE_CHECKING:
@@ -27,6 +30,37 @@ if TYPE_CHECKING:
 
     from orca.geometry.base_geometry import BaseGeometry
     from orca.pipeline.context import PipelineContext
+
+
+#: Electrical parameters whose error is an absolute difference instead of a relative one.
+#: The coupling factor k is close to zero for weakly coupled layouts, where a relative error
+#: explodes without saying anything about the model.
+ABSOLUTE_ERROR_PARAMETERS = frozenset({"k"})
+
+#: Name of the S-parameter error among the per-frequency errors
+S_PARAMETER_ERROR = "|S|"
+
+#: Percentiles of the per-frequency errors that are saved and plotted
+PERCENTILES = {"p5": 5, "p25": 25, "median": 50, "p75": 75, "p95": 95}
+
+
+@dataclass
+class EvaluationErrors:
+    """
+    The errors of a test run, per geometry and per frequency point.
+
+    Attributes:
+        per_geometry: One row per geometry; see :meth:`ModelTester.evaluate`.
+        frequencies: The frequency grid of the per-frequency errors, in Hz.
+        per_frequency: Per quantity (``|S|`` and each electrical parameter that is a
+            curve), the error of every geometry at every frequency point, shape
+            ``(n_geometries, n_freq)``. Relative errors are in percent, except for
+            :data:`ABSOLUTE_ERROR_PARAMETERS` and ``|S|``.
+    """
+
+    per_geometry: pd.DataFrame
+    frequencies: np.ndarray | None = None
+    per_frequency: dict[str, np.ndarray] = field(default_factory=dict)
 
 
 class ModelTester(PipelineStage):
@@ -84,14 +118,15 @@ class ModelTester(PipelineStage):
             logger.error(str(e))
             return context
 
-        per_geometry = self.evaluate(test_dataset, predictor, progress_callback)
-        results = self.summarize(per_geometry)
+        errors = self.evaluate(test_dataset, predictor, progress_callback)
+        results = self.summarize(errors.per_geometry)
 
         if results:
             os.makedirs(context.model_dir, exist_ok=True)
-            per_geometry.to_csv(context.test_errors_csv_path, index=False)
+            errors.per_geometry.to_csv(context.test_errors_csv_path, index=False)
             self._log_summary(results)
             logger.info(f"Errors of every test geometry written to {context.test_errors_csv_path}.")
+            self._save_frequency_profile(errors, context)
 
         context.test_results = results
         return context
@@ -162,28 +197,33 @@ class ModelTester(PipelineStage):
         Returns:
             dict: The summary of :meth:`summarize`; empty if nothing was evaluated.
         """
-        return self.summarize(self.evaluate(test_dataset, predictor, progress_callback))
+        return self.summarize(self.evaluate(test_dataset, predictor, progress_callback).per_geometry)
 
     def evaluate(
         self,
         test_dataset: GeoToNtwkDataset,
         predictor: NetworkPredictor,
         progress_callback: Callable[[str, int, int, str], None] | None = None,
-    ) -> pd.DataFrame:
+    ) -> EvaluationErrors:
         """
-        The errors of every test geometry, one row each.
+        The errors of every test geometry, overall and at every frequency point.
 
         Returns:
-            pd.DataFrame: ``name``, the geometry parameters, the mean and maximum
-            absolute S-parameter error, the mean absolute error per frequency band
-            (``s_error <band>``) and the median relative error of each electrical
-            parameter in percent (``<param> error %``). Empty in plot mode.
+            EvaluationErrors: ``per_geometry`` holds one row per geometry: ``name``, the
+            geometry parameters, the mean and maximum absolute S-parameter error, the
+            mean absolute error per frequency band (``s_error <band>``), and the median
+            error of each electrical parameter, relative in percent (``<param> error %``)
+            or, for :data:`ABSOLUTE_ERROR_PARAMETERS`, absolute (``<param> abs error``).
+            Empty in plot mode.
         """
         num_samples = len(test_dataset)
         if self.n_test_samples is not None:
             num_samples = min(num_samples, self.n_test_samples)
 
         rows: list[dict[str, Any]] = []
+        frequencies: np.ndarray | None = None
+        curves: dict[str, list[np.ndarray]] = {}
+        n_off_grid = 0
         for i in tqdm.tqdm(range(num_samples), desc="Testing samples"):
             input_params, ntwk_gt = test_dataset[i]
             ntwk_pred = predictor.predict(input_params, ntwk_gt.f)
@@ -205,15 +245,43 @@ class ModelTester(PipelineStage):
             }
             for label, in_band in self._frequency_bands(ntwk_gt.f).items():
                 row[f"s_error {label}"] = float(per_frequency[in_band].mean())
-            row |= self._electrical_errors(ntwk_pred, ntwk_gt, test_dataset.names[i])
+            electrical, electrical_curves = self._electrical_errors(
+                ntwk_pred, ntwk_gt, test_dataset.names[i]
+            )
+            row |= electrical
             rows.append(row)
+
+            # Per-frequency errors are only comparable on one grid, that of the first geometry
+            if frequencies is None:
+                frequencies = ntwk_gt.f
+            if len(ntwk_gt.f) == len(frequencies) and np.allclose(ntwk_gt.f, frequencies):
+                for quantity, curve in {S_PARAMETER_ERROR: per_frequency, **electrical_curves}.items():
+                    curves.setdefault(quantity, []).append(curve)
+            else:
+                n_off_grid += 1
 
             if progress_callback:
                 progress_callback(
                     self.name, i + 1, num_samples, f"Tested {i + 1} of {num_samples} geometries."
                 )
 
-        return pd.DataFrame(rows)
+        if n_off_grid:
+            logger.warning(
+                f"{n_off_grid} test geometries were simulated on another frequency grid than "
+                "the first; they are left out of the errors against frequency."
+            )
+        # A parameter missing for some geometries (not derivable) has fewer curves; only
+        # complete sets line up with the geometries
+        n_on_grid = len(curves.get(S_PARAMETER_ERROR, []))
+        return EvaluationErrors(
+            per_geometry=pd.DataFrame(rows),
+            frequencies=frequencies,
+            per_frequency={
+                quantity: np.vstack(stack)
+                for quantity, stack in curves.items()
+                if len(stack) == n_on_grid
+            },
+        )
 
     @staticmethod
     def summarize(per_geometry: pd.DataFrame, n_worst: int = 5) -> dict[str, Any]:
@@ -227,9 +295,11 @@ class ModelTester(PipelineStage):
         Returns:
             dict: ``n_samples``; ``mean_abs_s_error``; ``s_error_percentiles`` (p50, p95,
             max); ``s_error_by_band``; ``worst_geometries`` (name to error, worst first);
-            and per electrical parameter the mean (``electrical_parameters``) and 95th
+            per electrical parameter the mean (``electrical_parameters``) and 95th
             percentile (``electrical_parameters_p95``) over the geometries of the
-            median relative error in percent. Empty if nothing was evaluated.
+            median relative error in percent; and the same for the absolute errors
+            (``electrical_parameters_abs``, ``electrical_parameters_abs_p95``). Empty if
+            nothing was evaluated.
         """
         if per_geometry.empty:
             return {}
@@ -237,6 +307,7 @@ class ModelTester(PipelineStage):
         s_error = per_geometry["mean_abs_s_error"]
         band_columns = [c for c in per_geometry.columns if c.startswith("s_error ")]
         param_columns = sorted(c for c in per_geometry.columns if c.endswith(" error %"))
+        abs_columns = sorted(c for c in per_geometry.columns if c.endswith(" abs error"))
         worst = per_geometry.nlargest(n_worst, "mean_abs_s_error")
 
         return {
@@ -260,7 +331,65 @@ class ModelTester(PipelineStage):
                 c.removesuffix(" error %"): float(per_geometry[c].quantile(0.95))
                 for c in param_columns
             },
+            "electrical_parameters_abs": {
+                c.removesuffix(" abs error"): float(per_geometry[c].mean()) for c in abs_columns
+            },
+            "electrical_parameters_abs_p95": {
+                c.removesuffix(" abs error"): float(per_geometry[c].quantile(0.95))
+                for c in abs_columns
+            },
         }
+
+    @staticmethod
+    def frequency_profile(errors: EvaluationErrors) -> pd.DataFrame:
+        """
+        Percentiles over the test geometries of every per-frequency error.
+
+        Returns:
+            pd.DataFrame: One row per quantity and frequency point, with the columns
+            ``parameter``, ``unit`` (``%`` or ``abs``), ``frequency_hz`` and the
+            percentiles ``p5``, ``p25``, ``median``, ``p75`` and ``p95``. Empty if there
+            are no per-frequency errors.
+        """
+        if errors.frequencies is None or not errors.per_frequency:
+            return pd.DataFrame()
+
+        tables = []
+        for quantity, stack in errors.per_frequency.items():
+            # A frequency point where every geometry's error is undefined stays NaN
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                levels = np.nanpercentile(stack, list(PERCENTILES.values()), axis=0)
+            absolute = quantity == S_PARAMETER_ERROR or quantity in ABSOLUTE_ERROR_PARAMETERS
+            tables.append(
+                pd.DataFrame(
+                    {
+                        "parameter": quantity,
+                        "unit": "abs" if absolute else "%",
+                        "frequency_hz": errors.frequencies,
+                        **dict(zip(PERCENTILES, levels, strict=True)),
+                    }
+                )
+            )
+        return pd.concat(tables, ignore_index=True)
+
+    def _save_frequency_profile(self, errors: EvaluationErrors, context: "PipelineContext") -> None:
+        """Write the error percentiles against frequency as a table and as a plot."""
+        profile = self.frequency_profile(errors)
+        if profile.empty:
+            return
+        profile.to_csv(context.errors_vs_frequency_csv_path, index=False)
+        n_geometries = len(next(iter(errors.per_frequency.values())))
+        plot_errors_vs_frequency(
+            profile,
+            context.errors_vs_frequency_plot_path,
+            title=f"{context.geometry.name}: test error against frequency "
+            f"({n_geometries} geometries)",
+        )
+        logger.info(
+            f"Errors against frequency plotted to {context.errors_vs_frequency_plot_path} "
+            f"(values in {context.errors_vs_frequency_csv_path})."
+        )
 
     def _frequency_bands(self, frequencies: np.ndarray) -> dict[str, np.ndarray]:
         """Masks selecting each of ``n_frequency_bands`` equally wide bands, by label."""
@@ -276,21 +405,39 @@ class ModelTester(PipelineStage):
     @staticmethod
     def _electrical_errors(
         predicted_ntwk: "rf.Network", reference_ntwk: "rf.Network", name: str
-    ) -> dict[str, float]:
-        """Median relative error in percent of each electrical parameter that can be derived."""
+    ) -> tuple[dict[str, float], dict[str, np.ndarray]]:
+        """
+        The error of each electrical parameter that can be derived.
+
+        Returns:
+            tuple: The median error per parameter, keyed by its per-geometry column name;
+            and the error at every frequency point of each parameter that is a curve
+            (not, say, the self-resonance frequency).
+        """
         try:
             predicted = calculate_electrical_parameters(predicted_ntwk)
             reference = calculate_electrical_parameters(reference_ntwk)
         except Exception as e:  # noqa: BLE001 - skip samples whose metrics cannot be derived
             logger.debug(f"Could not compute electrical parameters for {name}: {e}")
-            return {}
+            return {}, {}
 
-        errors = {}
+        medians: dict[str, float] = {}
+        curves: dict[str, np.ndarray] = {}
         for param, gt in reference.items():
-            error = median_relative_error(predicted[param], gt)
-            if np.isfinite(error):
-                errors[f"{param} error %"] = error
-        return errors
+            if param in ABSOLUTE_ERROR_PARAMETERS:
+                curve = np.abs(np.atleast_1d(predicted[param]) - np.atleast_1d(gt)).astype(float)
+                curve[~np.isfinite(curve)] = np.nan
+                column = f"{param} abs error"
+            else:
+                curve = pointwise_relative_error(predicted[param], gt)
+                column = f"{param} error %"
+
+            finite = curve[np.isfinite(curve)]
+            if finite.size:
+                medians[column] = float(np.median(finite))
+            if curve.size == len(reference_ntwk.f) and curve.size > 1:
+                curves[param] = curve
+        return medians, curves
 
     def _log_summary(self, results: dict[str, Any]) -> None:
         percentiles = results["s_error_percentiles"]
@@ -308,4 +455,10 @@ class ModelTester(PipelineStage):
             logger.info(
                 f"Median relative error for {param}: {error:.2f}% on average, "
                 f"{p95[param]:.2f}% at the 95th percentile"
+            )
+        abs_p95 = results["electrical_parameters_abs_p95"]
+        for param, error in results["electrical_parameters_abs"].items():
+            logger.info(
+                f"Median absolute error for {param}: {error:.4f} on average, "
+                f"{abs_p95[param]:.4f} at the 95th percentile"
             )

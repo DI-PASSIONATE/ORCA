@@ -42,8 +42,11 @@ class TrainingConfig:
         epochs: Maximum number of epochs to run.
         batch_size: Mini-batch size for both training and validation.
         learning_rate: Initial learning rate handed to the optimizer.
+        weight_decay: Weight decay handed to the optimizer, as a regularization. The
+            default is AdamW's own.
         patience: Epochs without validation improvement before stopping early.
-        optimizer_cls: Optimizer factory, called as ``optimizer_cls(params, lr=...)``.
+        optimizer_cls: Optimizer factory, called as
+            ``optimizer_cls(params, lr=..., weight_decay=...)``.
         scheduler_factor: Factor by which ReduceLROnPlateau scales the learning rate.
         scheduler_patience: Plateau length, in epochs, before the scheduler reacts.
             Keep it below ``patience``, or early stopping ends the run before the
@@ -54,6 +57,7 @@ class TrainingConfig:
     epochs: int = 100
     batch_size: int = 128
     learning_rate: float = 1e-3
+    weight_decay: float = 1e-2
     patience: int = 10
     optimizer_cls: Callable[..., Optimizer] = AdamW
     scheduler_factor: float = 0.5
@@ -68,23 +72,30 @@ class TrainingConfig:
             hyperparameters (dict[str, Any]): Combined trainer and model hyperparameters.
             **overrides: Explicit values that take precedence over the dictionary.
         """
-        known = {"epochs", "batch_size", "learning_rate", "patience"}
+        known = {"epochs", "batch_size", "learning_rate", "weight_decay", "patience"}
         values = {k: v for k, v in hyperparameters.items() if k in known}
         values.update(overrides)
         return cls(**values)
 
     @staticmethod
-    def search_space(batch_sizes: Sequence[int] | None = None) -> dict[str, Any]:
+    def search_space(
+        batch_sizes: Sequence[int] | None = None, regularization: bool = False
+    ) -> dict[str, Any]:
         """Optuna search space for the trainer's own hyperparameters.
 
         Args:
             batch_sizes (Sequence[int] | None): Batch sizes to choose from. ``None``
                 uses :data:`DEFAULT_BATCH_SIZES`.
+            regularization (bool): Also search the weight decay. Otherwise every trial
+                uses the default.
         """
-        return {
+        space: dict[str, Any] = {
             "learning_rate": optuna.distributions.FloatDistribution(1e-5, 1e-2, log=True),
             "batch_size": list(batch_sizes or DEFAULT_BATCH_SIZES),
         }
+        if regularization:
+            space["weight_decay"] = optuna.distributions.FloatDistribution(1e-6, 1e-1, log=True)
+        return space
 
 
 @dataclass
@@ -231,7 +242,9 @@ class Trainer:
         train_loader = make_batches(train_dataset, config.batch_size, shuffle=True)
         val_loader = make_batches(val_dataset, config.batch_size, shuffle=False)
 
-        optimizer = config.optimizer_cls(model.parameters(), lr=config.learning_rate)
+        optimizer = config.optimizer_cls(
+            model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
+        )
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, factor=config.scheduler_factor, patience=config.scheduler_patience
         )
