@@ -139,17 +139,28 @@ class MinMaxNormalizer(InputNormalizer):
 
         input_mins, input_maxs = input_parameter_iterator.get_min_max_values()
 
+        #: Column order the ranges are given in; datasets check theirs against it.
+        self.input_names = list(input_parameter_iterator.input_names)
+        if input_parameter_iterator.frequency is not None:
+            self.input_names.append("frequency")
+
         # Registered on the CPU: `.to(device)` moves buffers along with the model,
         # so pinning them to cuda:0 here would only fight whatever device the
         # trainer was configured with. The dataset moves them to its own device.
         self.register_buffer("input_mins", torch.tensor(input_mins, dtype=torch.float32))
         self.register_buffer("input_maxs", torch.tensor(input_maxs, dtype=torch.float32))
 
+    @property
+    def _spans(self) -> torch.Tensor:
+        # A parameter with a single value would divide by zero; it is only shifted to 0
+        spans = self.input_maxs - self.input_mins
+        return torch.where(spans > 0, spans, torch.ones_like(spans))
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return (x - self.input_mins) / (self.input_maxs - self.input_mins)
+        return (x - self.input_mins) / self._spans
 
     def denormalize(self, x: torch.Tensor) -> torch.Tensor:
-        return x * (self.input_maxs - self.input_mins) + self.input_mins
+        return x * self._spans + self.input_mins
 
 
 class OutputMinMaxNormalizer(OutputNormalizer):

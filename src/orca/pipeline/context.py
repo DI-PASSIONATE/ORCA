@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 #: Fields left out of :meth:`PipelineContext.to_json_dict`, because they are
 #: large binary or tabular objects whose ``str()`` says nothing useful. The
 #: trained model and the dataset are written to disk by their own stages; the
-#: test split is reproducible from the result CSV and the split seed.
+#: split is recorded in :attr:`PipelineContext.split_csv_path`.
 _JSON_EXCLUDED = frozenset({"trained_model", "dataset", "test_df"})
 
 
@@ -106,7 +106,11 @@ class PipelineContext:
     final_val_loss: float | None = None
     training_history: list[EpochResult] = field(default_factory=list)
     test_df: pd.DataFrame | None = None
-    """Held-out split, kept so the testing stage evaluates the same rows."""
+    """Held-out split, kept so the testing stage evaluates the same rows.
+
+    The split is also recorded in :attr:`split_csv_path`, for a testing stage that
+    runs in a later pipeline.
+    """
 
     # --- Written by OnnxExporter --------------------------------------------
     model_path: str | None = None
@@ -114,7 +118,8 @@ class PipelineContext:
 
     # --- Written by ModelTester ---------------------------------------------
     test_results: dict[str, Any] = field(default_factory=dict)
-    """Error metrics per electrical parameter; empty when nothing was evaluated."""
+    """Summary of the test errors (see ``ModelTester.summarize``); empty when nothing was
+    evaluated. The errors of every geometry are in :attr:`test_errors_csv_path`."""
 
     # --- Derived folder layout -----------------------------------------------
 
@@ -163,6 +168,16 @@ class PipelineContext:
         return self.model_dir_override or os.path.join(self.base_dir, "models")
 
     @property
+    def split_csv_path(self) -> str:
+        """Where the training stage records which result file went into which split."""
+        return os.path.join(self.model_dir, f"{self.geometry.name}_split.csv")
+
+    @property
+    def test_errors_csv_path(self) -> str:
+        """Where the testing stage writes the errors of every test geometry."""
+        return os.path.join(self.model_dir, f"{self.geometry.name}_test_errors.csv")
+
+    @property
     def onnx_path(self) -> str:
         """Where the export stage writes, and the testing stage looks for, the model."""
         return self.model_path_override or os.path.join(
@@ -188,6 +203,8 @@ class PipelineContext:
             "result_dir": self.result_dir,
             "result_csv": self.result_csv,
             "model_dir": self.model_dir,
+            "split_csv": self.split_csv_path,
+            "test_errors_csv": self.test_errors_csv_path,
             "onnx_path": self.onnx_path,
         }
         return record
