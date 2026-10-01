@@ -38,7 +38,7 @@ def _input_parameters() -> InputParameterIterator:
     return InputParameterIterator(
         picking_strategy="random",
         frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
-        turns=[2, 3, 4, 5],
+        turns=[1, 2, 3, 4, 5],
         # 0.02 µm steps: symmetric_octa_IHP draws w and s on even hundredths,
         # so odd values would be built 0.01 µm off from what the table records.
         width=[x / 100 for x in range(200, 1501, 2)],   # 2.00 .. 15.00 µm

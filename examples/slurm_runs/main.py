@@ -1,7 +1,6 @@
 import orca
 from orca.geometry.presets import TransformerOcta
-
-#from orca.geometry.presets import InductorOcta
+from orca.geometry.presets import InductorOcta
 
 
 def main():
@@ -12,8 +11,8 @@ def main():
     except ModuleNotFoundError:
         pass
 
-    geometry = TransformerOcta(name="tf_octa_c_ports")
-    # geometry = InductorOcta(name="inductor_octa")
+    # geometry = TransformerOcta(name="tf_octa_c_ports")
+    geometry = InductorOcta(name="inductor_octa")
 
     orca_instance = orca.ORCA(
         [
