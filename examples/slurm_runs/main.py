@@ -1,5 +1,6 @@
 import orca
-from orca.geometry.presets import TransformerOcta
+
+# from orca.geometry.presets import TransformerOcta
 from orca.geometry.presets import InductorOcta
 
 
