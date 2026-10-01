@@ -2,20 +2,23 @@
 
 :class:`HyperparameterTuner` runs an optuna study over the union of three search
 spaces - the trainer's own, the architecture's, and the basis expansion's - scoring
-each trial with k-fold cross-validation.
+each trial with k-fold cross-validation over geometries.
 """
 
 from __future__ import annotations
 
-import traceback
+import math
+import time
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import optuna
+import torch
 from sklearn.model_selection import KFold
 from torch.utils.data import Subset
 
 from orca.logger import logger
-from orca.training.trainer import Trainer, TrainingConfig
+from orca.training.trainer import EpochResult, Trainer, TrainingConfig
 
 if TYPE_CHECKING:
     from orca.training.basis_expansion import BasisExpansion
@@ -65,6 +68,40 @@ def suggest_hyperparameters(trial: optuna.Trial, search_space: dict[str, Any]) -
     return values
 
 
+def group_kfold_indices(
+    groups: list[str], n_splits: int, seed: int
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """K-fold split that keeps every group on one side of each fold.
+
+    A per-point dataset holds hundreds of samples per geometry. Splitting those samples
+    at random puts the frequency neighbours of nearly every validation sample into the
+    training fold, so the score measures interpolation along frequency instead of
+    generalisation to unseen geometries. Splitting the geometries avoids that.
+
+    Args:
+        groups (list[str]): Group label of each sample (its result file).
+        n_splits (int): Number of folds.
+        seed (int): Seed for shuffling the groups.
+
+    Returns:
+        list[tuple[np.ndarray, np.ndarray]]: Train and validation sample indices per fold.
+    """
+    labels, sample_group = np.unique(np.asarray(groups), return_inverse=True)
+    if len(labels) < n_splits:
+        raise ValueError(
+            f"Cross-validation with {n_splits} folds needs at least {n_splits} geometries, "
+            f"but the tuning data holds {len(labels)}."
+        )
+    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    return [
+        (
+            np.flatnonzero(np.isin(sample_group, train_groups)),
+            np.flatnonzero(np.isin(sample_group, val_groups)),
+        )
+        for train_groups, val_groups in kfold.split(labels)
+    ]
+
+
 class HyperparameterTuner:
     """Searches for the best hyperparameters of a model on a given dataset.
 
@@ -77,9 +114,16 @@ class HyperparameterTuner:
             on the raw inputs.
         n_fold_cv (int): Number of cross-validation folds per trial.
         n_trials (int): Number of optuna trials to run.
-        seed (int): Seed for the fold split.
-        sampler (optuna.samplers.BaseSampler | None): Defaults to TPE.
-        pruner (optuna.pruners.BasePruner | None): Defaults to the median pruner.
+        seed (int): Seed for the fold split and the default sampler.
+        sampler (optuna.samplers.BaseSampler | None): Defaults to TPE, seeded with ``seed``.
+        pruner (optuna.pruners.BasePruner | None): Defaults to a median pruner that
+            compares trials after every epoch, at the same fold and epoch.
+        timeout (float | None): End the study after this many seconds: no new trial
+            starts, and a trial still running is pruned after its current epoch.
+            ``None`` runs all ``n_trials``.
+        max_epochs (int): Epoch limit per fold; early stopping usually ends a fold sooner.
+        batch_sizes (list[int] | None): Batch sizes to search. ``None`` uses
+            :data:`~orca.training.trainer.DEFAULT_BATCH_SIZES`.
     """
 
     def __init__(
@@ -92,6 +136,9 @@ class HyperparameterTuner:
         seed: int = 42,
         sampler: optuna.samplers.BaseSampler | None = None,
         pruner: optuna.pruners.BasePruner | None = None,
+        timeout: float | None = None,
+        max_epochs: int = 30,
+        batch_sizes: list[int] | None = None,
     ):
         self.model_cls = model_cls
         self.dataset = dataset
@@ -100,9 +147,15 @@ class HyperparameterTuner:
         self.n_fold_cv = n_fold_cv
         self.n_trials = n_trials
         self.seed = seed
-        self.sampler = sampler or optuna.samplers.TPESampler()
-        self.pruner = pruner or optuna.pruners.MedianPruner()
+        self.sampler = sampler or optuna.samplers.TPESampler(seed=seed)
+        self.pruner = pruner or optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=5)
+        self.timeout = timeout
+        self.max_epochs = max_epochs
+        self.batch_sizes = batch_sizes
+        self._deadline = math.inf
         self.study: optuna.Study | None = None
+        # The folds depend only on the data, so every trial is scored on the same split
+        self.folds = group_kfold_indices(dataset.sample_groups, n_fold_cv, seed)
 
     @property
     def search_space(self) -> dict[str, Any]:
@@ -111,7 +164,7 @@ class HyperparameterTuner:
             self.basis_cls.hyperparameter_search_space() if self.basis_cls else {}
         )
         return {
-            **TrainingConfig.search_space(),
+            **TrainingConfig.search_space(self.batch_sizes),
             **self.model_cls.hyperparameter_search_space(),
             **basis_space,
         }
@@ -125,52 +178,73 @@ class HyperparameterTuner:
         self.study = optuna.create_study(
             direction="minimize", sampler=self.sampler, pruner=self.pruner
         )
-        self.study.optimize(self._objective, n_trials=self.n_trials)
+        # optuna's own timeout only applies between trials, and one trial of a large
+        # model can take many minutes; the deadline is also checked after every epoch.
+        if self.timeout is not None:
+            self._deadline = time.monotonic() + self.timeout
+        self.study.optimize(self._objective, n_trials=self.n_trials, timeout=self.timeout)
+        if not any(t.state is optuna.trial.TrialState.COMPLETE for t in self.study.trials):
+            raise RuntimeError(
+                f"None of the {len(self.study.trials)} tuning trials completed; each one "
+                "diverged, ran out of memory or was still running at the tuning timeout. "
+                "Narrow the search space (lower learning rates, smaller models), allow "
+                "more time, or pass hyperparameters directly."
+            )
         return self.study.best_params
 
     def _objective(self, trial: optuna.Trial) -> float:
         hyperparameters = suggest_hyperparameters(trial, self.search_space)
-        config = TrainingConfig.from_hyperparameters(hyperparameters)
-
-        kfold = KFold(n_splits=self.n_fold_cv, shuffle=True, random_state=self.seed)
-        fold_losses = []
-
-        for fold_idx, (train_indices, val_indices) in enumerate(kfold.split(self.dataset)):
-            fold_loss = self._run_fold(trial, config, hyperparameters, fold_idx, train_indices, val_indices)
-            fold_losses.append(fold_loss)
-
+        config = TrainingConfig.from_hyperparameters(hyperparameters, epochs=self.max_epochs)
+        fold_losses = [
+            self._run_fold(trial, config, hyperparameters, fold_idx, train_indices, val_indices)
+            for fold_idx, (train_indices, val_indices) in enumerate(self.folds)
+        ]
         return sum(fold_losses) / len(fold_losses)
 
-    def _run_fold(self, trial, config, hyperparameters, fold_idx, train_indices, val_indices) -> float:
-        """Train one cross-validation fold, pruning the trial if anything fails."""
-        fold_label = f"Fold {fold_idx + 1}/{self.n_fold_cv}"
+    def _run_fold(
+        self, trial, config, hyperparameters, fold_idx, train_indices, val_indices
+    ) -> float:
+        """Train one cross-validation fold, letting the pruner stop it after any epoch.
 
+        A trial whose training diverges or runs out of memory is pruned: those are
+        properties of the hyperparameters. Any other exception is a bug and propagates.
+        """
+        fold_label = f"Fold {fold_idx + 1}/{self.n_fold_cv}"
+        best_loss = math.inf
+
+        def report(epoch: EpochResult) -> None:
+            # The step counts epochs across folds, so the pruner compares a trial with
+            # the others at the same fold and epoch; the best loss so far is reported,
+            # since that is what the fold will score.
+            nonlocal best_loss
+            if time.monotonic() > self._deadline:
+                logger.info(f"Tuning timeout reached during {fold_label}; pruning the trial.")
+                raise optuna.exceptions.TrialPruned
+            best_loss = min(best_loss, epoch.val_loss)
+            if math.isfinite(best_loss):
+                trial.report(best_loss, fold_idx * self.max_epochs + epoch.epoch - 1)
+                if trial.should_prune():
+                    raise optuna.exceptions.TrialPruned
+
+        basis = self.basis_cls.from_spec(self.spec, hyperparameters) if self.basis_cls else None
+        model = self.model_cls.from_spec(self.spec, hyperparameters, basis)
+        trainer = Trainer(config=config, stage_name=f"Tuning ({fold_label})", verbose=False)
         try:
-            basis = (
-                self.basis_cls.from_spec(self.spec, hyperparameters)
-                if self.basis_cls
-                else None
-            )
-            model = self.model_cls.from_spec(self.spec, hyperparameters, basis)
-            trainer = Trainer(
-                config=config,
-                stage_name=f"Tuning ({fold_label})",
-                verbose=False,
-            )
             result = trainer.fit(
                 model=model,
-                train_dataset=Subset(self.dataset, list(train_indices)),
-                val_dataset=Subset(self.dataset, list(val_indices)),
+                train_dataset=Subset(self.dataset, train_indices.tolist()),
+                val_dataset=Subset(self.dataset, val_indices.tolist()),
+                epoch_callback=report,
             )
-        except Exception as e:
-            traceback.print_exc()
+        except (torch.OutOfMemoryError, MemoryError) as e:
+            logger.warning(f"{fold_label} ran out of memory with {hyperparameters}; pruning.")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             raise optuna.exceptions.TrialPruned from e
 
-        logger.info(f"{fold_label} | Val Loss: {result.best_loss:.4f}")
-
-        # Report once per fold, using the fold index as the pruning step
-        trial.report(result.best_loss, fold_idx)
-        if trial.should_prune():
+        if not math.isfinite(result.best_loss):
+            logger.warning(f"{fold_label} diverged with {hyperparameters}; pruning.")
             raise optuna.exceptions.TrialPruned
 
+        logger.info(f"{fold_label} | Val Loss: {result.best_loss:.4f}")
         return result.best_loss

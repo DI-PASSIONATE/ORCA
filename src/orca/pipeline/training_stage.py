@@ -1,8 +1,10 @@
+import math
 import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
+import torch
 from sklearn.model_selection import train_test_split
 
 from orca.logger import logger
@@ -29,9 +31,15 @@ class ModelTrainer(PipelineStage):
         basis: str | type[BasisExpansion] | None = None,
         hyperparameters: dict[str, Any] | None = None,
         test_frac: float = 0.15,
+        val_frac: float = 0.15,
         n_train_samples: int | None = None,
         n_fold_cv: int = 5,
         n_trials: int = 200,
+        tuning_timeout: float | None = None,
+        max_epochs: int = 100,
+        tuning_max_epochs: int = 30,
+        batch_sizes: list[int] | None = None,
+        seed: int = 11,
     ):
         """
         Initializes the ModelTrainer stage with the architecture to train and optional
@@ -46,19 +54,36 @@ class ModelTrainer(PipelineStage):
             basis: Optional basis expansion of the model inputs, as a
                 BasisExpansion subclass or a registered name (e.g. "chebyshev").
             hyperparameters: Optional predefined hyperparameters. If None, hyperparameter tuning will be performed.
-            test_frac: Fraction of data to use for testing (default: 0.15).
-            n_train_samples: Optional limit on the number of samples to use for training.
+            test_frac: Fraction of the geometries held out for testing (default: 0.15).
+            val_frac: Fraction of the remaining geometries used for validation (early
+                stopping and checkpoint selection) in the final training (default: 0.15).
+            n_train_samples: Optional limit on the number of geometries used for training
+                and tuning.
             n_fold_cv: Number of folds for cross-validation during hyperparameter tuning (default: 5).
             n_trials: Number of optuna trials during hyperparameter tuning (default: 200).
+            tuning_timeout: Stop starting new tuning trials after this many seconds.
+                None runs all n_trials.
+            max_epochs: Epoch limit of the final training; early stopping usually ends
+                it sooner. An "epochs" entry in hyperparameters takes precedence.
+            tuning_max_epochs: Epoch limit of each cross-validation fold during tuning.
+            batch_sizes: Batch sizes the tuning searches, e.g. [1024, 2048, 4096]. None
+                searches 32 to 512. Ignored when hyperparameters are given.
+            seed: Seed for the data splits, the tuner and the weight initialisation.
         """
         super().__init__(name="Model Trainer", index=4)
         self.model_cls = get_model_class(model)
         self.basis_cls = get_basis_class(basis) if basis is not None else None
         self.hyperparameters = hyperparameters
         self.test_frac = test_frac
+        self.val_frac = val_frac
         self.n_samples = n_train_samples
         self.n_fold_cv = n_fold_cv
         self.n_trials = n_trials
+        self.tuning_timeout = tuning_timeout
+        self.max_epochs = max_epochs
+        self.tuning_max_epochs = tuning_max_epochs
+        self.batch_sizes = batch_sizes
+        self.seed = seed
 
     def run(
         self,
@@ -73,18 +98,24 @@ class ModelTrainer(PipelineStage):
             logger.error(f"No result CSV file found for training at {result_csv}.")
             return context
 
-        result_df = pd.read_csv(result_csv)
+        result_df = order_parameter_columns(pd.read_csv(result_csv), geometry)
+        torch.manual_seed(self.seed)
 
-        # Split into train_val and test using sklearn - train_val is used for n-fold-cross-validation during hyperparameter tuning
+        # Split into train_val and test by geometry (CSV row) - train_val is used for
+        # n-fold-cross-validation during hyperparameter tuning
         train_val_df, test_df = train_test_split(
-            result_df,
-            test_size=self.test_frac,
-            random_state=11
+            result_df, test_size=self.test_frac, random_state=self.seed
         )
 
         if self.n_samples is not None and self.n_samples < len(train_val_df):
             train_val_df = train_val_df.head(self.n_samples)
             logger.info(f"Using only the first {self.n_samples} samples for training as specified in the ModelTrainer initialization.")
+
+        # Split train_val_df into train and val for actual model training
+        train_df, val_df = train_test_split(
+            train_val_df, test_size=self.val_frac, random_state=self.seed
+        )
+        self._save_split(context, train_df, val_df, test_df)
 
         # Perform hyperparameter tuning if needed. The result stays local rather than
         # being stored on the stage, so re-running the same ModelTrainer tunes again
@@ -93,27 +124,7 @@ class ModelTrainer(PipelineStage):
             hyperparameters = self.hyperparameters
             logger.info(f"Using provided hyperparameters for training: {hyperparameters}")
         else:
-            logger.info("No hyperparameters provided, starting hyperparameter tuning with optuna...")
-            train_val_dataset = geometry.dataset.new_split(
-                directory=result_dir, data_df=train_val_df, fit_normalizers=True
-            )
-            self._check_compatibility(train_val_dataset)
-            tuner = HyperparameterTuner(
-                model_cls=self.model_cls,
-                dataset=train_val_dataset,
-                basis_cls=self.basis_cls,
-                n_fold_cv=self.n_fold_cv,
-                n_trials=self.n_trials,
-            )
-            hyperparameters = tuner.tune()
-            logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {hyperparameters}")
-
-        # Split train_val_df into train and val for actual model training
-        train_df, val_df = train_test_split(
-            train_val_df,
-            test_size=self.test_frac,
-            random_state=11
-        )
+            hyperparameters = self._tune(geometry, result_dir, train_val_df)
 
         # The training split owns the normalization statistics; validation reuses them,
         # so no validation data leaks into the normalization of the training data.
@@ -121,6 +132,7 @@ class ModelTrainer(PipelineStage):
             directory=result_dir, data_df=train_df, fit_normalizers=True
         )
         val_dataset = geometry.dataset.new_split(directory=result_dir, data_df=val_df)
+        geometry.dataset.clear_cache()
         self._check_compatibility(train_dataset)
 
         logger.info(
@@ -128,18 +140,26 @@ class ModelTrainer(PipelineStage):
         )
 
         trainer = Trainer(
-            config=TrainingConfig.from_hyperparameters(hyperparameters),
+            config=TrainingConfig.from_hyperparameters({"epochs": self.max_epochs, **hyperparameters}),
             progress_callback=progress_callback,
             stage_name=self.name,
         )
         spec = train_dataset.io_spec
         basis = self.basis_cls.from_spec(spec, hyperparameters) if self.basis_cls else None
 
+        # Reseeded so the final weights do not depend on how much randomness tuning used
+        torch.manual_seed(self.seed)
+
         result = trainer.fit(
             model=self.model_cls.from_spec(spec, hyperparameters, basis),
             train_dataset=train_dataset,
             val_dataset=val_dataset,
         )
+        if not math.isfinite(result.best_loss):
+            raise RuntimeError(
+                "Training diverged: the validation loss was never finite. Lower the learning "
+                f"rate or check the data for NaNs. Hyperparameters: {hyperparameters}"
+            )
 
         context.trained_model = result.model
         context.dataset = train_dataset
@@ -148,6 +168,59 @@ class ModelTrainer(PipelineStage):
         context.training_history = result.history
         context.test_df = test_df
         return context
+
+    def _tune(
+        self, geometry: "BaseGeometry", result_dir: str, train_val_df: pd.DataFrame
+    ) -> dict[str, Any]:
+        """
+        Search the hyperparameters with cross-validation over the train/validation rows.
+
+        A method of its own so the tuning data, which can fill most of a GPU, is
+        released before the final training loads its splits.
+        """
+        logger.info("No hyperparameters provided, starting hyperparameter tuning with optuna...")
+        train_val_dataset = geometry.dataset.new_split(
+            directory=result_dir, data_df=train_val_df, fit_normalizers=True
+        )
+        self._check_compatibility(train_val_dataset)
+        tuner = HyperparameterTuner(
+            model_cls=self.model_cls,
+            dataset=train_val_dataset,
+            basis_cls=self.basis_cls,
+            n_fold_cv=self.n_fold_cv,
+            n_trials=self.n_trials,
+            seed=self.seed,
+            timeout=self.tuning_timeout,
+            max_epochs=self.tuning_max_epochs,
+            batch_sizes=self.batch_sizes,
+        )
+        hyperparameters = tuner.tune()
+        logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {hyperparameters}")
+        return hyperparameters
+
+    def _save_split(
+        self,
+        context: "PipelineContext",
+        train_df: pd.DataFrame,
+        val_df: pd.DataFrame,
+        test_df: pd.DataFrame,
+    ) -> None:
+        """
+        Record which result file went into which split, so a ModelTester run in a later
+        pipeline evaluates exactly the held-out geometries.
+        """
+        os.makedirs(context.model_dir, exist_ok=True)
+        split = pd.concat(
+            [
+                pd.DataFrame({"name": df["name"], "split": label})
+                for label, df in (("train", train_df), ("val", val_df), ("test", test_df))
+            ]
+        )
+        split.to_csv(context.split_csv_path, index=False)
+        logger.info(
+            f"Split {len(train_df)} train / {len(val_df)} validation / {len(test_df)} test "
+            f"geometries; recorded in {context.split_csv_path}."
+        )
 
     def _check_compatibility(self, dataset: BaseDataset) -> None:
         """
@@ -161,3 +234,26 @@ class ModelTrainer(PipelineStage):
                 f"but {type(dataset).__name__} produces {dataset_mode.name}. "
                 "Pick a dataset and a model that agree on the frequency layout."
             )
+
+
+def order_parameter_columns(data_df: pd.DataFrame, geometry: "BaseGeometry") -> pd.DataFrame:
+    """
+    Reorder a parameter table to ``name`` followed by the geometry's input parameters.
+
+    Datasets take their inputs in column order, while the input normalizer and the
+    exported model follow the geometry's parameter order. A hand-made or merged table
+    with its columns in another order would otherwise be scaled column by column with
+    the wrong ranges, without any error.
+
+    Raises:
+        ValueError: If the table lacks one of the geometry's parameters or has extra columns.
+    """
+    expected = ["name", *geometry.input_parameter_iterator.input_names]
+    missing = [column for column in expected if column not in data_df.columns]
+    extra = [column for column in data_df.columns if column not in expected]
+    if missing or extra:
+        raise ValueError(
+            f"The parameter table does not match {geometry.name}'s input parameters: "
+            f"missing {missing}, unexpected {extra}. Expected the columns {expected}."
+        )
+    return data_df[expected]
