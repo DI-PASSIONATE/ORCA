@@ -5,13 +5,6 @@ from orca.geometry.presets import InductorOcta
 
 
 def main():
-    # Use predefined geometry from examples
-    try:
-        import torch  # optional: only installed with ORCA's "train" extra
-        torch.manual_seed(40)
-    except ModuleNotFoundError:
-        pass
-
     # geometry = TransformerOcta(name="tf_octa_c_ports")
     geometry = InductorOcta(name="inductor_octa")
 

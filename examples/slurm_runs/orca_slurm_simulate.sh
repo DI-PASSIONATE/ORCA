@@ -28,4 +28,4 @@ conda activate orca
 # `srun --nodes=1 --nodelist=<node> --ntasks=<cores per slot> --cpu-bind=map_cpu:<cores>`, one
 # simulation per slot (node / socket / NUMA domain) of this allocation. Each simulation writes its
 # srun/Palace output to <sim dir>/palace.log if save_log=True is passed to PalaceSimulator.
-python ./main.py
+python ./simulate.py
