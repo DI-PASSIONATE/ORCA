@@ -96,7 +96,7 @@ conda config --add envs_dirs $WORK/software/private/conda/envs
 3. Create a conda environment for ORCA and install dependencies
 
 ```sh
-conda create -n orca python=3.12
+conda create -n orca python=3.13
 conda activate orca
 conda install -c conda-forge mesalib libglu
 ```

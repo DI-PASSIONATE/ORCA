@@ -49,9 +49,12 @@ class ORCA:
             geometry (BaseGeometry): The geometry to be used in the pipeline.
             num_processes (int|None): Number of MPI processes to use for parallel execution.
                 Defaults to the number of CPU cores available to this process.
-            force_overwrite (bool): Skip the confirmation prompt when the output directory already exists.
+            force_overwrite (bool): Skip the confirmation prompt that is shown when the output
+                directory already exists and a stage is set to overwrite its earlier results.
+                Without such a stage, a run keeps earlier results and adds the missing samples.
             progress_callback: Called as (stage_name, current, total, message) while stages run.
-            overwrite_callback: Asked whether to continue when the output directory exists.
+            overwrite_callback: Asked whether to continue when the output directory exists and a
+                stage is set to overwrite its earlier results.
             base_dir (str|None): Output directory. Defaults to ./output/<geometry name>.
             result_dir (str|None): Directory of existing simulation results. Set this to train on
                 results that were simulated earlier, instead of the pipeline's own results folder.
@@ -82,15 +85,19 @@ class ORCA:
             result_csv_override=result_csv,
         )
 
-        if os.path.exists(context.base_dir) and not force_overwrite:
-            # Ask user to confirm overwriting existing output directory
+        # Stages keep what an earlier run left in the output directory and only add what is
+        # missing, so a run is only confirmed when a stage is set to delete its earlier results.
+        overwriting = [stage.name for stage in self.stages if getattr(stage, "overwrite", False)]
+        if overwriting and os.path.exists(context.base_dir) and not force_overwrite:
             if overwrite_callback:
                 if not overwrite_callback(context.base_dir):
                     logger.info("Aborting pipeline run.")
                     return None
             else:
                 response = input(
-                    f"Output directory {context.base_dir} already exists. Stages may overwrite existing files. Continue? (y/n): "
+                    f"Output directory {context.base_dir} already exists, and "
+                    f"{', '.join(overwriting)} will delete the results of earlier runs there. "
+                    "Continue? (y/n): "
                 )
                 if response.lower() != "y":
                     logger.info("Aborting pipeline run.")

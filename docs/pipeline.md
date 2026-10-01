@@ -21,9 +21,11 @@ flowchart TB
     E -- ".onnx (→ COBRA)" --> F[ModelTester]
 ```
 
+The sample-producing stages (`GDSGenerator`, `GDSConverter`, `PalaceSimulator`) record every finished sample in their parameter table right away and keep the results of earlier runs, so an interrupted run continues where it stopped when started again. Each of them takes `overwrite=True` to delete its earlier results instead; see [Resuming an interrupted run](running_orca.md#resuming-an-interrupted-run).
+
 ## Stage 1 — GDS generation (`GDSGenerator`)
 
-The geometry class's `input_parameter_iterator` samples parameter combinations (randomly or on a grid). For each combination, `create_gds_file()` is called to produce a GDS layout file. The number of samples is set by `num_samples`; `seed` makes the `"random"` picking strategy reproducible. Every draw is first passed to the geometry's `is_feasible()`; combinations it rejects (a winding that does not fit its diameter, a feed gap wider than the octagon's side) are counted and, with the `"random"` strategy, redrawn, so `num_samples` buildable layouts come out. A geometry that still raises `ValueError` in `create_gds_file()` costs a sample, and the stage warns when it delivered fewer layouts than requested.
+The geometry class's `input_parameter_iterator` samples parameter combinations (randomly or on a grid). For each combination, `create_gds_file()` is called to produce a GDS layout file. The number of samples is set by `num_samples`; `seed` makes the `"random"` picking strategy reproducible. Every draw is first passed to the geometry's `is_feasible()`; combinations it rejects (a winding that does not fit its diameter, a feed gap wider than the octagon's side) are counted and, with the `"random"` strategy, redrawn, so `num_samples` buildable layouts come out. A geometry that still raises `ValueError` in `create_gds_file()` costs a sample, and the stage warns when it delivered fewer layouts than requested. Layouts listed in the table of an earlier run are kept and only the missing indices are laid out; whenever new layouts are added, the DRC tables of the previous set are deleted so the DRC stage has to check them again.
 
 ## Stage 2 — Design-rule check (`DRCChecker`)
 
@@ -35,7 +37,7 @@ Off-grid vertices are repaired rather than reported: `snap_to_grid=True` (the de
 
 Each GDS file — those that passed DRC when the stage ran, otherwise all of them — is converted to a Palace-ready simulation setup using [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2). The geometry's `stackup_xml` defines the physical layer stackup and material properties; the `simconfig_filename` defines the simulation parameters (port positions, frequency sweep, mesh settings).
 
-Conversions run in parallel worker processes, one sample per task. A sample whose geometry gds2palace/gmsh cannot mesh (e.g. `PLC Error: A segment and a facet intersect`) is logged and skipped. gmsh can also loop forever on degenerate geometry, so each conversion has a time limit — `GDSConverter(timeout=60)` seconds by default — after which its worker is killed and the sample is skipped as well, instead of stalling the whole pipeline.
+Conversions run in parallel worker processes, one sample per task. A sample whose geometry gds2palace/gmsh cannot mesh (e.g. `PLC Error: A segment and a facet intersect`) is logged and skipped. gmsh can also loop forever on degenerate geometry, so each conversion has a time limit — `GDSConverter(timeout=60)` seconds by default — after which its worker is killed and the sample is skipped as well, instead of stalling the whole pipeline. Models converted by an earlier run for the same parameters are reused.
 
 ## Stage 4 — EM simulation (`PalaceSimulator`)
 
@@ -47,6 +49,8 @@ Several simulations can run at once, each already parallelized internally with M
 - `PalaceSimulator(launcher="slurm", num_parallel_sims=0, bind="numa")` does the same on every node of a Slurm allocation (`sbatch --nodes=N`), each simulation launched as an `srun` job step pinned to its node and cores. See [examples/slurm_runs](https://github.com/DI-PASSIONATE/ORCA/tree/main/examples/slurm_runs) for a job script.
 
 Palace is memory-bandwidth bound, so several smaller simulations confined to their own NUMA domain usually give a higher throughput than one simulation spread over a whole node — as long as one simulation fits into a domain's memory (use `bind="socket"` otherwise). The layout is derived from the machine or allocation at runtime, so `num_parallel_sims` and `num_processes` are capped to what is actually available. Pass `save_log=True` to keep each simulation's full Palace output in `palace.log` in its simulation folder (off by default, Palace prints a lot); failures are reported either way.
+
+Each simulation that finishes adds its row to `results/<name>.csv` immediately, so a job killed by its time limit still leaves a table describing every Touchstone file it produced; at the end of the stage the table is put back into the order of the Palace table. A simulation that fails, raises, or does not produce the requested Touchstone file is logged and left out, and the others go on. Started again, the stage skips every model already listed with the same parameters and simulates the rest.
 
 ## Stage 5 — Model training (`ModelTrainer`)
 

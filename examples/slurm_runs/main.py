@@ -40,6 +40,9 @@ def main():
 
     # num_processes=None uses all cores of the current node for the GDS stages. Each Palace simulation
     # gets at most that many MPI ranks, capped to the cores of its slot (18 for a NUMA domain).
+    # If the job hits its time limit, submit it again: every stage keeps what the previous job
+    # finished (results/<name>.csv lists each completed simulation) and only does the rest. Pass
+    # overwrite=True to a stage to start it from scratch instead.
     orca_instance.run(geometry=geometry, num_processes=None, force_overwrite=True)
 
 

@@ -1,7 +1,8 @@
 import os
+import shutil
 from collections.abc import Callable
 from concurrent.futures import as_completed
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import tqdm
@@ -9,11 +10,15 @@ from pebble import ProcessPool
 
 from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
+from orca.pipeline.resume import append_row, resume_table
 from orca.simulation.gds_converter import create_palace_model_from_gds
 
 if TYPE_CHECKING:
     from orca.geometry.base_geometry import BaseGeometry
     from orca.pipeline.context import PipelineContext
+
+#: Columns of the Palace table between the sample name and its parameters.
+PALACE_PATH_COLUMNS = ["data_dir", "sim_path", "config_name"]
 
 
 class GDSConverter(PipelineStage):
@@ -25,16 +30,23 @@ class GDSConverter(PipelineStage):
     2D mesher never recovers from), and a plain process pool would then wait
     for that worker indefinitely. A worker that exceeds ``timeout`` is killed
     and replaced, and the sample is logged and skipped like a failed mesh.
+
+    Palace models of an earlier, possibly aborted run are kept: a layout is only
+    converted if the Palace table has no row for it with the same parameters, or
+    its Palace config is gone.
     """
 
-    def __init__(self, timeout: float = 60.0):
+    def __init__(self, timeout: float = 60.0, overwrite: bool = False):
         """
         Args:
             timeout (float): Maximum seconds a single GDS conversion may take
                 before its worker is killed and the sample is skipped.
+            overwrite (bool): Delete the Palace model folder first instead of keeping
+                the models an earlier run left there.
         """
         super().__init__(name="GDS Converter", index=2)
         self.timeout = timeout
+        self.overwrite = overwrite
 
     def run(
         self,
@@ -45,8 +57,9 @@ class GDSConverter(PipelineStage):
         cpu_cores: int = context.num_processes
         base_dir: str = context.base_dir
         # The DRC stage leaves the table of the layouts that passed next to the GDS
-        # table; the GDS Generator wipes that folder, so a present table belongs to
-        # the current layouts even when the DRC stage ran in an earlier session.
+        # table; the GDS Generator deletes it whenever it adds layouts, so a present
+        # table belongs to the current layouts even when the DRC stage ran in an
+        # earlier session.
         gds_csv = context.gds_csv_path
         if os.path.exists(context.drc_csv_path):
             gds_csv = context.drc_csv_path
@@ -60,14 +73,34 @@ class GDSConverter(PipelineStage):
         output_dir = context.palace_sim_dir
         palace_csv = context.palace_csv_path
 
-        if os.path.exists(output_dir):
-            import shutil
-
+        if self.overwrite and os.path.exists(output_dir):
             shutil.rmtree(output_dir)
 
-        os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
         gds_data = pd.read_csv(gds_csv)
+        total = len(gds_data)
+
+        # Keep the models an earlier run finished for the same parameters
+        param_columns = [column for column in gds_data.columns if column != "name"]
+        converted = resume_table(
+            palace_csv,
+            gds_data,
+            ["name", *PALACE_PATH_COLUMNS, *param_columns],
+            lambda row: os.path.exists(os.path.join(row["sim_path"], row["config_name"])),
+        )
+        gds_data = gds_data[~gds_data["name"].isin(converted)]
+        if converted:
+            logger.info(
+                f"Reusing {len(converted)} of {total} Palace models from an earlier run in "
+                f"{output_dir}."
+            )
+        # A layout converted before with other parameters leaves a stale mesh and results
+        # in its folder; start it clean.
+        for name in gds_data["name"]:
+            sample_dir = os.path.join(output_dir, f"{os.path.splitext(name)[0]}_data")
+            if os.path.isdir(sample_dir):
+                shutil.rmtree(sample_dir)
 
         logger.info(
             f"Starting GDS conversion for {len(gds_data)} files using {cpu_cores} CPU cores."
@@ -114,8 +147,15 @@ class GDSConverter(PipelineStage):
                 try:
                     geo_name, params, config_name, sim_path, data_dir = future.result()
                     # Save input parameters to CSV
-                    self._save_csv(
-                        palace_csv, geo_name, params, data_dir, sim_path, config_name
+                    append_row(
+                        palace_csv,
+                        {
+                            "name": geo_name,
+                            "data_dir": data_dir,
+                            "sim_path": sim_path,
+                            "config_name": config_name,
+                        }
+                        | params,
                     )
                 except TimeoutError:
                     logger.error(
@@ -137,39 +177,3 @@ class GDSConverter(PipelineStage):
 
         context.palace_csv = palace_csv
         return context
-
-    def _save_csv(
-        self,
-        csv_path,
-        name: str,
-        params: dict[str, Any],
-        data_dir: str,
-        sim_path: str,
-        config_name: str,
-    ):
-        """
-        Saves the input parameters to a CSV file.
-
-        Args:
-            csv_path (str): Path to the CSV file.
-            name (str): Name of the geometry instance.
-            params (dict[str, Any]): Input parameters to save.
-            data_dir (str): Directory where data is stored.
-            sim_path (str): Path to the simulation file.
-            config_name (str): Name of the Palace config file written for this sample.
-        """
-        df = pd.DataFrame(
-            [
-                {
-                    "name": name,
-                    "data_dir": data_dir,
-                    "sim_path": sim_path,
-                    "config_name": config_name,
-                }
-                | params
-            ]
-        )
-        if not os.path.exists(csv_path):
-            df.to_csv(csv_path, header=True, index=False)
-        else:
-            df.to_csv(csv_path, mode="a", header=False, index=False)

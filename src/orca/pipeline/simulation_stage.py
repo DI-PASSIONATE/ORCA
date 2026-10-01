@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from queue import Queue
@@ -10,6 +11,7 @@ import tqdm
 
 from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
+from orca.pipeline.resume import append_row, read_table, resume_table, write_table
 from orca.simulation.combine_snp_results import touchstone_filename
 from orca.simulation.launchers import BIND_CHOICES, LocalLauncher, SimulationLauncher
 from orca.simulation.simulate import run_palace
@@ -21,6 +23,11 @@ if TYPE_CHECKING:
 class PalaceSimulator(PipelineStage):
     """
     Pipeline stage for running Palace EM simulations.
+
+    Each finished simulation is added to the result table right away, so the table
+    stays valid when the run is killed (e.g. by a Slurm time limit). A later run
+    keeps those results and only simulates the models that are missing, that failed,
+    or whose parameters changed since.
     """
 
     def __init__(
@@ -33,6 +40,7 @@ class PalaceSimulator(PipelineStage):
         extra_srun_args: str = "",
         save_log: bool = False,
         hyperthreads: bool = False,
+        overwrite: bool = False,
     ):
         """
         Initializes the PalaceSimulator stage.
@@ -64,6 +72,9 @@ class PalaceSimulator(PipelineStage):
                 core. Palace is memory-bandwidth bound and usually gains nothing from SMT (two
                 ranks then share one core's execution units, caches and bandwidth), so this is
                 off by default; enable it to measure the difference on your machine.
+            overwrite (bool): Delete the results folder first instead of keeping the results an
+                earlier run left there. Refused for a results folder passed to `ORCA.run`, which
+                is never deleted.
         """
         super().__init__(name="Palace EM Simulator", index=3)
         self.palace_executable = palace_executable
@@ -80,6 +91,7 @@ class PalaceSimulator(PipelineStage):
         self.extra_srun_args = extra_srun_args
         self.save_log = save_log
         self.hyperthreads = hyperthreads
+        self.overwrite = overwrite
 
     def _create_launcher(self) -> SimulationLauncher:
         """Builds the launcher for this run (reads the Slurm allocation / NUMA topology now, not at construction)."""
@@ -105,21 +117,28 @@ class PalaceSimulator(PipelineStage):
         output_dir = context.result_dir
         palace_csv = context.palace_csv_path
         result_csv = context.result_csv
+        if not os.path.exists(palace_csv):
+            logger.error(
+                f"No Palace model table found at {palace_csv}. The GDS Converter stage was "
+                "skipped or produced no models; nothing to simulate."
+            )
+            return context
         palace_data = pd.read_csv(palace_csv)  # Information
 
-        if os.path.exists(output_dir):
-            import shutil
-
+        if self.overwrite and os.path.exists(output_dir):
+            if context.result_dir_override:
+                raise ValueError(
+                    f"PalaceSimulator(overwrite=True) would delete {output_dir}, the results "
+                    "folder passed to ORCA.run. That folder is never deleted; turn overwrite off "
+                    "to add to it, or pass another folder."
+                )
             shutil.rmtree(output_dir)
 
-        os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
         # Prepare output CSV
-        result_data = palace_data.copy()  # Drop columns data_dir,sim_path,config_name
-        result_data.drop(
-            columns=["data_dir", "sim_path", "config_name"],
-            inplace=True,
-            errors="ignore",
+        result_data = palace_data.drop(
+            columns=["data_dir", "sim_path", "config_name"], errors="ignore"
         )
 
         # The name column arrives as "<geometry>.gds" from the GDS generation stage. Replace it
@@ -130,10 +149,25 @@ class PalaceSimulator(PipelineStage):
             lambda name: touchstone_filename(name, n_ports, self.touchstone_type)
         )
 
+        # Keep the results an earlier run finished for the same parameters; the table then
+        # grows by one row per simulation that finishes in this run.
+        simulated = resume_table(
+            result_csv,
+            result_data,
+            list(result_data.columns),
+            lambda row: os.path.exists(os.path.join(output_dir, row["name"])),
+        )
+        pending = palace_data[~result_data["name"].isin(simulated)]
+        if simulated:
+            logger.info(
+                f"{len(simulated)} of {len(palace_data)} models were simulated by an earlier run "
+                f"(listed in {result_csv}); skipping them."
+            )
+
         launcher = self._create_launcher()
         num_processes = launcher.ranks_per_simulation(num_processes)
         logger.info(
-            f"Starting Palace EM simulations for {len(palace_data)} models, "
+            f"Starting Palace EM simulations for {len(pending)} models, "
             f"{launcher.describe()}, each using {num_processes} MPI processes."
         )
         # Fail fast if the launcher cannot start simulations with these settings, instead of hanging
@@ -159,29 +193,46 @@ class PalaceSimulator(PipelineStage):
         with ThreadPoolExecutor(max_workers=len(launcher.slots)) as executor:
             futures = {
                 executor.submit(run_in_free_slot, index, row): index
-                for index, row in palace_data.iterrows()
+                for index, row in pending.iterrows()
             }
             for future in tqdm.tqdm(
                 as_completed(futures), total=len(futures), desc="Palace Simulations"
             ):
-                index, palace_config_name, success = future.result()
-                if not success:
+                index = futures[future]
+                palace_config_name = palace_data.loc[index, "config_name"]
+                touchstone_name = result_data.loc[index, "name"]
+                try:
+                    _, _, success = future.result()
+                    reason = "failed"
+                    if success and not os.path.exists(os.path.join(output_dir, touchstone_name)):
+                        success, reason = False, f"did not produce {touchstone_name}"
+                except Exception as e:  # noqa: BLE001 - one bad simulation must not abort the batch
+                    success, reason = False, f"raised {e!r}"
+                if success:
+                    # Written as soon as the Touchstone file exists, so the table lists every
+                    # finished simulation even if this run is killed before the others finish.
+                    append_row(result_csv, result_data.loc[index].to_dict())
+                else:
                     logger.error(
-                        f"Simulation for config {palace_config_name} failed. Removing from results."
+                        f"Simulation for config {palace_config_name} {reason}. Leaving it out of "
+                        "the results; a later run retries it."
                     )
-                    result_data.drop(index, inplace=True)
 
                 completed += 1
                 if progress_callback:
                     progress_callback(
                         self.name,
                         completed,
-                        len(palace_data),
-                        f"Simulated {completed} of {len(palace_data)} models.",
+                        len(pending),
+                        f"Simulated {completed} of {len(pending)} models.",
                     )
 
-        # Save updated results CSV
-        result_data.to_csv(result_csv, index=False)
+        # Rows were appended in completion order; restore the order of the Palace table so the
+        # table (and a split drawn from it) does not depend on which simulation finished first.
+        results = read_table(result_csv)
+        if results is not None:
+            order = {name: i for i, name in enumerate(result_data["name"])}
+            write_table(results.sort_values("name", key=lambda names: names.map(order)), result_csv)
 
         logger.info("Palace EM simulations completed.")
         return context

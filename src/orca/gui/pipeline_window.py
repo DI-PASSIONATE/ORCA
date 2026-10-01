@@ -275,11 +275,13 @@ class PipelineWindow(QMainWindow):
         self.worker.start()
 
     def handle_overwrite_confirmation(self, base_dir):
-        # Existing results would be lost, so this is the one place a confirmation is warranted.
+        # Only asked when a stage has Overwrite enabled: existing results would be lost, so this
+        # is the one place a confirmation is warranted. Otherwise stages resume silently.
         reply = QMessageBox.question(
             self,
-            "Overwrite results",
-            f"The output directory {base_dir} already exists. Stages may overwrite its files. Continue?",
+            "Overwrite Results",
+            f"The output directory {base_dir} already exists. Stages with overwrite enabled "
+            "delete the results of earlier runs there. Continue?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
