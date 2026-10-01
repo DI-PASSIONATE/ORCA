@@ -58,9 +58,16 @@ orca_instance = ORCA(
         ),
         orca.ModelTrainer(
             # hyperparameters=None,   # If None, Optuna tunes automatically
-            # test_frac=0.15,         # Fraction of data held out for testing
-            # n_train_samples=None,   # Optional cap on training samples
-            # n_fold_cv=5,            # Cross-validation folds during tuning
+            # test_frac=0.15,         # Fraction of geometries held out for testing
+            # val_frac=0.15,          # Fraction of the rest used for validation
+            # n_train_samples=None,   # Optional cap on training geometries
+            # n_fold_cv=5,            # Cross-validation folds (by geometry) during tuning
+            # n_trials=200,           # Optuna trials
+            # tuning_timeout=None,    # Stop tuning after this many seconds
+            # max_epochs=100,         # Epoch limit of the final training
+            # tuning_max_epochs=30,   # Epoch limit per cross-validation fold
+            # batch_sizes=None,       # Batch sizes to tune over (None: 32-512)
+            # seed=11,                # Splits, tuner and weight initialisation
         ),
         orca.OnnxExporter(),
         orca.ModelTester(),
