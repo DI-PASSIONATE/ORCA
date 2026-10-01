@@ -10,6 +10,7 @@ declares, so the two can be tuned together but configured independently.
 from __future__ import annotations
 
 import copy
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -17,16 +18,20 @@ import optuna
 import torch
 import tqdm
 from torch.optim import AdamW, Optimizer
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable, Iterator, Sequence
 
     from orca.training.models.base_model import OrcaModel
 
 
 def default_device() -> torch.device:
     return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+#: Batch sizes the tuner chooses from when none are given.
+DEFAULT_BATCH_SIZES = (32, 64, 128, 256, 512)
 
 
 @dataclass
@@ -41,6 +46,8 @@ class TrainingConfig:
         optimizer_cls: Optimizer factory, called as ``optimizer_cls(params, lr=...)``.
         scheduler_factor: Factor by which ReduceLROnPlateau scales the learning rate.
         scheduler_patience: Plateau length, in epochs, before the scheduler reacts.
+            Keep it below ``patience``, or early stopping ends the run before the
+            learning rate is ever lowered.
         device: Device to train on.
     """
 
@@ -50,7 +57,7 @@ class TrainingConfig:
     patience: int = 10
     optimizer_cls: Callable[..., Optimizer] = AdamW
     scheduler_factor: float = 0.5
-    scheduler_patience: int = 10
+    scheduler_patience: int = 4
     device: torch.device = field(default_factory=default_device)
 
     @classmethod
@@ -67,12 +74,16 @@ class TrainingConfig:
         return cls(**values)
 
     @staticmethod
-    def search_space() -> dict[str, Any]:
-        """Optuna search space for the trainer's own hyperparameters."""
+    def search_space(batch_sizes: Sequence[int] | None = None) -> dict[str, Any]:
+        """Optuna search space for the trainer's own hyperparameters.
+
+        Args:
+            batch_sizes (Sequence[int] | None): Batch sizes to choose from. ``None``
+                uses :data:`DEFAULT_BATCH_SIZES`.
+        """
         return {
             "learning_rate": optuna.distributions.FloatDistribution(1e-5, 1e-2, log=True),
-            "batch_size": [32, 64, 128, 256, 512],
-            "epochs": optuna.distributions.IntDistribution(5, 50, step=5),
+            "batch_size": list(batch_sizes or DEFAULT_BATCH_SIZES),
         }
 
 
@@ -105,6 +116,59 @@ class TrainingResult:
     @property
     def epochs_run(self) -> int:
         return len(self.history)
+
+
+def _stacked_tensors(dataset: Dataset) -> tuple[torch.Tensor, torch.Tensor] | None:
+    """The inputs and targets of ``dataset`` as two tensors, if it keeps them stacked.
+
+    Datasets exposing ``tensors`` (ORCA's datasets and ``TensorDataset``) and ``Subset``
+    views of them qualify; anything else returns ``None``.
+    """
+    if isinstance(dataset, Subset):
+        stacked = _stacked_tensors(dataset.dataset)
+        if stacked is None:
+            return None
+        indices = torch.as_tensor(dataset.indices, dtype=torch.long, device=stacked[0].device)
+        return stacked[0][indices], stacked[1][indices]
+    tensors = getattr(dataset, "tensors", None)
+    if isinstance(tensors, tuple) and len(tensors) == 2:  # (inputs, targets)
+        return tensors
+    return None
+
+
+class _TensorBatches:
+    """Mini-batches cut from two stacked tensors."""
+
+    def __init__(self, inputs: torch.Tensor, targets: torch.Tensor, batch_size: int, shuffle: bool):
+        self.inputs = inputs
+        self.targets = targets
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+
+    def __len__(self) -> int:
+        return math.ceil(len(self.inputs) / self.batch_size)
+
+    def __iter__(self) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
+        n = len(self.inputs)
+        if self.shuffle:
+            order = torch.randperm(n, device=self.inputs.device)
+            for start in range(0, n, self.batch_size):
+                batch = order[start : start + self.batch_size]
+                yield self.inputs[batch], self.targets[batch]
+        else:
+            for start in range(0, n, self.batch_size):
+                end = start + self.batch_size
+                yield self.inputs[start:end], self.targets[start:end]
+
+
+def make_batches(
+    dataset: Dataset, batch_size: int, shuffle: bool
+) -> Iterable[tuple[torch.Tensor, torch.Tensor]]:
+    """Mini-batches of ``dataset``, sliced from stacked tensors where it has them."""
+    stacked = _stacked_tensors(dataset)
+    if stacked is not None:
+        return _TensorBatches(*stacked, batch_size=batch_size, shuffle=shuffle)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
 class Trainer:
@@ -145,6 +209,7 @@ class Trainer:
         model: OrcaModel,
         train_dataset: Dataset,
         val_dataset: Dataset,
+        epoch_callback: Callable[[EpochResult], None] | None = None,
     ) -> TrainingResult:
         """Train ``model``, keeping the weights with the lowest validation loss.
 
@@ -152,6 +217,9 @@ class Trainer:
             model (OrcaModel): Model to train. Moved to the configured device.
             train_dataset (Dataset): Samples to optimize on.
             val_dataset (Dataset): Samples used for early stopping and scheduling.
+            epoch_callback (Callable | None): Called with each epoch's result. An
+                exception it raises ends training and propagates; the tuner prunes
+                trials this way.
 
         Returns:
             TrainingResult: The best model, its loss, and the per-epoch history.
@@ -160,8 +228,8 @@ class Trainer:
         model.to(config.device)
         criterion = self.resolve_criterion(model)
 
-        train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
+        train_loader = make_batches(train_dataset, config.batch_size, shuffle=True)
+        val_loader = make_batches(val_dataset, config.batch_size, shuffle=False)
 
         optimizer = config.optimizer_cls(model.parameters(), lr=config.learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -197,6 +265,9 @@ class Trainer:
                 )
             )
 
+            if epoch_callback is not None:
+                epoch_callback(history[-1])
+
             message = f"Train: {train_loss:.4f} | Val: {val_loss:.4f}"
             self._report(epoch + 1, message)
             if self.verbose:
@@ -226,12 +297,15 @@ class Trainer:
         """Mean loss of ``model`` over ``dataset``, without updating any weights."""
         model.to(self.config.device)
         criterion = criterion or self.resolve_criterion(model)
-        loader = DataLoader(dataset, batch_size=batch_size or self.config.batch_size)
+        loader = make_batches(dataset, batch_size or self.config.batch_size, shuffle=False)
         return self._run_eval(model, criterion, loader, desc="Testing")
 
     def _train_epoch(self, model, criterion, optimizer, loader) -> float:
         model.train()
-        total = 0.0
+        # Summed on the device and read once per epoch: reading it every step would make
+        # the CPU wait for the GPU after each batch
+        total = torch.zeros((), device=self.config.device)
+        count = 0
 
         for batch_x, batch_y in tqdm.tqdm(
             loader, desc="Training", leave=False, disable=not self.verbose
@@ -244,16 +318,19 @@ class Trainer:
             loss.backward()
             optimizer.step()
 
-            total += loss.item()
+            # Weighted by batch size, so a short last batch counts for what it holds
+            total += loss.detach() * len(x)
+            count += len(x)
 
-        return total / len(loader)
+        return total.item() / count
 
     def _validate(self, model, criterion, loader) -> float:
         return self._run_eval(model, criterion, loader, desc="Validation", show_progress=False)
 
     def _run_eval(self, model, criterion, loader, desc: str, show_progress: bool = True) -> float:
         model.eval()
-        total = 0.0
+        total = torch.zeros((), device=self.config.device)
+        count = 0
 
         iterator = loader
         if show_progress:
@@ -263,9 +340,10 @@ class Trainer:
             for batch_x, batch_y in iterator:
                 x = batch_x.to(self.config.device)
                 y = batch_y.to(self.config.device)
-                total += criterion(model(x), y).item()
+                total += criterion(model(x), y) * len(x)
+                count += len(x)
 
-        return total / len(loader)
+        return total.item() / count
 
     def _report(self, epoch: int, message: str) -> None:
         if self.progress_callback:
