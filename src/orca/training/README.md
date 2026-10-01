@@ -146,6 +146,11 @@ class MyModel(OrcaModel):
     def hyperparameter_search_space():
         # architecture only - learning rate/batch size/epochs belong to the trainer
         ...
+
+    @staticmethod
+    def regularization_search_space():
+        # optional, e.g. dropout; only searched with ModelTrainer(regularization=True)
+        ...
 ```
 
 To accept any basis expansion, size the first layer from `self.expanded_dim` rather than

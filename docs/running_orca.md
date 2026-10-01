@@ -57,7 +57,7 @@ orca_instance = ORCA(
             touchstone_type="dc_deembedded",  # "all", "normal", "deembedded", "dc", "dc_deembedded"
         ),
         orca.ModelTrainer(
-            # hyperparameters=None,   # If None, Optuna tunes automatically
+            # hyperparameters=None,   # Dict or JSON path; if None, Optuna tunes automatically
             # test_frac=0.15,         # Fraction of geometries held out for testing
             # val_frac=0.15,          # Fraction of the rest used for validation
             # n_train_samples=None,   # Optional cap on training geometries
@@ -67,6 +67,7 @@ orca_instance = ORCA(
             # max_epochs=100,         # Epoch limit of the final training
             # tuning_max_epochs=30,   # Epoch limit per cross-validation fold
             # batch_sizes=None,       # Batch sizes to tune over (None: 32-512)
+            # regularization=False,   # Also tune weight decay and dropout
             # seed=11,                # Splits, tuner and weight initialisation
         ),
         orca.OnnxExporter(),
