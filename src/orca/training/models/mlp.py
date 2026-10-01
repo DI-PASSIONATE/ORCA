@@ -77,5 +77,9 @@ class OrcaMLP(OrcaModel):
             "activation_function": ["GELU", "SiLU"],
         }
 
+    @staticmethod
+    def regularization_search_space() -> dict[str, Any]:
+        return {"dropout": optuna.distributions.FloatDistribution(0.0, 0.3)}
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(self.basis(x))

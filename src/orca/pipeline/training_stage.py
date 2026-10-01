@@ -1,3 +1,4 @@
+import json
 import math
 import os
 from collections.abc import Callable
@@ -29,7 +30,7 @@ class ModelTrainer(PipelineStage):
         self,
         model: str | type[OrcaModel] = "mlp",
         basis: str | type[BasisExpansion] | None = None,
-        hyperparameters: dict[str, Any] | None = None,
+        hyperparameters: dict[str, Any] | str | None = None,
         test_frac: float = 0.15,
         val_frac: float = 0.15,
         n_train_samples: int | None = None,
@@ -39,6 +40,7 @@ class ModelTrainer(PipelineStage):
         max_epochs: int = 100,
         tuning_max_epochs: int = 30,
         batch_sizes: list[int] | None = None,
+        regularization: bool = False,
         seed: int = 11,
     ):
         """
@@ -53,7 +55,10 @@ class ModelTrainer(PipelineStage):
             model: An OrcaModel subclass or a registered model name (default: "mlp").
             basis: Optional basis expansion of the model inputs, as a
                 BasisExpansion subclass or a registered name (e.g. "chebyshev").
-            hyperparameters: Optional predefined hyperparameters. If None, hyperparameter tuning will be performed.
+            hyperparameters: Hyperparameters to train with, as a dict or as the path of a
+                JSON file holding one, e.g. the <name>_hyperparameters.json an earlier run
+                saved in its models folder. If None, they are tuned with optuna. Every run
+                saves the hyperparameters it trained with to that file.
             test_frac: Fraction of the geometries held out for testing (default: 0.15).
             val_frac: Fraction of the remaining geometries used for validation (early
                 stopping and checkpoint selection) in the final training (default: 0.15).
@@ -68,6 +73,9 @@ class ModelTrainer(PipelineStage):
             tuning_max_epochs: Epoch limit of each cross-validation fold during tuning.
             batch_sizes: Batch sizes the tuning searches, e.g. [1024, 2048, 4096]. None
                 searches 32 to 512. Ignored when hyperparameters are given.
+            regularization: Also tune the weight decay and the model's regularization
+                (dropout for the MLP). Without it, AdamW's default weight decay and no
+                dropout are used, unless hyperparameters set them.
             seed: Seed for the data splits, the tuner and the weight initialisation.
         """
         super().__init__(name="Model Trainer", index=4)
@@ -83,6 +91,7 @@ class ModelTrainer(PipelineStage):
         self.max_epochs = max_epochs
         self.tuning_max_epochs = tuning_max_epochs
         self.batch_sizes = batch_sizes
+        self.regularization = regularization
         self.seed = seed
 
     def run(
@@ -97,6 +106,9 @@ class ModelTrainer(PipelineStage):
         if not os.path.exists(result_csv):
             logger.error(f"No result CSV file found for training at {result_csv}.")
             return context
+
+        # Read before anything else, so a wrong path fails before data is loaded
+        given_hyperparameters = self._given_hyperparameters()
 
         result_df = order_parameter_columns(pd.read_csv(result_csv), geometry)
         torch.manual_seed(self.seed)
@@ -120,8 +132,8 @@ class ModelTrainer(PipelineStage):
         # Perform hyperparameter tuning if needed. The result stays local rather than
         # being stored on the stage, so re-running the same ModelTrainer tunes again
         # instead of silently reusing the previous run's best parameters.
-        if isinstance(self.hyperparameters, dict):
-            hyperparameters = self.hyperparameters
+        if given_hyperparameters is not None:
+            hyperparameters = given_hyperparameters
             logger.info(f"Using provided hyperparameters for training: {hyperparameters}")
         else:
             hyperparameters = self._tune(geometry, result_dir, train_val_df)
@@ -161,6 +173,10 @@ class ModelTrainer(PipelineStage):
                 f"rate or check the data for NaNs. Hyperparameters: {hyperparameters}"
             )
 
+        with open(context.hyperparameters_json_path, "w") as f:
+            json.dump(hyperparameters, f, indent=2)
+        logger.info(f"Hyperparameters saved to {context.hyperparameters_json_path}.")
+
         context.trained_model = result.model
         context.dataset = train_dataset
         context.hyperparameters = hyperparameters
@@ -168,6 +184,23 @@ class ModelTrainer(PipelineStage):
         context.training_history = result.history
         context.test_df = test_df
         return context
+
+    def _given_hyperparameters(self) -> dict[str, Any] | None:
+        """The hyperparameters passed to the stage, read from their JSON file if a path."""
+        if self.hyperparameters is None or isinstance(self.hyperparameters, dict):
+            return self.hyperparameters
+        path = os.path.expanduser(self.hyperparameters)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(
+                f"ModelTrainer(hyperparameters={self.hyperparameters!r}) is neither a dict nor "
+                "an existing JSON file."
+            )
+        with open(path) as f:
+            hyperparameters = json.load(f)
+        if not isinstance(hyperparameters, dict):
+            raise TypeError(f"{path} holds a {type(hyperparameters).__name__}, not an object.")
+        logger.info(f"Read the hyperparameters from {path}.")
+        return hyperparameters
 
     def _tune(
         self, geometry: "BaseGeometry", result_dir: str, train_val_df: pd.DataFrame
@@ -193,6 +226,7 @@ class ModelTrainer(PipelineStage):
             timeout=self.tuning_timeout,
             max_epochs=self.tuning_max_epochs,
             batch_sizes=self.batch_sizes,
+            regularization=self.regularization,
         )
         hyperparameters = tuner.tune()
         logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {hyperparameters}")

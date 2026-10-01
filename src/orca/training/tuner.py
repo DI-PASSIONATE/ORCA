@@ -124,6 +124,8 @@ class HyperparameterTuner:
         max_epochs (int): Epoch limit per fold; early stopping usually ends a fold sooner.
         batch_sizes (list[int] | None): Batch sizes to search. ``None`` uses
             :data:`~orca.training.trainer.DEFAULT_BATCH_SIZES`.
+        regularization (bool): Also search the weight decay and the architecture's
+            regularization hyperparameters (dropout for the MLP).
     """
 
     def __init__(
@@ -139,6 +141,7 @@ class HyperparameterTuner:
         timeout: float | None = None,
         max_epochs: int = 30,
         batch_sizes: list[int] | None = None,
+        regularization: bool = False,
     ):
         self.model_cls = model_cls
         self.dataset = dataset
@@ -152,6 +155,7 @@ class HyperparameterTuner:
         self.timeout = timeout
         self.max_epochs = max_epochs
         self.batch_sizes = batch_sizes
+        self.regularization = regularization
         self._deadline = math.inf
         self.study: optuna.Study | None = None
         # The folds depend only on the data, so every trial is scored on the same split
@@ -163,9 +167,13 @@ class HyperparameterTuner:
         basis_space = (
             self.basis_cls.hyperparameter_search_space() if self.basis_cls else {}
         )
+        regularization_space = (
+            self.model_cls.regularization_search_space() if self.regularization else {}
+        )
         return {
-            **TrainingConfig.search_space(self.batch_sizes),
+            **TrainingConfig.search_space(self.batch_sizes, self.regularization),
             **self.model_cls.hyperparameter_search_space(),
+            **regularization_space,
             **basis_space,
         }
 

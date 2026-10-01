@@ -94,6 +94,16 @@ class OrcaModel(nn.Module, ABC):
         trainer and are merged in separately; do not declare them here.
         """
 
+    @staticmethod
+    def regularization_search_space() -> dict[str, Any]:
+        """Architecture regularization hyperparameters (e.g. dropout) for optuna tuning.
+
+        Only searched when regularization is switched on (``ModelTrainer(regularization=True)``);
+        otherwise :meth:`from_spec` falls back to its defaults for them. Empty when the
+        architecture has none.
+        """
+        return {}
+
     def default_loss(self) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
         """Loss to train this model with when the trainer is not given one."""
         return nn.L1Loss()
