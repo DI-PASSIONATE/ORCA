@@ -2,7 +2,6 @@ import os
 
 import numpy as np
 import pandas as pd
-import skrf as rf
 import torch
 import tqdm
 
@@ -49,25 +48,21 @@ class GeoToSParamDatasetSingleFrequency(BaseDataset):
             samples = self.load_single_sample(snp_path, geometry_params)
 
             self.samples.extend(samples)
+            self.sample_groups.extend([row["name"]] * len(samples))
 
     def load_single_sample(
         self, sparam_path: str, geometry_params: np.ndarray
     ) -> list[tuple[torch.Tensor, torch.Tensor]]:
         """Load S-parameter data from a Touchstone file, one sample per frequency point."""
-        net = rf.Network(sparam_path)
-        freq = net.f
-        targets = self.codec.encode(net)  # (n_freq, output_dim)
+        freq, targets = self.read_touchstone(sparam_path)  # targets: (n_freq, output_dim)
 
-        samples = []
-        for i in range(len(freq)):
-            # the model input is the geometry vector with the frequency appended
-            x = np.hstack((geometry_params, freq[i])).astype(np.float32)
+        # the model input is the geometry vector with the frequency appended
+        x = np.column_stack(
+            (np.broadcast_to(geometry_params, (len(freq), len(geometry_params))), freq)
+        )
 
-            x, y = (
-                torch.tensor(x, dtype=torch.float32, device=self.device),
-                torch.tensor(targets[i], dtype=torch.float32, device=self.device),
-            )
-
-            samples.append((x, y))
-
-        return samples
+        # One tensor per file, split into per-point views: far cheaper than building
+        # a tensor for every frequency point.
+        x = torch.tensor(x, dtype=torch.float32, device=self.device)
+        y = torch.tensor(targets, dtype=torch.float32, device=self.device)
+        return list(zip(x.unbind(0), y.unbind(0), strict=True))

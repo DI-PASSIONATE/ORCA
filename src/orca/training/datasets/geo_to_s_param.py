@@ -2,7 +2,6 @@ import os
 
 import numpy as np
 import pandas as pd
-import skrf as rf
 import torch
 
 from orca.logger import logger
@@ -45,18 +44,19 @@ class GeoToSParamDataset(BaseDataset):
             geometry_params = np.array(row.drop("name"), dtype=np.float32)
             sample = self.load_single_sample(snp_path, geometry_params)
             self.samples.append(sample)
+            self.sample_groups.append(row["name"])
 
     def load_single_sample(
         self, sparam_path: str, geometry_params: np.ndarray
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Load S-parameter data from a Touchstone file and return a single sample with all frequencies."""
-        net = rf.Network(sparam_path)
+        freq, targets = self.read_touchstone(sparam_path)
 
         if self.frequency_grid is None:
-            self.frequency_grid = net.f
+            self.frequency_grid = freq
 
         # (n_freq, output_dim) -> (output_dim, n_freq), one row per output value
-        y = self.codec.encode(net).T.astype(np.float32)
+        y = targets.T.astype(np.float32)
 
         # Input is only geometry parameters (no frequency)
         x = geometry_params.astype(np.float32)
