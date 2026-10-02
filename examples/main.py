@@ -1,6 +1,6 @@
 import orca
-
 from orca.geometry.presets import TransformerOcta
+
 # from orca.geometry.presets import InductorOcta
 
 PLOT = False
@@ -11,16 +11,16 @@ PLOT = False
 
 hyperparameters = {
     "learning_rate": 0.0005,
-    "batch_size": 256,
-    "epochs": 15,
+    "batch_size": 4096,
+    "epochs": 60,
     "num_layers": 5,
-    "hidden_size": 800,
+    "hidden_size": 1024,
     "activation_function": "GELU"
 }
 
 def main():
     # Use predefined geometry from examples
-    geometry = TransformerOcta(name="transformer_new")
+    geometry = TransformerOcta(name="transformer_octa")
 
     orca_instance = orca.ORCA(
         [

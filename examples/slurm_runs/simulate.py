@@ -10,7 +10,7 @@ def main():
 
     orca_instance = orca.ORCA(
         [
-            orca.GDSGenerator(num_samples=6000),
+            orca.GDSGenerator(num_samples=4000),
             orca.DRCChecker(),
             orca.GDSConverter(),
             # launcher="slurm" runs the simulations as srun job steps on the nodes of this allocation
