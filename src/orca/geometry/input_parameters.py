@@ -46,6 +46,10 @@ DRAWING_STRATEGIES = ("sobol", "lhs", "random")
 #: Rejected draws kept in :attr:`InputParameterIterator.rejected` for plotting.
 MAX_RECORDED_REJECTIONS = 20_000
 
+#: Redraws of the other parameters a draw gets around its ``kept_on_rejection`` values
+#: before the point is given up.
+MAX_REDRAWS = 100
+
 
 class GeometryParameter(ABC):
     """One input parameter of a geometry: its name, its values and how they are drawn."""
@@ -253,6 +257,7 @@ class InputParameterIterator:
         picking_strategy: str = "sobol",
         frequency: Sequence[float] | None = None,
         boundary_fraction: float = 0.05,
+        kept_on_rejection: Sequence[str] = (),
     ):
         """
         Args:
@@ -281,6 +286,14 @@ class InputParameterIterator:
                 least one, is set to its min or max. Space-filling and random draws almost
                 never reach the faces, edges and corners of the box, yet a network
                 extrapolates worst there and an optimizer often ends there. 0 disables it.
+            kept_on_rejection (Sequence[str]): Parameters whose drawn value survives a
+                rejection by the feasibility check: the other parameters are redrawn
+                around it (up to :data:`MAX_REDRAWS` times) until the combination is
+                feasible, and only then is the point given up. These parameters keep the
+                distribution they are declared with, where a plain rejection would skew
+                it towards the values that are feasible most often. With the drawing
+                strategies only. Example: an inductor's diameter, which small spirals
+                otherwise rarely get, since only few turns and narrow lines fit them.
         """
         for parameter in parameters:
             if not isinstance(parameter, GeometryParameter):
@@ -299,6 +312,9 @@ class InputParameterIterator:
                 f"Unknown picking_strategy {picking_strategy!r}; choose one of "
                 f"{list(PICKING_STRATEGIES)}."
             )
+        unknown = sorted(set(kept_on_rejection) - set(names))
+        if unknown:
+            raise ValueError(f"kept_on_rejection names unknown parameters: {unknown}.")
         if not 0 <= boundary_fraction <= 1:
             raise ValueError(f"boundary_fraction must lie in [0, 1], got {boundary_fraction}.")
 
@@ -306,6 +322,8 @@ class InputParameterIterator:
         self.picking_strategy = picking_strategy
         self.frequency = frequency
         self.boundary_fraction = boundary_fraction
+        self.kept_on_rejection = tuple(kept_on_rejection)
+        self._redraw_rng = np.random.default_rng()
         # Set with the sample count; GDSGenerator passes the seed of the run
         self.seed: int | None = None
         self.n_inputs = len(parameters)
@@ -347,6 +365,8 @@ class InputParameterIterator:
         self.rejected = []
         self.n_accepted = 0
         self.seed = seed
+        # Its own stream, so the redraws leave the space-filling points untouched
+        self._redraw_rng = np.random.default_rng(np.random.SeedSequence(seed).spawn(3)[2])
         if self.picking_strategy == "step_grid":
             self._iterator = self.step_grid()
         elif self.picking_strategy in ("uniform_grid", "grid"):
@@ -383,14 +403,35 @@ class InputParameterIterator:
                     param.item() if isinstance(param, np.generic) else param for param in params
                 ]
                 sample = dict(zip(self.input_names, params, strict=True))
-                if self.feasible is not None and not self.feasible(sample):
+                redraws = 0
+                while self.feasible is not None and not self.feasible(sample):
                     self.n_rejected += 1
                     if len(self.rejected) < MAX_RECORDED_REJECTIONS:
                         self.rejected.append(sample)
-                    continue
-                self.n_accepted += 1
-                self.n_geometries_created += 1  # May be used for logging or tracking
-                return sample
+                    if not self._can_redraw(redraws):
+                        break
+                    sample = self._redraw_around(sample)
+                    redraws += 1
+                else:
+                    self.n_accepted += 1
+                    self.n_geometries_created += 1  # May be used for logging or tracking
+                    return sample
+
+    def _can_redraw(self, redraws: int) -> bool:
+        """Whether a rejected draw gets another try around its kept parameters."""
+        return (
+            bool(self.kept_on_rejection)
+            and self.picking_strategy in DRAWING_STRATEGIES
+            and redraws < MAX_REDRAWS
+        )
+
+    def _redraw_around(self, sample: dict[str, Any]) -> dict[str, Any]:
+        """``sample`` with every parameter but the kept ones drawn anew."""
+        quantiles = self._redraw_rng.random(self.n_inputs).tolist()
+        return {
+            name: sample[name] if name in self.kept_on_rejection else parameter.from_unit(q)
+            for (name, parameter), q in zip(self.parameters.items(), quantiles, strict=True)
+        }
 
     def get_min_max_values(self) -> tuple[list[float], list[float]]:
         """

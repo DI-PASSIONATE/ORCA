@@ -98,7 +98,8 @@ def _input_parameters() -> InputParameterIterator:
     return InputParameterIterator(
         RangeParameter("bottom_winding_diameter", 20.0, 120.0, step=0.1),
         RangeParameter("top_winding_diameter", 20.0, 120.0, step=0.1),
-        RangeParameter("center_displacement", 0.0, 15.0, step=0.1),
+        # The offset between the winding centres as a share of their mean diameter
+        RangeParameter("relative_displacement", 0.0, 0.2, step=0.005),
         RangeParameter("bottom_linewidth", 2.0, 12.0, step=0.1),
         RangeParameter("top_linewidth", 2.0, 12.0, step=0.1),
         picking_strategy="sobol",
@@ -156,6 +157,7 @@ InputParameterIterator(
     picking_strategy="sobol",   # "sobol" (default), "lhs", "random", "grid" / "uniform_grid", "step_grid"
     frequency=[1e9, 500e9],     # Optional: frequency band in Hz, for normalisation (not drawn)
     boundary_fraction=0.05,     # Share of draws moved onto the faces, edges and corners of the box
+    kept_on_rejection=("diameter",),  # Kept when is_feasible rejects a draw; the rest is redrawn
 )
 ```
 
@@ -181,6 +183,8 @@ Picking strategies:
 | `"step_grid"` | Every value of every parameter combined; all parameters need a `step` or be choices. |
 
 With the three drawing strategies, draws `is_feasible()` rejects are replaced by further draws, and `boundary_fraction` (default 0.05) of the draws are moved onto the boundary of the box: a random number of their parameters, at least one, is set to its min or max. Space-filling and random designs almost never reach the faces, edges and corners themselves, yet a network extrapolates worst there and an optimizer often ends up there. Set it to 0 to switch this off. The grid strategies include each parameter's min and max anyway.
+
+A rejection skews the accepted samples towards the values that are feasible most often: an inductor's small diameters only fit one turn and thin lines, so most small-diameter draws are rejected, and the accepted diameters pile up at the large end. Parameters listed in `kept_on_rejection` keep their drawn value instead, and the other parameters are redrawn around it (up to 100 times) until the combination is feasible, so those parameters follow the distribution they are declared with. The `InductorOcta` preset keeps its diameter this way.
 
 `GDSGenerator` plots the result to `geometries/<name>_coverage.png`: every pair of parameters with the layouts over the rejected draws, so gaps in the sampling can be told apart from regions `is_feasible()` excludes.
 

@@ -29,6 +29,10 @@ GROUND_RING_WIDTH = 10.0
 # earlier campaign, windings under 0.7 of their partner's diameter or offset by more
 # than a fifth of it reached k ~ 0.05-0.3, where matched, centred ones reached ~0.5.
 MIN_DIAMETER_RATIO = 0.75
+#: Upper bound of relative_displacement, the offset between the winding centres as a
+#: share of their mean diameter. An input in its own right rather than a rule on an
+#: offset in µm: a rule would reject most offsets drawn for small windings (only 0-4 µm
+#: of 0-15 µm suit a 20 µm pair), and the replacement draws would pile up at large ones.
 MAX_RELATIVE_DISPLACEMENT = 0.2
 
 # Built per instance rather than shared as a class attribute: a dataclass default
@@ -37,14 +41,15 @@ MAX_RELATIVE_DISPLACEMENT = 0.2
 
 
 def _input_parameters() -> InputParameterIterator:
-    # All in µm, on a 0.1 µm grid. Sized for mm-wave and sub-THz transformers (D-band
-    # to ~300 GHz): their self-resonance must lie well above the operating band, which
-    # takes windings of roughly 20-90 µm. The diameters are log-sampled, so the small
-    # end gets as many samples per octave as the large one.
+    # Lengths in µm, on a 0.1 µm grid. Sized for mm-wave and sub-THz transformers
+    # (D-band to ~300 GHz): their self-resonance must lie well above the operating band,
+    # which takes windings of roughly 20-90 µm. The diameters are log-sampled, and since
+    # nothing else rejects small windings more often than large ones, the share of
+    # layouts falls with size: about 29 % have a winding of 20-30 µm, 8 % of 70-90 µm.
     return InputParameterIterator(
         RangeParameter("bottom_winding_diameter", 20.0, 90.0, step=0.1, sampling="log"),
         RangeParameter("top_winding_diameter", 20.0, 90.0, step=0.1, sampling="log"),
-        RangeParameter("center_displacement", 0.0, 15.0, step=0.1),
+        RangeParameter("relative_displacement", 0.0, MAX_RELATIVE_DISPLACEMENT, step=0.005),
         RangeParameter("bottom_linewidth", 2.0, 8.0, step=0.1),
         RangeParameter("top_linewidth", 2.0, 8.0, step=0.1),
         picking_strategy="sobol",
@@ -87,12 +92,18 @@ class TransformerOcta(BaseGeometry):
         )
 
     @staticmethod
+    def center_displacement(params: dict[str, Any]) -> float:
+        """The offset between the winding centres in µm, from ``relative_displacement``."""
+        mean_diameter = (params["bottom_winding_diameter"] + params["top_winding_diameter"]) / 2
+        return params["relative_displacement"] * mean_diameter
+
+    @staticmethod
     def _cell_arguments(params: dict[str, Any]) -> dict[str, Any]:
         """The tf_octa_c arguments for a parameter draw; the rest is fixed for this preset."""
         return {
             "bottom_winding_diameter": params["bottom_winding_diameter"],
             "top_winding_diameter": params["top_winding_diameter"],
-            "center_displacement": params["center_displacement"],
+            "center_displacement": TransformerOcta.center_displacement(params),
             "bottom_linewidth": params["bottom_linewidth"],
             "top_linewidth": params["top_linewidth"],
             "bottom_center_tap_width": CENTER_TAP_WIDTH,
@@ -113,10 +124,6 @@ class TransformerOcta(BaseGeometry):
             (
                 "min(bottom_winding_diameter, top_winding_diameter) >= "
                 f"{MIN_DIAMETER_RATIO:g} * max(bottom_winding_diameter, top_winding_diameter)"
-            ),
-            (
-                f"center_displacement <= {MAX_RELATIVE_DISPLACEMENT:g} * "
-                "(bottom_winding_diameter + top_winding_diameter) / 2"
             ),
         ]
 

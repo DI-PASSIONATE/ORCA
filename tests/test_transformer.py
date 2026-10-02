@@ -17,7 +17,7 @@ _names = itertools.count()
 SMALLEST = {
     "bottom_winding_diameter": 20.0,
     "top_winding_diameter": 20.0,
-    "center_displacement": 0.0,
+    "relative_displacement": 0.0,
     "bottom_linewidth": 2.0,
     "top_linewidth": 2.0,
 }
@@ -44,7 +44,7 @@ def _metal(path: str, layer: tuple[int, int]) -> kdb.Region:
         SMALLEST | {"bottom_winding_diameter": 24.0, "top_winding_diameter": 24.0,
                     "bottom_linewidth": 8.0, "top_linewidth": 8.0},
         SMALLEST | {"bottom_winding_diameter": 40.0, "top_winding_diameter": 30.0,
-                    "center_displacement": 7.0, "bottom_linewidth": 4.0, "top_linewidth": 3.0},
+                    "relative_displacement": 0.2, "bottom_linewidth": 4.0, "top_linewidth": 3.0},
         SMALLEST | {"bottom_winding_diameter": 90.0, "top_winding_diameter": 90.0,
                     "bottom_linewidth": 8.0, "top_linewidth": 6.0},
     ],
@@ -117,8 +117,7 @@ def test_ports_inside_the_windings_are_rejected():
     [
         ({"top_winding_diameter": 30.0, "bottom_winding_diameter": 40.0}, True),  # ratio 0.75
         ({"top_winding_diameter": 29.9, "bottom_winding_diameter": 40.0}, False),
-        ({"center_displacement": 4.0}, True),  # 0.2 * 20 µm
-        ({"center_displacement": 4.1}, False),
+        ({"relative_displacement": 0.2}, True),  # the largest offset, at the smallest size
         ({"bottom_linewidth": 6.7}, False),  # wider than a third of the diameter
     ],
 )
@@ -138,3 +137,17 @@ def test_layout_carries_its_dimensions_as_text(tmp_path):
     assert "top winding diameter: 30.00" in text
     assert "top feed gap: 5.00" in text
     assert check_gds_file(path).clean
+
+
+def test_offset_scales_with_the_windings_and_lands_on_the_grid(tmp_path):
+    params = SMALLEST | {"bottom_winding_diameter": 37.4, "top_winding_diameter": 33.3,
+                         "relative_displacement": 0.035}
+
+    # 0.035 of the 35.35 µm mean diameter
+    assert TransformerOcta.center_displacement(params) == pytest.approx(1.23725)
+    path = _draw(tmp_path, params)
+    layout = kdb.Layout()
+    layout.read(path)
+    (text,) = [s.text.string for s in layout.top_cell().shapes(layout.find_layer(*SG13G2.TEXT)).each()]
+    assert "center displacement: 1.240" in text  # each winding centre on the 5 nm grid
+    assert check_gds_file(path).snapped_vertices == 0

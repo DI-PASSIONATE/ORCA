@@ -221,3 +221,37 @@ def test_boundary_fraction_moves_draws_onto_the_faces_of_the_box():
 def test_boundary_fraction_must_be_a_share():
     with pytest.raises(ValueError, match="boundary_fraction"):
         InputParameterIterator(RangeParameter("a", 0.0, 1.0), boundary_fraction=1.5)
+
+
+def _triangle(kept: tuple[str, ...], seed: int = 4) -> tuple[np.ndarray, InputParameterIterator]:
+    """Draws from the unit square under a + b <= 1, which plain rejection skews towards small a."""
+    iterator = InputParameterIterator(
+        RangeParameter("a", 0.0, 1.0), RangeParameter("b", 0.0, 1.0),
+        boundary_fraction=0.0, kept_on_rejection=kept,
+    )
+    iterator.set_sample_count(4000, seed=seed, feasible=lambda s: s["a"] + s["b"] <= 1)
+    return np.array([s["a"] for s in iterator]), iterator
+
+
+def test_kept_parameters_keep_their_distribution_through_rejections():
+    plain, _ = _triangle(kept=())
+    kept, iterator = _triangle(kept=("a",))
+
+    # Under plain rejection a follows the triangle's density 2 * (1 - a): mean 1/3
+    assert plain.mean() == pytest.approx(1 / 3, abs=0.02)
+    # Kept, it stays uniform; only points too close to 1 for any b to fit are lost
+    assert kept.mean() == pytest.approx(0.5, abs=0.02)
+    assert len(kept) == 4000
+    assert iterator.n_rejected > 0
+
+
+def test_redraws_repeat_with_the_seed():
+    first, _ = _triangle(kept=("a",), seed=8)
+    again, _ = _triangle(kept=("a",), seed=8)
+
+    assert np.array_equal(first, again)
+
+
+def test_kept_parameters_must_exist():
+    with pytest.raises(ValueError, match="unknown parameters"):
+        InputParameterIterator(RangeParameter("a", 0.0, 1.0), kept_on_rejection=("diameter",))

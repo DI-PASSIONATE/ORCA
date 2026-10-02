@@ -210,15 +210,23 @@ def tf_octa_c(
     # Geometry Limits
     tf_y = max(top_winding_diameter, bottom_winding_diameter) / 2.0 + gnd_side_spacing
 
-    # X Limits for Ports
-    # Note: Winding edges are approx at center +/- diameter/2
-    top_right_x = (center_displacement / 2.0) + (top_winding_diameter / 2.0)
-    bot_right_x = (-center_displacement / 2.0) + (bottom_winding_diameter / 2.0)
-    port_xr = max(top_right_x, bot_right_x) + gnd_upper_spacing
+    # The windings are built on the manufacturing grid, so their centres are placed on it
+    # too (at most 2.5 nm from the requested offset): an off-grid shift would take every
+    # vertex off the grid, and snapping them afterwards could tilt the 45 degree sides.
+    half_offset = round(center_displacement / 2.0 / _GRID) * _GRID
 
-    top_left_x = (center_displacement / 2.0) - (top_winding_diameter / 2.0)
-    bot_left_x = (-center_displacement / 2.0) - (bottom_winding_diameter / 2.0)
-    port_xl = min(top_left_x, bot_left_x) - gnd_lower_spacing
+    def on_grid(x: float) -> float:
+        return round(x / _GRID) * _GRID
+
+    # X Limits for Ports, on the grid like the windings whose feeds end there
+    # Note: Winding edges are approx at center +/- diameter/2
+    top_right_x = half_offset + (top_winding_diameter / 2.0)
+    bot_right_x = -half_offset + (bottom_winding_diameter / 2.0)
+    port_xr = on_grid(max(top_right_x, bot_right_x) + gnd_upper_spacing)
+
+    top_left_x = half_offset - (top_winding_diameter / 2.0)
+    bot_left_x = -half_offset - (bottom_winding_diameter / 2.0)
+    port_xl = on_grid(min(top_left_x, bot_left_x) - gnd_lower_spacing)
 
     # -------------------------------------------------
     # 2. Helper: Winding Generator
@@ -322,7 +330,7 @@ def tf_octa_c(
         width=top_linewidth,
         gap_size=fs_top,
         layer=LAYER_TOP,
-        center_x=center_displacement / 2.0,
+        center_x=half_offset,
         center_y=0,
         rotation_deg=0,
         feed_target_x=port_xr - gnd_ring_width,
@@ -336,7 +344,7 @@ def tf_octa_c(
         width=bottom_linewidth,
         gap_size=fs_bot,
         layer=LAYER_BOT,
-        center_x=-center_displacement / 2.0,
+        center_x=-half_offset,
         center_y=0,
         rotation_deg=180,
         feed_target_x=port_xl + gnd_ring_width,
@@ -508,7 +516,7 @@ def tf_octa_c(
         textlabel = (
             f"  bottom winding diameter: {bottom_winding_diameter:.2f}\n"
             f"  top winding diameter: {top_winding_diameter:.2f}\n"
-            f"  center displacement: {center_displacement:.2f}\n"
+            f"  center displacement: {2 * half_offset:.3f}\n"
             f"  bottom linewidth: {bottom_linewidth:.2f}\n"
             f"  top linewidth: {top_linewidth:.2f}\n"
             f"  bottom center tap width: {bottom_centertap_width if draw_bottom_tap else 0:.2f}\n"

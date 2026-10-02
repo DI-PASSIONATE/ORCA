@@ -16,16 +16,14 @@ from orca.geometry.presets.paths import StackupXML
 if TYPE_CHECKING:
     from orca.training.datasets.base_dataset import BaseDataset
 
-# All ports run up from a ground on SUBGND (matches "from_layername": "SUBGND" in
+# All ports run up from a ground on Metal5 (matches "from_layername": "Metal5" in
 # the simcfg): ports 1/2 to the feeds on TopMetal1, port 3 to the center tap on
-# TopMetal2. SUBGND is an ideal conductor (PEC) sheet on top of the EPI layer, so
-# the port reference adds no series resistance. The ground is a closed square
-# ring around the spiral for every N, so one connected reference serves all
-# three ports whether the center tap leaves between the feeds (even N) or at the
-# top (odd N). The feeds and the center tap run out to the ring's outer edge,
+# TopMetal2. The ground is a closed square ring around the spiral for every N, so
+# one connected reference serves all three ports whether the center tap leaves
+# between the feeds (even N) or at the top (odd N). The feeds and the center tap run out to the ring's outer edge,
 # where the ports sit. The feed on TopMetal1 requires N >= 2 turns (see
 # symmetric_octa_IHP: N == 1 feeds on TopMetal2 instead).
-GROUND_LAYER = 250      # SUBGND
+GROUND_LAYER = 67       # Metal5
 GROUND_SPACING = 20.0   # µm, gap between inductor outer edge and the ground
 GROUND_DEPTH = 20.0     # µm, width of the ground ring bars
 
@@ -35,10 +33,12 @@ GROUND_DEPTH = 20.0     # µm, width of the ground ring bars
 
 
 def _input_parameters() -> InputParameterIterator:
-    # Lengths in µm. Diameter and width are drawn on a log scale, so small inductors get
-    # more samples: a small spiral is only buildable with thin lines, and is_feasible
-    # rejects most small diameters drawn with wide ones. With seed 40, 16% of 6000
-    # accepted samples are below 100 µm (5% with uniform sampling), median 182 µm (222);
+    # Lengths in µm. The diameter is drawn on a log scale and kept when is_feasible rejects
+    # a draw: turns, width and space are redrawn around it instead. A small spiral only
+    # fits with one turn and thin lines, so a plain rejection threw out most small
+    # diameters and left the median at 182 µm; kept, the diameter follows its log
+    # distribution (seed 40: median 96 µm, 51% of 6000 samples below 100 µm, 29% below
+    # 60 µm). Spirals under ~60 µm are then nearly all single-turn, as only those fit.
     # geometries/inductor_octa_coverage.png shows the coverage after a run.
     return InputParameterIterator(
         RangeParameter("turns", 1, 5, dtype=int),
@@ -49,6 +49,7 @@ def _input_parameters() -> InputParameterIterator:
         RangeParameter("diameter", 30.0, 300.0, step=2.0, sampling="log"),
         picking_strategy="sobol",
         frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
+        kept_on_rejection=("diameter",),
     )
 
 
