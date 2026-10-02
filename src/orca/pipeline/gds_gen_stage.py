@@ -13,6 +13,7 @@ from orca.pipeline.resume import append_row, resume_table
 
 if TYPE_CHECKING:
     from orca.geometry.base_geometry import BaseGeometry
+    from orca.geometry.input_parameters import InputParameterIterator
     from orca.pipeline.context import PipelineContext
 
 
@@ -30,15 +31,20 @@ class GDSGenerator(PipelineStage):
         overwrite (bool): Delete the layouts of earlier runs and draw all samples anew.
     """
 
-    def __init__(self, num_samples: int = 1000, overwrite: bool = False):
+    def __init__(
+        self, num_samples: int = 1000, overwrite: bool = False, plot_coverage: bool = True
+    ):
         """
         Args:
             num_samples (int): Number of parameter samples, and thus GDS layouts, to generate.
+            plot_coverage (bool): Save a pair plot of the laid-out parameter combinations,
+                over the draws rejected as infeasible, to geometries/<name>_coverage.png.
             overwrite (bool): Delete the geometry folder first instead of keeping the layouts
                 an earlier run left there.
         """
         super().__init__(name="GDS Generator", index=0)
         self.num_samples = num_samples
+        self.plot_coverage = plot_coverage
         self.overwrite = overwrite
 
     def run(
@@ -156,8 +162,33 @@ class GDSGenerator(PipelineStage):
             )
         else:
             logger.info(f"GDS generation completed: {drawn} layouts drawn.")
+        if self.plot_coverage:
+            self._plot_coverage(context, iterator)
         context.gds_csv = gds_csv
         return context
+
+    @staticmethod
+    def _plot_coverage(context: "PipelineContext", iterator: "InputParameterIterator") -> None:
+        """Plot which parts of the parameter box the layouts in the GDS table cover."""
+        if not os.path.exists(context.gds_csv_path) or not iterator.input_names:
+            return
+        layouts = pd.read_csv(context.gds_csv_path)
+        rejected = pd.DataFrame(iterator.rejected, columns=iterator.input_names)
+        # Imported here: matplotlib is only needed once the layouts are done
+        from orca.utils.postprocessing import plot_parameter_coverage
+
+        path = context.gds_coverage_plot_path
+        title = f"{context.geometry.name}: parameter coverage ({len(layouts)} layouts"
+        if iterator.n_rejected:
+            title += f", {iterator.n_rejected} draws rejected as infeasible"
+        try:
+            plot_parameter_coverage(
+                layouts, rejected, iterator.parameters, path, title=title + ")"
+            )
+        except Exception as e:  # noqa: BLE001 - a failed plot must not fail the layouts
+            logger.warning(f"Could not plot the parameter coverage: {e}")
+            return
+        logger.info(f"Parameter coverage plotted to {path}.")
 
     @staticmethod
     def _generate_gds_file(

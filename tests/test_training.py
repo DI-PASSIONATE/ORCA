@@ -16,7 +16,7 @@ skrf = pytest.importorskip("skrf")
 
 from orca import ORCA
 from orca.geometry.base_geometry import BaseGeometry
-from orca.geometry.input_parameters import InputParameterIterator
+from orca.geometry.input_parameters import InputParameterIterator, RangeParameter
 from orca.pipeline.context import PipelineContext
 from orca.pipeline.test_model_stage import ModelTester
 from orca.pipeline.training_stage import ModelTrainer, order_parameter_columns
@@ -42,9 +42,12 @@ B_VALUES = [0.5, 1.0, 1.5]
 TINY_MLP = {"epochs": 2, "batch_size": 16, "num_layers": 1, "hidden_size": 8}
 
 
-def _iterator(**extra) -> InputParameterIterator:
+def _iterator(*extra: RangeParameter) -> InputParameterIterator:
     return InputParameterIterator(
-        frequency=[FREQUENCIES[0], FREQUENCIES[-1]], a=A_VALUES, b=B_VALUES, **extra
+        RangeParameter("a", A_VALUES[0], A_VALUES[-1], step=1.0),
+        RangeParameter("b", B_VALUES[0], B_VALUES[-1], step=0.5),
+        *extra,
+        frequency=[FREQUENCIES[0], FREQUENCIES[-1]],
     )
 
 
@@ -147,7 +150,7 @@ def test_parameter_table_with_extra_columns_is_rejected(result_dir):
 
 def test_fixed_parameter_normalizes_to_finite_values(result_dir):
     table = _table(result_dir).assign(c=2.0)[["name", "a", "b", "c"]]
-    iterator = _iterator(c=[2.0])
+    iterator = _iterator(RangeParameter("c", 2.0, 2.0))
 
     dataset = _dataset(iterator).new_split(result_dir, table, fit_normalizers=True)
 

@@ -88,7 +88,7 @@ Wrap the call in `if __name__ == "__main__":` (or a `main()` function) as shown:
 
 This will:
 
-1. Generate 1000 parameterised GDS layout variants.
+1. Generate 1000 parameterised GDS layout variants, spread over the parameter ranges with a space-filling design, and plot their coverage to `geometries/<name>_coverage.png`.
 2. Snap them to the manufacturing grid and drop those violating the SG13G2 design rules.
 3. Convert each to a Palace mesh and run full-wave EM simulation.
 4. Store results in Touchstone format under `output/<geometry_name>/`.

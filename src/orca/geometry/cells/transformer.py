@@ -1,13 +1,19 @@
+import math
+
 import gdsfactory as gf
 import klayout.db as kdb
 import numpy as np
 
+from orca.geometry.drc import GRID_NM
 from orca.geometry.layers import SG13G2
+
+#: Manufacturing grid in µm.
+_GRID = GRID_NM / 1000.0
 
 
 def _ensure_active_pdk() -> None:
-    """Gdsfactory refuses to extrude paths without an active PDK. We only use it as a
-    polygon generator with explicit SG13G2 layer tuples, so its generic PDK is enough.
+    """Gdsfactory refuses to build components without an active PDK. We only use it as
+    a polygon generator with explicit SG13G2 layer tuples, so its generic PDK is enough.
     """
     try:
         gf.get_active_pdk()
@@ -25,15 +31,17 @@ def check_tf_octa_c_parameters(
     upper_center_tap_width: float = 0.0,
     upper_feed_type: int = 1,
     feedline_spacing: float = 6.0,
-    gnd_upper_spacing: float = 10.0,
-    gnd_lower_spacing: float = 10.0,
-    gnd_side_spacing: float = 10.0,
+    gnd_upper_spacing: float = 20.0,
+    gnd_lower_spacing: float = 20.0,
+    gnd_side_spacing: float = 20.0,
     gnd_ring_width: float = 10.0,
 ) -> None:
     """Raise ``ValueError`` if :func:`tf_octa_c` cannot draw these parameters.
 
     Same arguments as :func:`tf_octa_c`. Called by it, and by
-    ``TransformerOcta.is_feasible`` to reject a draw before anything is drawn.
+    ``TransformerOcta.is_feasible`` to reject a draw before anything is drawn. Only
+    drawability is checked here; which combinations make a useful transformer (how
+    well the windings couple) is the preset's choice.
     """
     bottom_centertap_width = (
         bottom_center_tap_width if bottom_center_tap_width > 0.1 else bottom_linewidth
@@ -66,26 +74,28 @@ def check_tf_octa_c_parameters(
         raise ValueError(
             "upper_center_tap_width is too large for input_winding_diameter."
         )
-    if abs(bottom_winding_diameter - top_winding_diameter) > 40.0:
-        raise ValueError(
-            "input_winding_diameter and output_winding_diameter difference is too large. No sufficient coupling."
-        )
 
-    # The winding path starts at the feed gap and runs along the octagon's vertical
-    # side to the first vertex, where it bends by 45 degrees. That first segment must
-    # be at least as long as the miter reach of the bend (w/2 * tan 22.5 deg), or
-    # gf.Path.extrude() folds the trace into a zero-width spike; a gap wider than
-    # the side is not a transformer at all.
-    miter_reach = np.tan(np.radians(22.5)) / 2.0
-    half_side = np.sin(np.radians(22.5)) / 2.0
-    for label, diameter, width, gap in (
-        ("top", top_winding_diameter, top_linewidth, fs_top),
-        ("bottom", bottom_winding_diameter, bottom_linewidth, fs_bot),
+    # The feed gap is cut out of the octagon's flat side facing the ports. It must fit
+    # in that side along the trace's centre line (diameter * sin 22.5 deg long), so
+    # that the trace ends on either side of the gap still run along the flat side.
+    for label, diameter, gap in (
+        ("top", top_winding_diameter, fs_top),
+        ("bottom", bottom_winding_diameter, fs_bot),
     ):
-        if diameter * half_side - gap / 2.0 < width * miter_reach:
+        if gap > diameter * np.sin(np.radians(22.5)):
             raise ValueError(
-                f"The {label} winding's feed gap of {gap:g} plus the miter of its {width:g} wide "
-                f"trace does not fit in the flat side of a {diameter:g} octagon."
+                f"The {label} winding's feed gap of {gap:g} does not fit in the flat side of "
+                f"a {diameter:g} octagon."
+            )
+
+    # The ports sit on the ring's inner edge, gnd_*_spacing - gnd_ring_width beyond the
+    # windings' vertices; closer than half a trace width, a feed would run back into its
+    # own winding instead of out of it.
+    for label, spacing in (("gnd_upper_spacing", gnd_upper_spacing), ("gnd_lower_spacing", gnd_lower_spacing)):
+        if spacing - gnd_ring_width < max(top_linewidth, bottom_linewidth) / 2.0:
+            raise ValueError(
+                f"{label} - gnd_ring_width = {spacing - gnd_ring_width:g} puts the ports inside "
+                "the windings; it must be at least half the widest trace."
             )
 
     # Ground ring: the ports on both sides and the ring bars must leave a positive opening.
@@ -122,10 +132,11 @@ def tf_octa_c(
     upper_center_tap_width: float = 0.0,
     upper_feed_type: int = 1,
     feedline_spacing: float = 6.0,
-    gnd_upper_spacing: float = 10.0,
-    gnd_lower_spacing: float = 10.0,
-    gnd_side_spacing: float = 10.0,
+    gnd_upper_spacing: float = 20.0,
+    gnd_lower_spacing: float = 20.0,
+    gnd_side_spacing: float = 20.0,
     gnd_ring_width: float = 10.0,
+    textlabel: str = "",
 ) -> gf.Component:
     """
     Octagon Transformer Component with Feed Extensions and Overlap Checks.
@@ -149,6 +160,8 @@ def tf_octa_c(
         gnd_lower_spacing: Ring spacing on the lower winding side.
         gnd_side_spacing: Ring spacing at the side.
         gnd_ring_width: Ring width.
+        textlabel: Text placed at the transformer's centre on the TEXT layer, to read the
+            dimensions in a layout viewer. Empty lists every dimension drawn.
     """
     _ensure_active_pdk()
     check_tf_octa_c_parameters(
@@ -197,15 +210,23 @@ def tf_octa_c(
     # Geometry Limits
     tf_y = max(top_winding_diameter, bottom_winding_diameter) / 2.0 + gnd_side_spacing
 
-    # X Limits for Ports
-    # Note: Winding edges are approx at center +/- diameter/2
-    top_right_x = (center_displacement / 2.0) + (top_winding_diameter / 2.0)
-    bot_right_x = (-center_displacement / 2.0) + (bottom_winding_diameter / 2.0)
-    port_xr = max(top_right_x, bot_right_x) + gnd_upper_spacing
+    # The windings are built on the manufacturing grid, so their centres are placed on it
+    # too (at most 2.5 nm from the requested offset): an off-grid shift would take every
+    # vertex off the grid, and snapping them afterwards could tilt the 45 degree sides.
+    half_offset = round(center_displacement / 2.0 / _GRID) * _GRID
 
-    top_left_x = (center_displacement / 2.0) - (top_winding_diameter / 2.0)
-    bot_left_x = (-center_displacement / 2.0) - (bottom_winding_diameter / 2.0)
-    port_xl = min(top_left_x, bot_left_x) - gnd_lower_spacing
+    def on_grid(x: float) -> float:
+        return round(x / _GRID) * _GRID
+
+    # X Limits for Ports, on the grid like the windings whose feeds end there
+    # Note: Winding edges are approx at center +/- diameter/2
+    top_right_x = half_offset + (top_winding_diameter / 2.0)
+    bot_right_x = -half_offset + (bottom_winding_diameter / 2.0)
+    port_xr = on_grid(max(top_right_x, bot_right_x) + gnd_upper_spacing)
+
+    top_left_x = half_offset - (top_winding_diameter / 2.0)
+    bot_left_x = -half_offset - (bottom_winding_diameter / 2.0)
+    port_xl = on_grid(min(top_left_x, bot_left_x) - gnd_lower_spacing)
 
     # -------------------------------------------------
     # 2. Helper: Winding Generator
@@ -223,85 +244,81 @@ def tf_octa_c(
         centertap_width,
     ):
         """
-        Creates octagon winding AND the feed extension lines (rectangles) to the port.
-        gap_size: spacing between inner edges of feed lines.
-        centertap_target_x: x of the center tap port, or None for no center tap.
+        Draws one winding with its feed lines and optional center tap as one polygon.
+
+        The winding is the ring between two octagons whose flat sides lie ``width / 2``
+        outside and inside the trace's centre line, with the feed gap cut out of the
+        flat side facing the feeds. Unlike a mitred path, the cut never folds the
+        trace, however short the side next to the gap.
+
+        Args:
+            diameter: Diameter of the trace's centre line, vertex to vertex.
+            width: Trace width of the winding and its feed lines.
+            gap_size: Spacing between the inner edges of the feed lines.
+            layer: Metal layer of the winding.
+            center_x: x of the winding's centre.
+            center_y: y of the winding's centre.
+            rotation_deg: 0 for feeds towards +x, 180 for feeds towards -x.
+            feed_target_x: x of the feed ports.
+            centertap_target_x: x of the center tap port, or None for no center tap.
+            centertap_width: Trace width of the center tap.
         """
-        r = diameter / 2.0
-        # Feed Y positions (Trace Centers)
-        # Inner edge is at +gap_size/2 and -gap_size/2
-        y_upper = gap_size / 2.0
-        y_lower = -gap_size / 2.0
+        if rotation_deg not in (0, 180):
+            raise ValueError(f"rotation_deg must be 0 or 180, got {rotation_deg}.")
+        dbu = c.layout().dbu
+        # Built in the winding's own frame (feeds towards +x), then turned into place
+        to_global = kdb.DCplxTrans(1.0, rotation_deg, False, center_x, center_y)
+        direction = 1.0 if rotation_deg == 0 else -1.0
 
-        # Calculate start X (at the gap face)
-        # Using 22.5 deg vertex logic (vertical flat side approximation)
-        x_face = r * np.cos(np.radians(22.5))
+        def local_x(global_x):
+            return (global_x - center_x) * direction
 
-        # Calculate end X (for center tap) on the other side
-        # Using 22.5 deg vertex logic (vertical flat side approximation)
-        x_end = -r * np.cos(np.radians(22.5))
+        def octagon(flat, offset):
+            # Flat sides at +-flat facing +-x and +-y; vertices at (+-flat, +-offset) and
+            # (+-offset, +-flat), so every diagonal side is exactly 45 degrees
+            corners = [(flat, offset), (offset, flat), (-offset, flat), (-flat, offset)]
+            corners += [(-x, -y) for x, y in corners]
+            return kdb.DPolygon([kdb.DPoint(x, y) for x, y in corners])
 
-        # --- 1. Main Octagon Path ---
-        path_pts = []
-        path_pts.append((round(x_face, 2), round(y_upper, 2)))  # Start at upper feed
+        def region(shape):
+            return kdb.Region(shape.transformed(to_global).to_itype(dbu))
 
-        # Vertices (22.5 to 337.5)
-        for ang in np.arange(22.5, 360, 45):
-            rad = np.radians(ang)
-            path_pts.append((round(r * np.cos(rad), 2), round(r * np.sin(rad), 2)))
+        # The octagons are built on the manufacturing grid rather than snapped later:
+        # snapping each vertex on its own would tilt the 45 degree sides off 45 degrees,
+        # which the SG13G2 angle rule rejects. Rounding the outer octagon's vertex offset
+        # up and the inner one's down keeps the diagonal trace at least `width` wide.
+        tan_22 = math.tan(math.radians(22.5))
+        outer = round((diameter / 2.0 * math.cos(math.radians(22.5)) + width / 2.0) / _GRID) * _GRID
+        inner = outer - width
+        apothem = outer - width / 2.0  # flat side of the trace's centre line
+        winding = region(octagon(outer, math.ceil(outer * tan_22 / _GRID) * _GRID)) - region(
+            octagon(inner, math.floor(inner * tan_22 / _GRID) * _GRID)
+        )
+        winding -= region(
+            kdb.DPolygon(
+                kdb.DBox(apothem - width, -gap_size / 2.0, apothem + width, gap_size / 2.0)
+            )
+        )
 
-        path_pts.append((round(x_face, 2), round(y_lower, 2)))  # End at lower feed
+        # Feed lines from the trace ends straight out to the ports
+        feed_end = local_x(feed_target_x)
+        for y0, y1 in ((gap_size / 2.0, gap_size / 2.0 + width), (-gap_size / 2.0 - width, -gap_size / 2.0)):
+            winding += region(kdb.DPolygon(kdb.DBox(apothem - width / 2.0, y0, feed_end, y1)))
 
-        p = gf.Path(path_pts)
-        ref = c << p.extrude(width=width, layer=layer)
-        ref.rotate(rotation_deg)
-        ref.move((center_x, center_y))
-
-        # --- 2. Feed Extensions (The "Small Rectangles") ---
-        # These connect the winding gap to the boundary (port_x).
-        # We need to calculate coordinates in the rotated frame or global frame.
-
-        # Local coordinates of feed tips:
-        p_up_local = (round(x_face - width / 2.0, 2), round(y_upper + width / 2.0, 2))
-        p_lo_local = (round(x_face - width / 2.0, 2), round(y_lower - width / 2.0, 2))
-
-        # Transform to Global
-        # Rotation Matrix
-        theta = np.radians(rotation_deg)
-        c_rot, s_rot = np.cos(theta), np.sin(theta)
-
-        def transform(pt):
-            x, y = pt
-            x_new = x * c_rot - y * s_rot + center_x
-            y_new = x * s_rot + y * c_rot + center_y
-            return (round(x_new, 2), round(y_new, 2))
-
-        start_up = transform(p_up_local)
-        start_lo = transform(p_lo_local)
-
-        # End points are at feed_target_x with same Y
-        end_up = (round(feed_target_x, 2), start_up[1])
-        end_lo = (round(feed_target_x, 2), start_lo[1])
-
-        # Create Feed Rectangles (Wires)
-        # Upper Feed
-        path_u = gf.Path([start_up, end_up])
-        c << path_u.extrude(width=width, layer=layer)
-
-        # Lower Feed
-        path_l = gf.Path([start_lo, end_lo])
-        c << path_l.extrude(width=width, layer=layer)
-
-        # Center tap (optional): from the back of the winding straight out to its port
+        # Center tap: from the back of the winding straight out to its port
         if centertap_target_x is not None:
-            p_center_local = (round(x_end + width / 2.0, 2), round(center_y, 2))
-            start_ct = transform(p_center_local)
-            end_ct = (round(centertap_target_x, 2), round(center_y, 2))
+            winding += region(
+                kdb.DPolygon(
+                    kdb.DBox(
+                        local_x(centertap_target_x),
+                        -centertap_width / 2.0,
+                        -apothem + width / 2.0,
+                        centertap_width / 2.0,
+                    )
+                )
+            )
 
-            path_ct = gf.Path([start_ct, end_ct])
-            c << path_ct.extrude(width=centertap_width, layer=layer)
-
-        return start_up, start_lo  # Return actual start points for reference if needed
+        c.shapes(c.layout().layer(*layer)).insert(winding.merged())
 
     # -------------------------------------------------
     # 3. Create Geometry
@@ -313,7 +330,7 @@ def tf_octa_c(
         width=top_linewidth,
         gap_size=fs_top,
         layer=LAYER_TOP,
-        center_x=center_displacement / 2.0,
+        center_x=half_offset,
         center_y=0,
         rotation_deg=0,
         feed_target_x=port_xr - gnd_ring_width,
@@ -327,7 +344,7 @@ def tf_octa_c(
         width=bottom_linewidth,
         gap_size=fs_bot,
         layer=LAYER_BOT,
-        center_x=-center_displacement / 2.0,
+        center_x=-half_offset,
         center_y=0,
         rotation_deg=180,
         feed_target_x=port_xl + gnd_ring_width,
@@ -492,6 +509,26 @@ def tf_octa_c(
             "Ground ring dimensions are invalid due to port spacing. Adjust parameters."
         )
 
-    # gf.Path.extrude() leaves off-grid vertices on the angled segments; the
-    # DRCChecker stage snaps them to the manufacturing grid (orca.geometry.drc).
+    # -------------------------------------------------
+    # 7. Parameter label (TEXT layer, ignored by the EM model and the DRC)
+    # -------------------------------------------------
+    if textlabel == "":
+        textlabel = (
+            f"  bottom winding diameter: {bottom_winding_diameter:.2f}\n"
+            f"  top winding diameter: {top_winding_diameter:.2f}\n"
+            f"  center displacement: {2 * half_offset:.3f}\n"
+            f"  bottom linewidth: {bottom_linewidth:.2f}\n"
+            f"  top linewidth: {top_linewidth:.2f}\n"
+            f"  bottom center tap width: {bottom_centertap_width if draw_bottom_tap else 0:.2f}\n"
+            f"  top center tap width: {top_centertap_width if draw_top_tap else 0:.2f}\n"
+            f"  bottom feed gap: {fs_bot:.2f}\n"
+            f"  top feed gap: {fs_top:.2f}\n"
+            f"  ground spacing (upper/lower/side): {gnd_upper_spacing:.2f} / "
+            f"{gnd_lower_spacing:.2f} / {gnd_side_spacing:.2f}\n"
+            f"  ground ring width: {gnd_ring_width:.2f}\n"
+        )
+    c.add_label(textlabel, position=(0.0, 0.0), layer=SG13G2.TEXT)
+
+    # The windings are drawn on the grid with exact 45 degree sides; anything else the
+    # DRCChecker stage snaps to the manufacturing grid (orca.geometry.drc).
     return c

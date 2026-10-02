@@ -93,7 +93,7 @@ flowchart LR
 
 A geometry class defines everything ORCA needs to sample and simulate a component:
 
-- **Parameter ranges** via `InputParameterIterator` (sampling strategy, min/max per parameter).
+- **Parameter ranges** via `InputParameterIterator` of `RangeParameter` / `ChoiceParameter` objects (min/max, step, data type and uniform or log sampling per parameter; space-filling Sobol' (default), Latin hypercube, random or grid picking, with samples on the boundary of the box).
 - **GDS generation** via `create_gds_file(name, output_path, params)`.
 - **Basis expansions** of the model inputs via `BasisExpansion` (e.g. a Chebyshev expansion of frequency), chosen on `ModelTrainer` and shared by every architecture.
 - **Dataset type** (e.g. `GeoToSParamDatasetSingleFrequency`).
