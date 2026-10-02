@@ -72,6 +72,7 @@ orca_instance = ORCA(
             # lr_schedule="cosine",   # Learning-rate decay after warmup: "cosine" or "plateau"
             # warmup_epochs=1.0,      # Linear learning-rate warmup at the start of training
             # grad_clip_norm=1.0,     # Gradient-norm clipping; None disables it
+            # allow_tf32=False,       # TF32 matmuls while training (faster on A100 and newer)
         ),
         orca.OnnxExporter(),
         orca.ModelTester(),

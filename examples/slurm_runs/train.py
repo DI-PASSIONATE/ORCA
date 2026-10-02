@@ -29,6 +29,9 @@ def main():
                 # pruned after its current epoch.
                 tuning_timeout=16 * 3600,
                 max_epochs=200,
+                # TF32 matrix multiplies while training: faster on the A100, ignored on the
+                # V100. Testing and the exported model stay in FP32.
+                allow_tf32=True,
             ),
             orca.OnnxExporter(),
             orca.ModelTester(),

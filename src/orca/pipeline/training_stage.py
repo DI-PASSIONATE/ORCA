@@ -44,6 +44,7 @@ class ModelTrainer(PipelineStage):
         lr_schedule: str = "cosine",
         warmup_epochs: float = 1.0,
         grad_clip_norm: float | None = 1.0,
+        allow_tf32: bool = False,
     ):
         """
         Initializes the ModelTrainer stage with the architecture to train and optional
@@ -85,6 +86,10 @@ class ModelTrainer(PipelineStage):
                 tuned value at the start of every training; 0 disables the warmup.
             grad_clip_norm: Largest gradient norm of an optimizer step; larger gradients
                 are scaled down. None disables clipping.
+            allow_tf32: Train with TF32 matrix multiplies on GPUs that support them
+                (Ampere and newer, e.g. A100): faster, with 10 instead of 23 mantissa
+                bits in the multiplies. Tuning and the final training use it; testing and
+                the exported model stay in full FP32.
         """
         super().__init__(name="Model Trainer", index=4)
         self.model_cls = get_model_class(model)
@@ -104,6 +109,7 @@ class ModelTrainer(PipelineStage):
             "lr_schedule": lr_schedule,
             "warmup_epochs": warmup_epochs,
             "grad_clip_norm": grad_clip_norm,
+            "allow_tf32": allow_tf32,
         }
         # Checked now, so a typo fails before hours of tuning rather than after
         TrainingConfig.from_hyperparameters(self.training_defaults)

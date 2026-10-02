@@ -9,6 +9,7 @@ declares, so the two can be tuned together but configured independently.
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import math
 from dataclasses import dataclass, field
@@ -67,6 +68,8 @@ class TrainingConfig:
         scheduler_patience: Plateau length, in epochs, before the plateau schedule
             reacts. Keep it below ``patience``, or early stopping ends the run before
             the learning rate is ever lowered.
+        allow_tf32: Let matrix multiplies round their inputs to TF32 (10 mantissa bits)
+            while training, on GPUs with TF32 tensor cores (Ampere and newer).
         device: Device to train on.
     """
 
@@ -82,6 +85,7 @@ class TrainingConfig:
     grad_clip_norm: float | None = 1.0
     scheduler_factor: float = 0.5
     scheduler_patience: int = 4
+    allow_tf32: bool = False
     device: torch.device = field(default_factory=default_device)
 
     def __post_init__(self) -> None:
@@ -116,6 +120,7 @@ class TrainingConfig:
             "warmup_epochs",
             "min_lr_ratio",
             "grad_clip_norm",
+            "allow_tf32",
         }
         values = {k: v for k, v in hyperparameters.items() if k in known}
         values.update(overrides)
@@ -214,6 +219,17 @@ class _TensorBatches:
             for start in range(0, n, self.batch_size):
                 end = start + self.batch_size
                 yield self.inputs[start:end], self.targets[start:end]
+
+
+@contextlib.contextmanager
+def matmul_precision(allow_tf32: bool) -> Iterator[None]:
+    """Run the block with TF32 matrix multiplies allowed or not, then restore the setting."""
+    previous = torch.get_float32_matmul_precision()
+    torch.set_float32_matmul_precision("high" if allow_tf32 else "highest")
+    try:
+        yield
+    finally:
+        torch.set_float32_matmul_precision(previous)
 
 
 def make_batches(
@@ -348,41 +364,42 @@ class Trainer:
 
         self._report(0, "Starting training")
 
-        for epoch in range(config.epochs):
-            train_loss = self._train_epoch(model, criterion, optimizer, schedule, train_loader)
-            val_loss = self._validate(model, criterion, val_loader)
-            schedule.after_epoch(val_loss)
+        with matmul_precision(config.allow_tf32):
+            for epoch in range(config.epochs):
+                train_loss = self._train_epoch(model, criterion, optimizer, schedule, train_loader)
+                val_loss = self._validate(model, criterion, val_loader)
+                schedule.after_epoch(val_loss)
 
-            if val_loss < best_loss:
-                best_loss = val_loss
-                best_state = copy.deepcopy(model.state_dict())
-                patience_counter = 0
-            else:
-                patience_counter += 1
+                if val_loss < best_loss:
+                    best_loss = val_loss
+                    best_state = copy.deepcopy(model.state_dict())
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
 
-            history.append(
-                EpochResult(
-                    epoch=epoch + 1,
-                    train_loss=train_loss,
-                    val_loss=val_loss,
-                    learning_rate=optimizer.param_groups[0]["lr"],
+                history.append(
+                    EpochResult(
+                        epoch=epoch + 1,
+                        train_loss=train_loss,
+                        val_loss=val_loss,
+                        learning_rate=optimizer.param_groups[0]["lr"],
+                    )
                 )
-            )
 
-            if epoch_callback is not None:
-                epoch_callback(history[-1])
+                if epoch_callback is not None:
+                    epoch_callback(history[-1])
 
-            message = f"Train: {train_loss:.4f} | Val: {val_loss:.4f}"
-            self._report(epoch + 1, message)
-            if self.verbose:
-                # tqdm.write keeps the line clear of the epoch progress bar
-                tqdm.tqdm.write(f"Epoch {epoch + 1:4d} | {message}")
-
-            if patience_counter >= config.patience:
-                stopped_early = True
+                message = f"Train: {train_loss:.4f} | Val: {val_loss:.4f}"
+                self._report(epoch + 1, message)
                 if self.verbose:
-                    tqdm.tqdm.write("Early stopping triggered")
-                break
+                    # tqdm.write keeps the line clear of the epoch progress bar
+                    tqdm.tqdm.write(f"Epoch {epoch + 1:4d} | {message}")
+
+                if patience_counter >= config.patience:
+                    stopped_early = True
+                    if self.verbose:
+                        tqdm.tqdm.write("Early stopping triggered")
+                    break
 
         if best_state is not None:
             model.load_state_dict(best_state)
