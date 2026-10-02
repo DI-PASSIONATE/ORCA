@@ -17,7 +17,7 @@ architecture lives in a geometry class.
 | `guarantees.py` | `PhysicsGuarantees` — properties a model or codec enforces by construction |
 | `models/` | `OrcaModel` — architecture, hyperparameter space, loss, guarantees |
 | `trainer.py` | `Trainer` / `TrainingConfig` — optimizer, schedule, early stopping, history |
-| `tuner.py` | `HyperparameterTuner` — optuna study with k-fold cross-validation |
+| `tuner.py` | `HyperparameterTuner` — optuna study with k-fold cross-validation over geometries |
 | `losses.py` | Loss modules (`ComplexMSELoss`, `MSEPlusLogCoshLoss`) |
 
 The model owns *what* is fitted (architecture and loss); the trainer owns *how* it is
@@ -145,6 +145,11 @@ class MyModel(OrcaModel):
     @staticmethod
     def hyperparameter_search_space():
         # architecture only - learning rate/batch size/epochs belong to the trainer
+        ...
+
+    @staticmethod
+    def regularization_search_space():
+        # optional, e.g. dropout; only searched with ModelTrainer(regularization=True)
         ...
 ```
 

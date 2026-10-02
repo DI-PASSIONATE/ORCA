@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 #: Fields left out of :meth:`PipelineContext.to_json_dict`, because they are
 #: large binary or tabular objects whose ``str()`` says nothing useful. The
 #: trained model and the dataset are written to disk by their own stages; the
-#: test split is reproducible from the result CSV and the split seed.
+#: split is recorded in :attr:`PipelineContext.split_csv_path`.
 _JSON_EXCLUDED = frozenset({"trained_model", "dataset", "test_df"})
 
 
@@ -67,6 +67,9 @@ class PipelineContext:
     """MPI ranks per Palace simulation, and worker count for GDS generation."""
     base_dir: str = "."
     """Root output directory; every derived path below hangs off this."""
+    seed: int | None = None
+    """Seed of the run, or None for an unseeded run. ``ORCA.run`` seeds the global generators
+    with it; stages pass it to generators of their own (parameter sampler, data splits, tuner)."""
 
     # --- Path overrides, written by ORCA.run --------------------------------
     result_dir_override: str | None = None
@@ -106,7 +109,11 @@ class PipelineContext:
     final_val_loss: float | None = None
     training_history: list[EpochResult] = field(default_factory=list)
     test_df: pd.DataFrame | None = None
-    """Held-out split, kept so the testing stage evaluates the same rows."""
+    """Held-out split, kept so the testing stage evaluates the same rows.
+
+    The split is also recorded in :attr:`split_csv_path`, for a testing stage that
+    runs in a later pipeline.
+    """
 
     # --- Written by OnnxExporter --------------------------------------------
     model_path: str | None = None
@@ -114,7 +121,8 @@ class PipelineContext:
 
     # --- Written by ModelTester ---------------------------------------------
     test_results: dict[str, Any] = field(default_factory=dict)
-    """Error metrics per electrical parameter; empty when nothing was evaluated."""
+    """Summary of the test errors (see ``ModelTester.summarize``); empty when nothing was
+    evaluated. The errors of every geometry are in :attr:`test_errors_csv_path`."""
 
     # --- Derived folder layout -----------------------------------------------
 
@@ -163,6 +171,31 @@ class PipelineContext:
         return self.model_dir_override or os.path.join(self.base_dir, "models")
 
     @property
+    def split_csv_path(self) -> str:
+        """Where the training stage records which result file went into which split."""
+        return os.path.join(self.model_dir, f"{self.geometry.name}_split.csv")
+
+    @property
+    def hyperparameters_json_path(self) -> str:
+        """Where the training stage saves the hyperparameters it trained with."""
+        return os.path.join(self.model_dir, f"{self.geometry.name}_hyperparameters.json")
+
+    @property
+    def test_errors_csv_path(self) -> str:
+        """Where the testing stage writes the errors of every test geometry."""
+        return os.path.join(self.model_dir, f"{self.geometry.name}_test_errors.csv")
+
+    @property
+    def errors_vs_frequency_csv_path(self) -> str:
+        """Where the testing stage writes the error percentiles at every frequency point."""
+        return os.path.join(self.model_dir, f"{self.geometry.name}_errors_vs_frequency.csv")
+
+    @property
+    def errors_vs_frequency_plot_path(self) -> str:
+        """Where the testing stage saves the plot of the errors against frequency."""
+        return os.path.join(self.model_dir, f"{self.geometry.name}_errors_vs_frequency.png")
+
+    @property
     def onnx_path(self) -> str:
         """Where the export stage writes, and the testing stage looks for, the model."""
         return self.model_path_override or os.path.join(
@@ -188,6 +221,11 @@ class PipelineContext:
             "result_dir": self.result_dir,
             "result_csv": self.result_csv,
             "model_dir": self.model_dir,
+            "split_csv": self.split_csv_path,
+            "hyperparameters_json": self.hyperparameters_json_path,
+            "test_errors_csv": self.test_errors_csv_path,
+            "errors_vs_frequency_csv": self.errors_vs_frequency_csv_path,
+            "errors_vs_frequency_plot": self.errors_vs_frequency_plot_path,
             "onnx_path": self.onnx_path,
         }
         return record

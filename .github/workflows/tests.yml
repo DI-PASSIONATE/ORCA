@@ -10,9 +10,6 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  UV_PYTHON: "3.12"
-
 jobs:
   lint:
     name: lint and type-check
@@ -31,3 +28,27 @@ jobs:
         run: uv run ruff check .
       - name: Ty
         run: uv run ty check
+
+  test:
+    name: tests (python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      # Simulation-only HPC nodes install ORCA without the train extra (no torch) and often
+      # without libGLU, which the gmsh wheel needs and this runner lacks too.
+      - name: Check the simulation-only install imports
+        run: |
+          uv sync --locked --python ${{ matrix.python-version }}
+          uv run --python ${{ matrix.python-version }} python -c "import orca; orca.GDSGenerator, orca.GDSConverter, orca.PalaceSimulator"
+      - name: Install dependencies
+        run: uv sync --locked --python ${{ matrix.python-version }} --extra train --extra cpu
+      - name: Run tests
+        run: uv run --python ${{ matrix.python-version }} --extra train --extra cpu pytest --cov --cov-report=term-missing

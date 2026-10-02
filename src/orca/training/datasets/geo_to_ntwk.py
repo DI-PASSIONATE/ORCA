@@ -21,6 +21,8 @@ class GeoToNtwkDataset(torch.utils.data.Dataset[tuple[np.ndarray, rf.Network]]):
         data_df: pd.DataFrame,
     ):
         self.samples: list[tuple[np.ndarray, rf.Network]] = []
+        #: Result file of each sample, from the table's "name" column
+        self.names: list[str] = []
         self.load_samples(directory, data_df)
 
 
@@ -41,6 +43,7 @@ class GeoToNtwkDataset(torch.utils.data.Dataset[tuple[np.ndarray, rf.Network]]):
             samples = self.load_single_sample(snp_path, geometry_params)
 
             self.samples.extend(samples)
+            self.names.extend([row["name"]] * len(samples))
 
     def load_single_sample(
         self, sparam_path: str, geometry_params: np.ndarray

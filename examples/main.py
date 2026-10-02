@@ -20,16 +20,11 @@ hyperparameters = {
 
 def main():
     # Use predefined geometry from examples
-    try:
-        import torch  # optional: only installed with ORCA's "train" extra
-        torch.manual_seed(40)
-    except ModuleNotFoundError:
-        pass
     geometry = InductorOcta()
 
     orca_instance = orca.ORCA(
         [
-            orca.GDSGenerator(num_samples=6000, seed=40),
+            orca.GDSGenerator(num_samples=6000),
             orca.DRCChecker(),
             orca.GDSConverter(),
             #orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
@@ -39,7 +34,8 @@ def main():
         ]
     )
 
-    orca_instance.run(geometry=geometry, num_processes=16)
+    # seed fixes every random draw of the run (parameter samples, splits, tuning, weights)
+    orca_instance.run(geometry=geometry, num_processes=16, seed=40)
 
 if __name__ == "__main__":
     main()

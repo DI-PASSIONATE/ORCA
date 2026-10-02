@@ -14,6 +14,11 @@ import re
 TOOLTIPS = {
     "theme_btn": "Appearance: {mode} ({theme}). Click to switch between system, light and dark.",
     "run_btn": "Run the enabled stages in order on the selected geometry.",
+    "seed_edit": (
+        "Seed of the whole run: parameter draws, data splits, hyperparameter search and "
+        "weight initialisation. The same seed and inputs give the same samples and model; "
+        "leave empty for an unseeded run."
+    ),
     "geometry_combo": "Built-in geometry presets. Loading a custom file replaces the selection.",
     "geometry_file_btn": "Browse for a Python file that defines a BaseGeometry subclass.",
     "geometry_name_edit": (

@@ -97,8 +97,8 @@ A geometry class defines everything ORCA needs to sample and simulate a componen
 - **GDS generation** via `create_gds_file(name, output_path, params)`.
 - **Basis expansions** of the model inputs via `BasisExpansion` (e.g. a Chebyshev expansion of frequency), chosen on `ModelTrainer` and shared by every architecture.
 - **Dataset type** (e.g. `GeoToSParamDatasetSingleFrequency`).
-- **Model factory** via `get_model(hyperparameters)` — called by `ModelTrainer` during Optuna tuning.
-- **Hyperparameter search space** via `get_hyperparameter_search_space()` — Optuna distributions per tunable parameter.
+- **Model architecture** via `OrcaModel` subclasses registered with `register_model`, chosen on `ModelTrainer(model=...)`.
+- **Hyperparameter search space** via the model's `hyperparameter_search_space()` — Optuna distributions per tunable parameter, merged with the trainer's and the basis expansion's.
 
 ## Inputs and Outputs
 

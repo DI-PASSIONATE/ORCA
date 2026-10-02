@@ -89,12 +89,15 @@ cpu = ["torch"]
 cu126 = ["torch"]
 cu130 = ["torch"]
 
+# Linters and the test runner are development tools, not runtime requirements.
+# `uv sync` installs this group by default; `uv sync --no-dev` skips it for a
+# runtime-only install.
 [dependency-groups]
-# Installed by `uv sync` (not by `pip install`): the linters and test runner CI uses, pinned by uv.lock.
 dev = [
     "ruff",
     "ty",
     "pytest",
+    "pytest-cov",
 ]
 
 [tool.uv]

@@ -22,27 +22,23 @@ class GDSGenerator(PipelineStage):
 
     Existing layouts are kept: a run finds the layouts of an earlier, possibly
     aborted run in the GDS table and only draws and lays out the missing sample
-    indices. With the same seed the draws are the same as in a fresh run.
+    indices. With the same run seed (``ORCA.run(seed=...)``) the draws are the same as
+    in a fresh run.
 
     Args:
         num_samples (int): Number of parameter combinations to draw and lay out.
-        seed (int|None): Seed for the geometry's 'random' picking strategy, so that
-            a run can be reproduced. None keeps the seed set on the geometry's
-            input parameter iterator (fresh entropy by default).
         overwrite (bool): Delete the layouts of earlier runs and draw all samples anew.
     """
 
-    def __init__(self, num_samples: int = 1000, seed: int | None = None, overwrite: bool = False):
+    def __init__(self, num_samples: int = 1000, overwrite: bool = False):
         """
         Args:
             num_samples (int): Number of parameter samples, and thus GDS layouts, to generate.
-            seed (int | None): Seed of the parameter sampler; None draws a fresh sample each run.
             overwrite (bool): Delete the geometry folder first instead of keeping the layouts
                 an earlier run left there.
         """
         super().__init__(name="GDS Generator", index=0)
         self.num_samples = num_samples
-        self.seed = seed
         self.overwrite = overwrite
 
     def run(
@@ -69,7 +65,9 @@ class GDSGenerator(PipelineStage):
         # the geometry cannot build are rejected there and, for the random
         # strategy, redrawn, so the requested number of layouts is met.
         iterator = geometry.input_parameter_iterator
-        iterator.set_sample_count(self.num_samples, seed=self.seed, feasible=geometry.is_feasible)
+        iterator.set_sample_count(
+            self.num_samples, seed=context.seed, feasible=geometry.is_feasible
+        )
 
         # Layouts an earlier run finished are kept. Their parameters are not compared with
         # this run's draws (an unseeded run would then redraw everything); the later stages

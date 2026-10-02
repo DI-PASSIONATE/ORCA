@@ -124,3 +124,36 @@ which palace
 which python
 python --version
 ```
+
+## Training on the TinyGPU cluster
+
+Training needs no Palace, but a CUDA build of PyTorch, so it gets its own environment. $HOME and $WORK are shared with Fritz, as is the conda setup above, so the simulation results can be trained on in place.
+
+1. Connect to the TinyGPU frontend and allocate a GPU node, so the installed PyTorch can be checked against a real GPU
+
+```sh
+ssh <username>@tinyx.nhr.fau.de
+salloc.tinygpu --gres=gpu:1 --time=01:00:00
+export http_proxy=http://proxy.nhr.fau.de:80 && export https_proxy=http://proxy.nhr.fau.de:80
+```
+
+2. Create the environment and install a CUDA build of PyTorch, then ORCA's training extra
+
+```sh
+module load python
+conda create -n orca-gpu python=3.13
+conda activate orca-gpu
+# Example only, take the command for your CUDA version from PyTorch.org; check the node's driver with nvidia-smi
+pip install torch --index-url https://download.pytorch.org/whl/cu126
+pip install -e "./ORCA/[train]"
+python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+```
+
+3. Submit the training from the folder the simulation ran in (it reads `output/<geometry>/results` there)
+
+```sh
+cd ORCA/examples/slurm_runs
+sbatch.tinygpu orca_slurm_train.sh
+```
+
+Each job writes its model, train/validation/test split and test errors to `output/<geometry>/training_<job id>/`.

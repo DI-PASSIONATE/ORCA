@@ -1,8 +1,10 @@
+import os
 from abc import ABC, abstractmethod
 from typing import ClassVar
 
 import numpy as np
 import pandas as pd
+import skrf as rf
 import torch
 
 from orca.training.codecs import OutputCodec
@@ -33,14 +35,20 @@ class BaseDataset(ABC, torch.utils.data.Dataset[tuple[torch.Tensor, torch.Tensor
         super().__init__()
 
         self.codec = codec
+        # Filled by load_samples, one entry per sample: the samples themselves, and the
+        # result file each one came from. The groups keep cross-validation from putting
+        # frequency points of one geometry on both sides of a fold.
         self.samples: list[tuple[torch.Tensor, torch.Tensor]] = []
+        self.sample_groups: list[str] = []
+        # The normalized samples, stacked once loading is done
+        self.inputs = torch.empty(0)
+        self.targets = torch.empty(0)
+        # Parsed Touchstone files, shared by every split made with new_split()
+        self._touchstone_cache: dict[tuple[str, int], tuple[np.ndarray, np.ndarray]] = {}
         self.input_normalizer = input_normalizer
         self.output_normalizer = output_normalizer
         self.input_param_names: list[str] = []
         self.frequency_grid: np.ndarray | None = None
-        self.random = np.random.RandomState(
-            seed=11
-        )  # Ensure same behavior for all instances
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         # Samples are built on self.device, and the predictor and ONNX exporter
@@ -58,6 +66,39 @@ class BaseDataset(ABC, torch.utils.data.Dataset[tuple[torch.Tensor, torch.Tensor
     @property
     def output_param_names(self) -> list[str]:
         return self.codec.output_names
+
+    def read_touchstone(self, path: str) -> tuple[np.ndarray, np.ndarray]:
+        """
+        The frequencies and codec-encoded targets of a Touchstone file.
+
+        Parsing dominates loading, and a training run reads most files twice: once
+        for tuning and once for the final train/validation split. The result is kept
+        until :meth:`clear_cache`, keyed by path and modification time.
+
+        Args:
+            path (str): Touchstone file to read.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: Frequencies in Hz, shape ``(n_freq,)``, and
+            targets of shape ``(n_freq, output_dim)``.
+        """
+        key = (path, os.stat(path).st_mtime_ns)
+        cached = self._touchstone_cache.get(key)
+        if cached is None:
+            ntwk = rf.Network(path)
+            cached = (ntwk.f, self.codec.encode(ntwk))
+            self._touchstone_cache[key] = cached
+        return cached
+
+    def clear_cache(self) -> None:
+        """Forget the parsed Touchstone files, for this dataset and every split of it."""
+        self._touchstone_cache.clear()
+
+    @property
+    def tensors(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """All normalized inputs and targets, stacked along the first dimension.
+        """
+        return self.inputs, self.targets
 
     @property
     def io_spec(self) -> IOSpec:
@@ -105,6 +146,14 @@ class BaseDataset(ABC, torch.utils.data.Dataset[tuple[torch.Tensor, torch.Tensor
                 "directory and the CSV describe the same set of simulations."
             )
 
+        if len(self.sample_groups) != len(self.samples):
+            raise RuntimeError(
+                f"{type(self).__name__}.load_samples recorded {len(self.sample_groups)} sample "
+                f"groups for {len(self.samples)} samples. Append the result file name of every "
+                "sample to self.sample_groups, so cross-validation can split by geometry."
+            )
+        self._check_input_names()
+
         inputs, outputs = zip(*self.samples, strict=True)
 
         # The normalizers are shared across the splits of a run, so only the split
@@ -123,26 +172,45 @@ class BaseDataset(ABC, torch.utils.data.Dataset[tuple[torch.Tensor, torch.Tensor
                     "training split first with new_split(..., fit_normalizers=True)."
                 )
 
-        self.samples = [
-            (
-                self.input_normalizer.normalize(x) if self.input_normalizer is not None else x,
-                self.output_normalizer.normalize(y) if self.output_normalizer is not None else y,
+        # Normalize the stacked tensors if normalizers are available.
+        self.inputs = torch.stack(inputs)
+        self.targets = torch.stack(outputs)
+        self.samples = []
+        if self.input_normalizer is not None:
+            self.inputs = self.input_normalizer.normalize(self.inputs)
+        if self.output_normalizer is not None:
+            self.targets = self.output_normalizer.normalize(self.targets)
+
+    def _check_input_names(self) -> None:
+        """
+        Fail if the input normalizer expects its columns in another order than the
+        parameter table supplies them; it would otherwise scale every column with the
+        range of a different one.
+        """
+        expected = getattr(self.input_normalizer, "input_names", None)
+        if expected is not None and list(expected) != self.input_param_names:
+            raise ValueError(
+                f"The input normalizer expects the inputs {list(expected)}, but the "
+                f"parameter table gives {self.input_param_names}. Reorder the table's "
+                "columns to the geometry's input parameters (frequency last for per-point "
+                "datasets), or declare the frequency band on the input parameter iterator."
             )
-            for x, y in self.samples
-        ]
 
     @abstractmethod
     def load_samples(self, directory: str, data_df: pd.DataFrame) -> None:
         """
         Load samples from the dataset.
-        This method should be implemented by subclasses to load data specific from its self.data_dir.
+
+        Implementations append ``(input, target)`` tensor pairs to ``self.samples`` and,
+        for each of them, the ``name`` of the table row it came from to
+        ``self.sample_groups``. They set ``self.input_param_names`` as well.
         """
 
     def __getitem__(self, index) -> tuple[torch.Tensor, torch.Tensor]:
-        return self.samples[index]
+        return self.inputs[index], self.targets[index]
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.inputs)
 
     def new_split(
         self, directory: str, data_df: pd.DataFrame, fit_normalizers: bool = False
@@ -167,5 +235,6 @@ class BaseDataset(ABC, torch.utils.data.Dataset[tuple[torch.Tensor, torch.Tensor
             input_normalizer=self.input_normalizer,
             output_normalizer=self.output_normalizer,
         )
+        new_dataset._touchstone_cache = self._touchstone_cache  # noqa: SLF001 - same class
         new_dataset._load_samples_and_normalize(directory, data_df, fit_normalizers)  # noqa: SLF001 - same class
         return new_dataset

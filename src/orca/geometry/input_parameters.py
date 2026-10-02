@@ -26,7 +26,6 @@ class InputParameterIterator:
         self,
         picking_strategy: str = "grid",
         frequency: list | range | np.ndarray | None = None,
-        seed: int | None = None,
         **input_values,
     ):
         """
@@ -35,7 +34,6 @@ class InputParameterIterator:
         Args:
             picking_strategy (str): Strategy for picking parameters ('grid', 'random', etc.).
             frequency (list|range|np.ndarray|None): Optional frequency values to include as an additional input dimension. Does not get returned by __next__ (since it's handled by palace) but is considered for min/max calculations.
-            seed (int|None): Seed for the 'random' picking strategy. None draws fresh entropy on every set_sample_count() call.
             **input_values: One list, range or numpy array of possible values per geometry parameter.
         """
         # Check if all input_values are lists or ranges
@@ -47,7 +45,8 @@ class InputParameterIterator:
 
         self.picking_strategy = picking_strategy
         self.frequency = frequency
-        self.seed = seed
+        # Set with the sample count; GDSGenerator passes the seed of the run
+        self.seed: int | None = None
         self.n_inputs = len(input_values)
         self.input_values = input_values
         self.input_names = list(input_values.keys())
@@ -71,7 +70,7 @@ class InputParameterIterator:
 
         Args:
             n_samples (int): Number of samples to generate.
-            seed (int|None): Overrides the seed given to __init__ for the 'random' strategy.
+            seed (int|None): Seed of the 'random' strategy. None draws fresh entropy.
             feasible (Callable|None): Constraint between parameters, typically a geometry's
                 ``is_feasible``. Combinations it rejects are skipped and counted in
                 :attr:`n_rejected`. The 'random' strategy redraws until ``n_samples``
@@ -82,8 +81,7 @@ class InputParameterIterator:
         self.feasible = feasible
         self.n_rejected = 0
         self.n_accepted = 0
-        if seed is not None:
-            self.seed = seed
+        self.seed = seed
         # Reinitialize the iterator based on the picking strategy
         if self.picking_strategy == "step_grid":
             self._iterator = self.step_grid()

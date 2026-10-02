@@ -71,11 +71,18 @@ class OrcaMLP(OrcaModel):
 
     @staticmethod
     def hyperparameter_search_space() -> dict[str, Any]:
+        # The width is drawn on a log scale, so 64-256 is tried as often as 512-2048:
+        # with a handful of geometry inputs and a few thousand geometries, small
+        # networks often generalise as well and train far faster.
         return {
-            "num_layers": optuna.distributions.IntDistribution(3, 9, step=1),
-            "hidden_size": optuna.distributions.IntDistribution(128, 2048, step=128),
+            "num_layers": optuna.distributions.IntDistribution(2, 8),
+            "hidden_size": optuna.distributions.IntDistribution(64, 2048, log=True),
             "activation_function": ["GELU", "SiLU"],
         }
+
+    @staticmethod
+    def regularization_search_space() -> dict[str, Any]:
+        return {"dropout": optuna.distributions.FloatDistribution(0.0, 0.3)}
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(self.basis(x))

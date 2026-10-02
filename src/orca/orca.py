@@ -7,6 +7,7 @@ from orca.geometry.base_geometry import BaseGeometry
 from orca.logger import logger
 from orca.pipeline.context import PipelineContext
 from orca.pipeline.pipeline_stage import PipelineStage
+from orca.utils.seeding import seed_everything
 
 
 def default_process_count() -> int:
@@ -41,6 +42,7 @@ class ORCA:
         base_dir: str | None = None,
         result_dir: str | None = None,
         result_csv: str | None = None,
+        seed: int | None = None,
     ) -> PipelineContext | None:
         """
         Runs the ORCA pipeline with the specified geometry and CPU cores.
@@ -60,6 +62,10 @@ class ORCA:
                 results that were simulated earlier, instead of the pipeline's own results folder.
             result_csv (str|None): Parameter CSV describing those results. Defaults to
                 <result_dir>/<geometry name>.csv.
+            seed (int|None): Seed of the whole run: the parameter draws, the data splits,
+                the hyperparameter search and the weight initialisation, and the global
+                generators of Python, NumPy and PyTorch. Two runs with the same seed and
+                inputs produce the same samples and model. None leaves everything unseeded.
 
         Returns:
             PipelineContext|None: The final context, or None if the run was aborted.
@@ -83,7 +89,11 @@ class ORCA:
             base_dir=base_dir or os.path.join(os.getcwd(), "output", geometry.name),
             result_dir_override=result_dir,
             result_csv_override=result_csv,
+            seed=seed,
         )
+        if seed is not None:
+            seed_everything(seed)
+            logger.info(f"Seeded the run with {seed}.")
 
         # Stages keep what an earlier run left in the output directory and only add what is
         # missing, so a run is only confirmed when a stage is set to delete its earlier results.

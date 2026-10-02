@@ -29,3 +29,5 @@ config.json
 port_information.json
 *.tar.gz
 *.zip
+.coverage
+.pytest_cache

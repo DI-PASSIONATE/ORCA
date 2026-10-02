@@ -71,6 +71,33 @@ def calculate_electrical_parameters(ntwk):
     }
 
 
+def pointwise_relative_error(pred, gt) -> np.ndarray:
+    """
+    Relative error in percent at every point of a predicted and a reference curve.
+
+    The error is taken against the local magnitude, floored at 1% of the curve's median
+    magnitude so zero crossings stay finite. See :func:`median_relative_error` for why.
+
+    Args:
+        pred: Predicted values (array or scalar).
+        gt: Reference values (array or scalar), same shape as pred.
+
+    Returns:
+        np.ndarray: Error per point in percent; NaN where it is not finite.
+    """
+    pred = np.atleast_1d(pred)
+    gt = np.atleast_1d(gt)
+
+    gt_abs = np.abs(gt)
+    finite_gt = gt_abs[np.isfinite(gt_abs)]
+    scale = np.median(finite_gt) if finite_gt.size else 0.0
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        errors = np.abs(pred - gt) / np.maximum(gt_abs, 0.01 * scale + 1e-10) * 100
+
+    return np.where(np.isfinite(errors), errors, np.nan)
+
+
 def median_relative_error(pred, gt) -> float:
     """
     Median relative error, in percent, between a predicted and a reference curve.
@@ -88,16 +115,7 @@ def median_relative_error(pred, gt) -> float:
     Returns:
         float: Median relative error in percent, or NaN if nothing finite remains.
     """
-    pred = np.atleast_1d(pred)
-    gt = np.atleast_1d(gt)
-
-    gt_abs = np.abs(gt)
-    finite_gt = gt_abs[np.isfinite(gt_abs)]
-    scale = np.median(finite_gt) if finite_gt.size else 0.0
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        errors = np.abs(pred - gt) / np.maximum(gt_abs, 0.01 * scale + 1e-10) * 100
-
+    errors = pointwise_relative_error(pred, gt)
     errors = errors[np.isfinite(errors)]
     return float(np.median(errors)) if errors.size else float("nan")
 
@@ -330,3 +348,87 @@ def plot_diff_s_params_and_k(ntwk: rf.Network):
     plt.title("Octagon Transformer: Mixed-Mode S-Params & Coupling")
     fig.tight_layout()
     plt.show()
+
+
+# Chart tokens for saved figures (light surface), shared with the COBRA/ORCA chart palette
+_SURFACE = "#fcfcfb"
+_INK_PRIMARY = "#0b0b0b"
+_INK_SECONDARY = "#52514e"
+_GRIDLINE = "#e1e0d9"
+_SERIES = "#2a78d6"
+
+
+def plot_errors_vs_frequency(profile, path: str, title: str, n_columns: int = 3) -> None:
+    """
+    Save a small-multiples plot of the test error against frequency, one panel per quantity.
+
+    Each panel shows the median over the test geometries as a line, the middle half of
+    them (25th to 75th percentile) as a dark band and the 5th to 95th percentile as a
+    light one, on a logarithmic error axis. Written with matplotlib's Agg canvas rather
+    than pyplot, so it changes no global backend (the GUI keeps its own) and needs no
+    display on a cluster node.
+
+    Args:
+        profile (pd.DataFrame): Long table with the columns ``parameter``, ``unit``,
+            ``frequency_hz``, ``p5``, ``p25``, ``median``, ``p75`` and ``p95``, one row per
+            quantity and frequency point, as written by ``ModelTester``.
+        path (str): PNG file to write.
+        title (str): Figure title.
+        n_columns (int): Panels per row.
+    """
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    parameters = list(dict.fromkeys(profile["parameter"]))
+    n_rows = -(-len(parameters) // n_columns)
+    fig = Figure(figsize=(4.2 * n_columns, 3.0 * n_rows + 0.9), dpi=150, facecolor=_SURFACE)
+    FigureCanvasAgg(fig)
+    axes = fig.subplots(n_rows, n_columns, sharex=True, squeeze=False).ravel()
+
+    for ax, parameter in zip(axes, parameters, strict=False):
+        rows = profile[profile["parameter"] == parameter]
+        f_ghz = rows["frequency_hz"].to_numpy() / 1e9
+        unit = rows["unit"].iloc[0]
+
+        ax.set_facecolor(_SURFACE)
+        ax.fill_between(f_ghz, rows["p5"], rows["p95"], color=_SERIES, alpha=0.14, linewidth=0)
+        ax.fill_between(f_ghz, rows["p25"], rows["p75"], color=_SERIES, alpha=0.32, linewidth=0)
+        ax.plot(f_ghz, rows["median"], color=_SERIES, linewidth=2, solid_capstyle="round")
+        if (rows[["p5", "median", "p95"]].to_numpy() > 0).any():
+            ax.set_yscale("log")
+
+        kind = "relative error (%)" if unit == "%" else "absolute error"
+        ax.set_title(f"{parameter}: {kind}", color=_INK_PRIMARY, fontsize=10, loc="left")
+        ax.grid(visible=True, which="major", color=_GRIDLINE, linewidth=0.8, linestyle="-")
+        ax.set_axisbelow(True)
+        ax.tick_params(colors=_INK_SECONDARY, labelsize=8, which="both")
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        for side in ("left", "bottom"):
+            ax.spines[side].set_color(_GRIDLINE)
+
+    for ax in axes[len(parameters) :]:
+        ax.remove()
+    # Every panel without one below it carries the frequency axis, also above an empty slot
+    for i, ax in enumerate(axes[: len(parameters)]):
+        if i + n_columns >= len(parameters):
+            ax.xaxis.set_tick_params(labelbottom=True)
+            ax.set_xlabel("Frequency (GHz)", color=_INK_SECONDARY, fontsize=9)
+
+    fig.suptitle(title, color=_INK_PRIMARY, fontsize=12, x=0.01, ha="left")
+    fig.legend(
+        handles=[
+            Line2D([], [], color=_SERIES, linewidth=2, label="median"),
+            Patch(color=_SERIES, alpha=0.32, label="25th-75th percentile"),
+            Patch(color=_SERIES, alpha=0.14, label="5th-95th percentile"),
+        ],
+        loc="upper right",
+        ncols=3,
+        frameon=False,
+        fontsize=9,
+        labelcolor=_INK_PRIMARY,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.savefig(path, facecolor=_SURFACE)

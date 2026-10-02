@@ -2,9 +2,6 @@ import os
 from contextlib import ExitStack, redirect_stdout
 from typing import Any
 
-import gmsh
-from gds2palace import gds_reader, simulation_setup, stackup_reader, utilities
-
 from orca.simulation.simulate import read_simconfig
 
 
@@ -36,6 +33,11 @@ def create_palace_model_from_gds(
         tuple[str, dict, str, str, str]: geometry_name, params, Palace config name, simulation
         directory and data directory of the created Palace model.
     """
+    # Imported here: the PyPI gmsh wheel loads libGLU, which headless machines (CI runners,
+    # HPC compute nodes) often lack, and `import orca` must not depend on it.
+    import gmsh
+    from gds2palace import gds_reader, simulation_setup, stackup_reader, utilities
+
     # ExitStack is used to suppress stdout output in the conversion worker processes to avoid cluttering the console
     with ExitStack() as stack:
         if not show_mesh_results:

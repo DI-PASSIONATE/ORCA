@@ -51,7 +51,7 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 **Required abstract methods:**
 
 - `create_gds_file(name, output_path, params) -> str` — Generates a GDS layout file from geometry parameters. Returns the path to the created file.
-- `create_dataset() -> BaseDataset` — Builds the dataset (e.g. `GeoToSParamDatasetSingleFrequency`) with its output codec and normalizers, used for training. It is called once per geometry instance, the first time `geometry.dataset` is read, so each instance gets its own dataset and normalizer statistics.
+- `create_dataset() -> BaseDataset` — Builds the dataset (e.g. `GeoToSParamDatasetSingleFrequency`) with its output codec and normalizers, used for training. It is called once per geometry instance, the first time `geometry.dataset` is read, so each instance gets its own dataset and normalizer statistics. A `MinMaxNormalizer` expects the parameter table's columns in the order of the input parameter iterator, with `frequency` last; `ModelTrainer` reorders the table to match and rejects one with missing or extra columns. A custom `BaseDataset` subclass appends the result file name of every sample it loads to `self.sample_groups`, so cross-validation can keep each geometry on one side of a fold.
 
 **Optional methods:**
 

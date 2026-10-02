@@ -229,6 +229,11 @@ QGroupBox::indicator:checked {
 QGroupBox QGroupBox {
     background-color: $canvas;
 }
+QGroupBox[collapsed="true"] {
+    background-color: transparent;
+    border: 1px solid transparent;
+    padding-top: 0px;
+}
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextBrowser, QListWidget, QPlainTextEdit {
     background-color: $surface;
     border: 1px solid $border;
