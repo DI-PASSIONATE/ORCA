@@ -432,3 +432,161 @@ def plot_errors_vs_frequency(profile, path: str, title: str, n_columns: int = 3)
     )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     fig.savefig(path, facecolor=_SURFACE)
+
+
+#: Draws a geometry rejected: context for the layouts, so a recessive neutral
+_REJECTED = "#bdbbb3"
+
+
+def _histogram_edges(grid, low: float, high: float, log: bool, n_bins: int = 30) -> np.ndarray:
+    """
+    Bin edges for a histogram of one parameter, equally wide in the axis' own scale.
+
+    For a parameter with a grid of values, every edge lies halfway between two values,
+    so each bin holds whole values and the bars do not alternate with how many grid
+    values happen to fall into them.
+    """
+    forward = np.log10 if log else (lambda x: np.asarray(x, dtype=float))
+    if grid is None or len(grid) < 2:
+        if high <= low:
+            return np.array([low - 0.5, high + 0.5]) if not log else np.array([low / 1.1, high * 1.1])
+        return np.geomspace(low, high, n_bins + 1) if log else np.linspace(low, high, n_bins + 1)
+    t = forward(np.asarray(grid, dtype=float))
+    midpoints = (t[1:] + t[:-1]) / 2
+    outer = np.concatenate(([t[0] - (t[1] - t[0]) / 2], midpoints, [t[-1] + (t[-1] - t[-2]) / 2]))
+    if len(grid) > n_bins:
+        targets = np.linspace(outer[0], outer[-1], n_bins + 1)
+        outer = np.unique(outer[np.abs(outer[:, None] - targets[None, :]).argmin(axis=0)])
+    return 10**outer if log else outer
+
+
+def plot_parameter_coverage(
+    layouts, rejected, parameters: dict, path: str, title: str
+) -> None:
+    """
+    Save a pair plot of the parameter combinations that were laid out.
+
+    One panel per pair of parameters shows every layout as a dot, over the draws the
+    geometry's feasibility check rejected in grey, so gaps in the coverage and the
+    regions that cannot be built are told apart. The diagonal holds a histogram of
+    each parameter. Axes span each parameter's declared range, outlined in every panel
+    so samples moved onto the boundary of the box sit on the outline; log-sampled
+    parameters get a log axis.
+
+    Args:
+        layouts (pd.DataFrame): One row per layout, one column per parameter.
+        rejected (pd.DataFrame): One row per rejected draw; may be empty.
+        parameters (dict[str, GeometryParameter]): The declared parameters, in order.
+        path (str): PNG file to write.
+        title (str): Figure title.
+    """
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Rectangle
+    from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
+
+    names = list(parameters)
+    n = len(names)
+    log = {name: getattr(parameters[name], "sampling", "uniform") == "log" for name in names}
+    bounds = {name: parameters[name].bounds for name in names}
+
+    def limits(name: str) -> tuple[float, float]:
+        low, high = bounds[name]
+        if log[name]:
+            pad = (high / low) ** 0.04
+            return low / pad, high * pad
+        pad = 0.04 * (high - low) or 0.5
+        return low - pad, high + pad
+
+    def log_axis(axis) -> None:
+        # Plain numbers (30, 50, 100) instead of matplotlib's 3x10^1 mathtext
+        axis.set_major_locator(LogLocator(subs=(1.0, 2.0, 5.0)))
+        axis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:g}"))
+        axis.set_minor_formatter(NullFormatter())
+
+    def style(ax) -> None:
+        ax.set_facecolor(_SURFACE)
+        ax.tick_params(colors=_INK_SECONDARY, labelsize=7, which="both")
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        for side in ("left", "bottom"):
+            ax.spines[side].set_color(_GRIDLINE)
+
+    size = 2.2 if n > 1 else 4.0
+    fig = Figure(figsize=(size * n + 0.4, size * n + 0.9), dpi=150, facecolor=_SURFACE)
+    FigureCanvasAgg(fig)
+    axes = fig.subplots(n, n, squeeze=False)
+
+    for row, y_name in enumerate(names):
+        for col, x_name in enumerate(names):
+            ax = axes[row][col]
+            if col > row:
+                ax.remove()
+                continue
+            style(ax)
+            if log[x_name]:
+                ax.set_xscale("log")
+                log_axis(ax.xaxis)
+            ax.set_xlim(*limits(x_name))
+
+            if row == col:  # histogram of the layouts along this parameter
+                values = layouts[x_name].to_numpy(dtype=float)
+                edges = _histogram_edges(
+                    getattr(parameters[x_name], "grid_values", None), *bounds[x_name],
+                    log=log[x_name],
+                )
+                counts, _ = np.histogram(values, bins=edges)
+                # Density in the axis' own scale, so bins of unequal width compare fairly
+                scale = np.log10(edges) if log[x_name] else edges
+                ax.bar(
+                    edges[:-1], counts / np.diff(scale), width=np.diff(edges), align="edge",
+                    color=_SERIES, edgecolor=_SURFACE, linewidth=1,
+                )
+                ax.set_yticks([])
+                ax.spines["left"].set_visible(False)
+                ax.set_title(x_name, color=_INK_PRIMARY, fontsize=9, loc="left")
+            else:  # layouts over rejected draws, for one pair of parameters
+                if log[y_name]:
+                    ax.set_yscale("log")
+                    log_axis(ax.yaxis)
+                ax.set_ylim(*limits(y_name))
+                if len(rejected):
+                    ax.scatter(
+                        rejected[x_name], rejected[y_name], s=2, color=_REJECTED,
+                        linewidths=0, rasterized=True,
+                    )
+                ax.scatter(
+                    layouts[x_name], layouts[y_name], s=3, color=_SERIES, alpha=0.7,
+                    linewidths=0, rasterized=True,
+                )
+                (x_low, x_high), (y_low, y_high) = bounds[x_name], bounds[y_name]
+                ax.add_patch(
+                    Rectangle(
+                        (x_low, y_low), x_high - x_low, y_high - y_low, fill=False,
+                        edgecolor=_INK_SECONDARY, linewidth=0.6, alpha=0.5,
+                    )
+                )
+            # Tick labels only on the outer panels
+            if row != n - 1:
+                ax.tick_params(labelbottom=False)
+            else:
+                ax.set_xlabel(x_name, color=_INK_SECONDARY, fontsize=8)
+            if col == 0 and row > 0:
+                ax.set_ylabel(y_name, color=_INK_SECONDARY, fontsize=8)
+            elif row != col:
+                ax.tick_params(labelleft=False)
+
+    fig.suptitle(title, color=_INK_PRIMARY, fontsize=12, x=0.01, ha="left")
+    handles = [Line2D([], [], marker="o", linestyle="", color=_SERIES, label="layouts")]
+    if len(rejected):
+        handles.append(
+            Line2D([], [], marker="o", linestyle="", color=_REJECTED, label="rejected as infeasible")
+        )
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    # In the empty upper triangle, clear of the title
+    fig.legend(
+        handles=handles, loc="upper right", bbox_to_anchor=(0.99, 0.93), frameon=False,
+        fontsize=9, labelcolor=_INK_PRIMARY,
+    )
+    fig.savefig(path, facecolor=_SURFACE)

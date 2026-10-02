@@ -136,6 +136,11 @@ class PipelineContext:
         return os.path.join(self.geometry_dir, f"{self.geometry.name}.csv")
 
     @property
+    def gds_coverage_plot_path(self) -> str:
+        """Where the GDS generation stage plots which parts of the parameter box it covered."""
+        return os.path.join(self.geometry_dir, f"{self.geometry.name}_coverage.png")
+
+    @property
     def drc_csv_path(self) -> str:
         """Where the DRC stage writes the parameter table of the layouts that passed."""
         return os.path.join(self.geometry_dir, f"{self.geometry.name}_drc.csv")
@@ -216,6 +221,7 @@ class PipelineContext:
         record["geometry"] = self.geometry.name
         record["paths"] = {
             "geometry_dir": self.geometry_dir,
+            "gds_coverage_plot": self.gds_coverage_plot_path,
             "drc_report": self.drc_report_path,
             "palace_sim_dir": self.palace_sim_dir,
             "result_dir": self.result_dir,
