@@ -24,7 +24,7 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 - `name: str` — Unique identifier for the geometry (used as directory name and file prefix).
 - `stackup_xml: str` — Path to the stackup XML file describing the physical layer stack.
 - `simconfig_filename: str` — Path to the Palace simulation configuration file (`.simcfg`).
-- `input_parameter_iterator: InputParameterIterator` — Defines geometry parameters and their sampling ranges.
+- `input_parameter_iterator: InputParameterIterator` — Declares the geometry's parameters (`RangeParameter` / `ChoiceParameter` objects) and how they are sampled; see the [reference below](#reference-inputparameteriterator).
 
 !!! warning "Give the object-valued field a `default_factory`"
 
@@ -56,7 +56,7 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 **Optional methods:**
 
 - `feasibility_constraints() -> list[str]` — The same rules as `is_feasible()`, written as boolean expressions over the input parameter names, e.g. `"bottom_linewidth <= bottom_winding_diameter / 3"`. `OnnxExporter` stores them in the model's `input_constraints` metadata, so COBRA can refuse a query for a geometry that cannot be built instead of returning a prediction the model was never trained for. The grammar is a small subset of Python (arithmetic, comparisons, `and`/`or`/`not`, `a if c else b`, and `abs min max sqrt sin cos tan radians ceil floor round`, plus `pi` and `sqrt2`), documented in `orca.geometry.constraints`; anything else is rejected at export. Derive the strings from the same numbers as `is_feasible()` and add a test that they agree on random draws (see `tests/test_constraints.py` for the presets' version).
-- `is_feasible(params) -> bool` — Whether a parameter combination describes a layout that can be drawn (default: always `True`). `GDSGenerator` calls it for every draw of the iterator; rejected draws are counted and, with the `"random"` strategy, redrawn, so the requested number of samples is met with buildable layouts only. Put cheap, closed-form constraints between parameters here — a winding that must fit its diameter, a feed gap that must fit the octagon's side. The presets derive it from the same check their cell code runs, so the two cannot disagree.
+- `is_feasible(params) -> bool` — Whether a parameter combination describes a layout that can be drawn (default: always `True`). `GDSGenerator` calls it for every draw of the iterator; rejected draws are counted and, with the `"sobol"`, `"lhs"` and `"random"` strategies, replaced by further draws, so the requested number of samples is met with buildable layouts only. Put cheap, closed-form constraints between parameters here — a winding that must fit its diameter, a feed gap that must fit the octagon's side. The presets derive it from the same check their cell code runs, so the two cannot disagree.
 
 !!! warning "Reject, never clamp"
 
@@ -94,14 +94,15 @@ Example:
 # Builds a fresh iterator per geometry instance. See the warning above:
 # a bare `= InputParameterIterator(...)` default would be shared by every instance.
 def _input_parameters() -> InputParameterIterator:
+    # All in µm, on a 0.1 µm grid (from orca import InputParameterIterator, RangeParameter)
     return InputParameterIterator(
-        picking_strategy="random",
-        frequency=[1e8, 500e8],  # 1 GHz to 500 GHz
-        bottom_winding_diameter=[x / 10 for x in range(200, 1201, 1)],  # 20.0 to 120.0 in 0.1 steps
-        top_winding_diameter=[x / 10 for x in range(200, 1201, 1)],  # 20.0 to 120.0 in 0.1 steps
-        center_displacement=[x / 10 for x in range(0, 151, 1)],   # 0.0 to 15.0 in 0.1 steps
-        bottom_linewidth=[x / 10 for x in range(20, 121, 1)],     # 2.0 to 12.0 in 0.1 steps
-        top_linewidth=[x / 10 for x in range(20, 121, 1)],        # 2.0 to 12.0 in 0.1 steps
+        RangeParameter("bottom_winding_diameter", 20.0, 120.0, step=0.1),
+        RangeParameter("top_winding_diameter", 20.0, 120.0, step=0.1),
+        RangeParameter("center_displacement", 0.0, 15.0, step=0.1),
+        RangeParameter("bottom_linewidth", 2.0, 12.0, step=0.1),
+        RangeParameter("top_linewidth", 2.0, 12.0, step=0.1),
+        picking_strategy="sobol",
+        frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
     )
 
 
@@ -141,24 +142,49 @@ class TransformerOcta(BaseGeometry):
 
 ### Reference: InputParameterIterator
 
-`InputParameterIterator` defines the set of geometry parameters and how they are sampled during GDS generation.
+`InputParameterIterator` declares the geometry's parameters and how they are sampled during GDS generation. Each parameter is an object; their order is the column order of the parameter table and of the model inputs.
 
 ```python
+from orca import ChoiceParameter, InputParameterIterator, RangeParameter
+
 InputParameterIterator(
-    picking_strategy="random",  # "grid" / "uniform_grid", "step_grid", or "random"
-    frequency=[1e8, 500e8],     # Optional: frequency range included for normalisation (not iterated)
-    param_a=[...],              # List/range of possible values for each geometry parameter
-    param_b=[...],
+    RangeParameter("turns", 1, 5, dtype=int),                     # 1, 2, 3, 4, 5
+    RangeParameter("width", 2.0, 15.0, step=0.02, sampling="log"),
+    RangeParameter("diameter", 30.0, 300.0, step=2.0, sampling="log"),
+    RangeParameter("angle", 0.0, 45.0),                           # continuous
+    ChoiceParameter("layer", [126, 134]),
+    picking_strategy="sobol",   # "sobol" (default), "lhs", "random", "grid" / "uniform_grid", "step_grid"
+    frequency=[1e9, 500e9],     # Optional: frequency band in Hz, for normalisation (not drawn)
+    boundary_fraction=0.05,     # Share of draws moved onto the faces, edges and corners of the box
 )
 ```
+
+`RangeParameter(name, min, max, step=None, sampling="uniform", dtype=float)`:
+
+| Argument | Meaning |
+|---|---|
+| `min`, `max` | Bounds, both inclusive. `min == max` makes a fixed parameter. |
+| `step` | Spacing of the allowed values `min`, `min + step`, … `max`; it must divide `max - min`. Values are rounded to the step's decimals (a 0.1 step gives 0.3, not 0.30000000000000004). Without a step the parameter is continuous. |
+| `sampling` | `"uniform"` spreads draws evenly over the range. `"log"` spreads them evenly in the logarithm — as many draws between 30 and 100 as between 100 and 300 — which favours small values; it needs `min > 0`. |
+| `dtype` | `float` or `int`. An integer parameter steps by 1 unless given another integer step, and `create_gds_file` receives Python `int`s. |
+
+`ChoiceParameter(name, values)` takes one of an explicit list of values, each equally likely.
 
 Picking strategies:
 
 | Strategy | Behaviour |
 |---|---|
-| `"grid"` / `"uniform_grid"` | Uniform grid across all parameter combinations |
-| `"step_grid"` | Grid using explicit step sizes |
-| `"random"` | Random sampling without replacement |
+| `"sobol"` (default) | A scrambled Sobol' sequence: a space-filling design that spreads the samples over the parameter box much more evenly than random draws, so the same number of simulations leaves fewer gaps. Reproducible with the run seed. |
+| `"lhs"` | Latin hypercube designs of `num_samples` points: each parameter's range is cut into `num_samples` strata with one sample each. Evener than random, less so than Sobol' in several dimensions together. |
+| `"random"` | Draws every parameter independently from its sampling distribution (with replacement). |
+| `"grid"` / `"uniform_grid"` | About `num_samples ** (1 / number of parameters)` evenly spaced quantiles of each parameter's distribution (always including its min and max), combined. A log-sampled parameter is gridded on a log scale. |
+| `"step_grid"` | Every value of every parameter combined; all parameters need a `step` or be choices. |
+
+With the three drawing strategies, draws `is_feasible()` rejects are replaced by further draws, and `boundary_fraction` (default 0.05) of the draws are moved onto the boundary of the box: a random number of their parameters, at least one, is set to its min or max. Space-filling and random designs almost never reach the faces, edges and corners themselves, yet a network extrapolates worst there and an optimizer often ends up there. Set it to 0 to switch this off. The grid strategies include each parameter's min and max anyway.
+
+`GDSGenerator` plots the result to `geometries/<name>_coverage.png`: every pair of parameters with the layouts over the rejected draws, so gaps in the sampling can be told apart from regions `is_feasible()` excludes.
+
+The ranges, not the sampling, define what the model covers: `input_parameter_ranges` in the exported ONNX model holds each parameter's `min` and `max`. Sampling only decides where in that box the simulations are concentrated.
 
 ### Reference: Dataset Types
 
