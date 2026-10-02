@@ -32,7 +32,8 @@ In GUI mode:
 1. Select a geometry preset, or load a custom `.py` file that defines a `BaseGeometry` subclass. The name field sets the output folder (`output/<name>/`).
 2. Tick the pipeline stages to run and set their parameters. Every field has a tooltip taken from the stage's documentation; leave an optional field empty (or `None`) to use the default.
 3. Set the Palace executable path in the `PalaceSimulator` stage.
-4. Click **Run pipeline**. Progress, the current stage, and the outcome show next to the progress bar (green when finished, red text on an error); the log panel mirrors what ORCA prints on the console. Validation problems, such as no geometry selected, appear inline instead of in a dialog. If the output directory already exists, the run continues from what is there (see [Resuming an interrupted run](#resuming-an-interrupted-run)); you are only asked to confirm when a stage has **Overwrite** enabled, because that stage deletes its earlier results.
+4. Optionally enter a **Seed** next to the run button: it fixes every random choice of the run (parameter draws, data splits, tuning, weight initialisation), so the same seed and inputs give the same samples and model. Leave it empty for an unseeded run.
+5. Click **Run pipeline**. Progress, the current stage, and the outcome show next to the progress bar (green when finished, red text on an error); the log panel mirrors what ORCA prints on the console. Validation problems, such as no geometry selected, appear inline instead of in a dialog. If the output directory already exists, the run continues from what is there (see [Resuming an interrupted run](#resuming-an-interrupted-run)); you are only asked to confirm when a stage has **Overwrite** enabled, because that stage deletes its earlier results.
 
 The button in the top-right corner switches the appearance between *system* (follows the OS colour scheme), *light* (Sandbank) and *dark* (Deepwater). The choice is remembered across sessions.
 
@@ -71,7 +72,6 @@ orca_instance = ORCA(
             # lr_schedule="cosine",   # Learning-rate decay after warmup: "cosine" or "plateau"
             # warmup_epochs=1.0,      # Linear learning-rate warmup at the start of training
             # grad_clip_norm=1.0,     # Gradient-norm clipping; None disables it
-            # seed=11,                # Splits, tuner and weight initialisation
         ),
         orca.OnnxExporter(),
         orca.ModelTester(),
@@ -79,7 +79,9 @@ orca_instance = ORCA(
 )
 
 if __name__ == "__main__":
-    orca_instance.run(geometry=geometry, num_processes=16)
+    # seed: one seed for the whole run - parameter draws, data splits, tuning, weights,
+    # and the global generators of Python, NumPy and PyTorch. None (default) is unseeded.
+    orca_instance.run(geometry=geometry, num_processes=16, seed=40)
 ```
 
 Wrap the call in `if __name__ == "__main__":` (or a `main()` function) as shown: ORCA starts its worker processes with the `spawn` start method, which re-imports your script in every worker. Without the guard each worker would start its own pipeline.
@@ -122,7 +124,7 @@ Typical contents include:
 
 Running the same script again continues where the previous run stopped, for example after a Slurm job hit its time limit. `GDSGenerator`, `GDSConverter` and `PalaceSimulator` each add a row to their parameter table (`geometries/<name>.csv`, `palace_sims/<name>.csv`, `results/<name>.csv`) as soon as a sample is finished, so the tables always list exactly the finished samples, even when the run is killed. The next run keeps those samples and only produces the missing ones:
 
-- `GDSGenerator` lays out only the sample indices missing from its table. With a fixed `seed` they get the same parameters as in an uninterrupted run.
+- `GDSGenerator` lays out only the sample indices missing from its table. With a fixed run seed (`ORCA.run(seed=...)`) they get the same parameters as in an uninterrupted run.
 - `GDSConverter` and `PalaceSimulator` reuse a sample only if their table lists it with the same parameters as their input table and its output (Palace config, Touchstone file) still exists. A sample that failed, was never finished, or was drawn anew with other parameters is converted or simulated again.
 
 Rows that no longer fit (other parameters, a missing file, a line cut off by the kill) are dropped from the table, and the previous table is kept as `<table>.csv.bak`. Earlier results are never deleted unless you ask for it: pass `overwrite=True` to a stage (the **Overwrite** option in the GUI) to delete its folder and start that stage from scratch. Do this, or use a new output folder, after changing the geometry code, the stackup or the simconfig: the parameters of a sample would then be unchanged while its layout or simulation is not, which the resume check cannot see. A results folder passed as `ORCA.run(result_dir=...)` is never deleted; `PalaceSimulator(overwrite=True)` refuses to run on it.

@@ -49,9 +49,6 @@ class BaseDataset(ABC, torch.utils.data.Dataset[tuple[torch.Tensor, torch.Tensor
         self.output_normalizer = output_normalizer
         self.input_param_names: list[str] = []
         self.frequency_grid: np.ndarray | None = None
-        self.random = np.random.RandomState(
-            seed=11
-        )  # Ensure same behavior for all instances
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         # Samples are built on self.device, and the predictor and ONNX exporter

@@ -44,7 +44,6 @@ class ModelTrainer(PipelineStage):
         lr_schedule: str = "cosine",
         warmup_epochs: float = 1.0,
         grad_clip_norm: float | None = 1.0,
-        seed: int = 11,
     ):
         """
         Initializes the ModelTrainer stage with the architecture to train and optional
@@ -86,7 +85,6 @@ class ModelTrainer(PipelineStage):
                 tuned value at the start of every training; 0 disables the warmup.
             grad_clip_norm: Largest gradient norm of an optimizer step; larger gradients
                 are scaled down. None disables clipping.
-            seed: Seed for the data splits, the tuner and the weight initialisation.
         """
         super().__init__(name="Model Trainer", index=4)
         self.model_cls = get_model_class(model)
@@ -109,7 +107,6 @@ class ModelTrainer(PipelineStage):
         }
         # Checked now, so a typo fails before hours of tuning rather than after
         TrainingConfig.from_hyperparameters(self.training_defaults)
-        self.seed = seed
 
     def run(
         self,
@@ -128,12 +125,15 @@ class ModelTrainer(PipelineStage):
         given_hyperparameters = self._given_hyperparameters()
 
         result_df = order_parameter_columns(pd.read_csv(result_csv), geometry)
-        torch.manual_seed(self.seed)
+        # The run seed (ORCA.run(seed=...)) fixes the splits, the tuner and the weights
+        seed = context.seed
+        if seed is not None:
+            torch.manual_seed(seed)
 
         # Split into train_val and test by geometry (CSV row) - train_val is used for
         # n-fold-cross-validation during hyperparameter tuning
         train_val_df, test_df = train_test_split(
-            result_df, test_size=self.test_frac, random_state=self.seed
+            result_df, test_size=self.test_frac, random_state=seed
         )
 
         if self.n_samples is not None and self.n_samples < len(train_val_df):
@@ -142,7 +142,7 @@ class ModelTrainer(PipelineStage):
 
         # Split train_val_df into train and val for actual model training
         train_df, val_df = train_test_split(
-            train_val_df, test_size=self.val_frac, random_state=self.seed
+            train_val_df, test_size=self.val_frac, random_state=seed
         )
         self._save_split(context, train_df, val_df, test_df)
 
@@ -153,7 +153,7 @@ class ModelTrainer(PipelineStage):
             hyperparameters = given_hyperparameters
             logger.info(f"Using provided hyperparameters for training: {hyperparameters}")
         else:
-            hyperparameters = self._tune(geometry, result_dir, train_val_df)
+            hyperparameters = self._tune(geometry, result_dir, train_val_df, seed)
 
         # The training split owns the normalization statistics; validation reuses them,
         # so no validation data leaks into the normalization of the training data.
@@ -179,7 +179,8 @@ class ModelTrainer(PipelineStage):
         basis = self.basis_cls.from_spec(spec, hyperparameters) if self.basis_cls else None
 
         # Reseeded so the final weights do not depend on how much randomness tuning used
-        torch.manual_seed(self.seed)
+        if seed is not None:
+            torch.manual_seed(seed)
 
         result = trainer.fit(
             model=self.model_cls.from_spec(spec, hyperparameters, basis),
@@ -222,7 +223,11 @@ class ModelTrainer(PipelineStage):
         return hyperparameters
 
     def _tune(
-        self, geometry: "BaseGeometry", result_dir: str, train_val_df: pd.DataFrame
+        self,
+        geometry: "BaseGeometry",
+        result_dir: str,
+        train_val_df: pd.DataFrame,
+        seed: int | None,
     ) -> dict[str, Any]:
         """
         Search the hyperparameters with cross-validation over the train/validation rows.
@@ -241,7 +246,7 @@ class ModelTrainer(PipelineStage):
             basis_cls=self.basis_cls,
             n_fold_cv=self.n_fold_cv,
             n_trials=self.n_trials,
-            seed=self.seed,
+            seed=seed,
             timeout=self.tuning_timeout,
             max_epochs=self.tuning_max_epochs,
             batch_sizes=self.batch_sizes,

@@ -67,6 +67,9 @@ class PipelineContext:
     """MPI ranks per Palace simulation, and worker count for GDS generation."""
     base_dir: str = "."
     """Root output directory; every derived path below hangs off this."""
+    seed: int | None = None
+    """Seed of the run, or None for an unseeded run. ``ORCA.run`` seeds the global generators
+    with it; stages pass it to generators of their own (parameter sampler, data splits, tuner)."""
 
     # --- Path overrides, written by ORCA.run --------------------------------
     result_dir_override: str | None = None

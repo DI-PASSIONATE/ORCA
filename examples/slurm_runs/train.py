@@ -29,14 +29,13 @@ def main():
                 # pruned after its current epoch.
                 tuning_timeout=16 * 3600,
                 max_epochs=200,
-                seed=40,
             ),
             orca.OnnxExporter(),
             orca.ModelTester(),
         ]
     )
 
-    orca_instance.run(geometry=geometry, base_dir=base_dir, result_dir=result_dir)
+    orca_instance.run(geometry=geometry, base_dir=base_dir, result_dir=result_dir, seed=40)
 
 
 if __name__ == "__main__":

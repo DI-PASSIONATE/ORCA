@@ -4,6 +4,7 @@ import itertools
 import json
 import math
 import os
+import random
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -13,6 +14,7 @@ import pytest
 torch = pytest.importorskip("torch")
 skrf = pytest.importorskip("skrf")
 
+from orca import ORCA
 from orca.geometry.base_geometry import BaseGeometry
 from orca.geometry.input_parameters import InputParameterIterator
 from orca.pipeline.context import PipelineContext
@@ -206,9 +208,9 @@ def test_tuner_prunes_diverging_trials(result_dir):
 def test_tester_evaluates_the_split_the_trainer_recorded(result_dir, tmp_path):
     geometry = ToyGeometry()
     context = PipelineContext(
-        geometry=geometry, base_dir=str(tmp_path / "run"), result_dir_override=result_dir
+        geometry=geometry, base_dir=str(tmp_path / "run"), result_dir_override=result_dir, seed=3
     )
-    trainer = ModelTrainer(hyperparameters=TINY_MLP, test_frac=0.25, val_frac=0.25, seed=3)
+    trainer = ModelTrainer(hyperparameters=TINY_MLP, test_frac=0.25, val_frac=0.25)
 
     context = trainer.run(context)
 
@@ -259,9 +261,12 @@ def test_same_seed_gives_the_same_split_and_model(result_dir, tmp_path):
     losses = []
     for run in ("one", "two"):
         context = PipelineContext(
-            geometry=ToyGeometry(), base_dir=str(tmp_path / run), result_dir_override=result_dir
+            geometry=ToyGeometry(),
+            base_dir=str(tmp_path / run),
+            result_dir_override=result_dir,
+            seed=5,
         )
-        context = ModelTrainer(hyperparameters=TINY_MLP, seed=5).run(context)
+        context = ModelTrainer(hyperparameters=TINY_MLP).run(context)
         assert context.test_df is not None
         losses.append((sorted(context.test_df["name"]), context.final_val_loss))
 
@@ -340,17 +345,17 @@ def test_regularization_is_searched_only_when_asked(result_dir):
 
 def test_hyperparameters_are_saved_and_read_back(result_dir, tmp_path):
     first = PipelineContext(
-        geometry=ToyGeometry(), base_dir=str(tmp_path / "one"), result_dir_override=result_dir
+        geometry=ToyGeometry(), base_dir=str(tmp_path / "one"), result_dir_override=result_dir, seed=5
     )
-    first = ModelTrainer(hyperparameters=TINY_MLP, seed=5).run(first)
+    first = ModelTrainer(hyperparameters=TINY_MLP).run(first)
 
     with open(first.hyperparameters_json_path) as f:
         assert json.load(f) == TINY_MLP
 
     second = PipelineContext(
-        geometry=ToyGeometry(), base_dir=str(tmp_path / "two"), result_dir_override=result_dir
+        geometry=ToyGeometry(), base_dir=str(tmp_path / "two"), result_dir_override=result_dir, seed=5
     )
-    second = ModelTrainer(hyperparameters=first.hyperparameters_json_path, seed=5).run(second)
+    second = ModelTrainer(hyperparameters=first.hyperparameters_json_path).run(second)
 
     assert second.hyperparameters == TINY_MLP
     assert second.final_val_loss == first.final_val_loss
@@ -448,3 +453,17 @@ def test_tuning_trials_use_the_stage_training_settings(result_dir):
 
     with pytest.raises(ValueError, match="grad_clip_norm must be positive"):
         tuner.tune()
+
+
+def test_run_seed_seeds_every_global_generator(tmp_path):
+    def draws() -> tuple[float, float, float]:
+        return random.random(), float(np.random.rand()), float(torch.rand(1))  # noqa: S311, NPY002
+
+    contexts = []
+    runs = []
+    for run in ("one", "two"):
+        contexts.append(ORCA([]).run(geometry=ToyGeometry(), base_dir=str(tmp_path / run), seed=7))
+        runs.append(draws())
+
+    assert runs[0] == runs[1]
+    assert all(context is not None and context.seed == 7 for context in contexts)

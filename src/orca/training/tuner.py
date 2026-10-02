@@ -69,7 +69,7 @@ def suggest_hyperparameters(trial: optuna.Trial, search_space: dict[str, Any]) -
 
 
 def group_kfold_indices(
-    groups: list[str], n_splits: int, seed: int
+    groups: list[str], n_splits: int, seed: int | None
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """K-fold split that keeps every group on one side of each fold.
 
@@ -81,7 +81,7 @@ def group_kfold_indices(
     Args:
         groups (list[str]): Group label of each sample (its result file).
         n_splits (int): Number of folds.
-        seed (int): Seed for shuffling the groups.
+        seed (int | None): Seed for shuffling the groups; None shuffles unseeded.
 
     Returns:
         list[tuple[np.ndarray, np.ndarray]]: Train and validation sample indices per fold.
@@ -114,7 +114,8 @@ class HyperparameterTuner:
             on the raw inputs.
         n_fold_cv (int): Number of cross-validation folds per trial.
         n_trials (int): Number of optuna trials to run.
-        seed (int): Seed for the fold split and the default sampler.
+        seed (int | None): Seed for the fold split and the default sampler; None leaves
+            both unseeded.
         sampler (optuna.samplers.BaseSampler | None): Defaults to TPE, seeded with ``seed``.
         pruner (optuna.pruners.BasePruner | None): Defaults to a median pruner that
             compares trials after every epoch, at the same fold and epoch.
@@ -138,7 +139,7 @@ class HyperparameterTuner:
         basis_cls: type[BasisExpansion] | None = None,
         n_fold_cv: int = 5,
         n_trials: int = 200,
-        seed: int = 42,
+        seed: int | None = None,
         sampler: optuna.samplers.BaseSampler | None = None,
         pruner: optuna.pruners.BasePruner | None = None,
         timeout: float | None = None,

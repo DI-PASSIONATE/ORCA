@@ -1,10 +1,12 @@
 import logging
 
 from PySide6.QtCore import QThread, Signal
+from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -40,10 +42,11 @@ class PipelineWorker(QThread):
     finished = Signal()
     error = Signal(str)
 
-    def __init__(self, orca_instance, geometry):
+    def __init__(self, orca_instance, geometry, seed: int | None = None):
         super().__init__()
         self.orca = orca_instance
         self.geometry = geometry
+        self.seed = seed
         self._overwrite_result = None
         self._waiting_for_overwrite = False
 
@@ -52,7 +55,8 @@ class PipelineWorker(QThread):
             self.orca.run(
                 geometry=self.geometry,
                 progress_callback=self.progress_callback,
-                overwrite_callback=self.overwrite_callback
+                overwrite_callback=self.overwrite_callback,
+                seed=self.seed,
             )
             self.finished.emit()
         except Exception as e:  # noqa: BLE001 - worker thread: report every failure to the GUI
@@ -103,9 +107,19 @@ class PipelineWindow(QMainWindow):
         )
         root_layout.setSpacing(tokens.space_3)
 
-        # Global controls: run and appearance, shown regardless of the panels below
+        # Global controls: run seed, run and appearance, shown regardless of the panels below
         controls_layout = QHBoxLayout()
         controls_layout.setSpacing(tokens.space_2)
+
+        seed_label = QLabel("Seed")
+        seed_label.setProperty("role", "muted")
+        self.seed_input = QLineEdit()
+        self.seed_input.setPlaceholderText("Random")
+        self.seed_input.setValidator(QIntValidator(0, 2**31 - 1, self.seed_input))
+        self.seed_input.setFixedWidth(120)
+        self.seed_input.setAccessibleName("Seed")
+        self.seed_input.setToolTip(tooltip("seed_edit"))
+        seed_label.setBuddy(self.seed_input)
 
         self.btn_run = QPushButton("Run pipeline")
         self.btn_run.setProperty("primaryAction", True)
@@ -123,6 +137,8 @@ class PipelineWindow(QMainWindow):
         self._theme.bind_icon(self.theme_btn, "theme-light-dark", tertiary=True, size=24)
 
         controls_layout.addStretch()
+        controls_layout.addWidget(seed_label)
+        controls_layout.addWidget(self.seed_input)
         controls_layout.addWidget(self.btn_run)
         controls_layout.addWidget(self.theme_btn)
         root_layout.addLayout(controls_layout)
@@ -222,6 +238,7 @@ class PipelineWindow(QMainWindow):
 
     def _set_running(self, running: bool) -> None:
         self.btn_run.setEnabled(not running)
+        self.seed_input.setEnabled(not running)
         self.btn_run.setText("Running…" if running else "Run pipeline")
         refresh_style(self.btn_run)
 
@@ -267,7 +284,8 @@ class PipelineWindow(QMainWindow):
         self.log_output.clear()
         self.log_output.appendPlainText("Starting pipeline...")
 
-        self.worker = PipelineWorker(orca_instance, geometry)
+        seed_text = self.seed_input.text().strip()
+        self.worker = PipelineWorker(orca_instance, geometry, int(seed_text) if seed_text else None)
         self.worker.progress.connect(self.update_progress)
         self.worker.confirm_overwrite.connect(self.handle_overwrite_confirmation)
         self.worker.finished.connect(self.pipeline_finished)
