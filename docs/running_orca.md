@@ -30,7 +30,7 @@ orca
 In GUI mode:
 
 1. Select a geometry preset, or load a custom `.py` file that defines a `BaseGeometry` subclass. The name field sets the output folder (`output/<name>/`).
-2. Tick the pipeline stages to run and set their parameters. Every field has a tooltip taken from the stage's documentation; leave an optional field empty (or `None`) to use the default.
+2. Tick the pipeline stages to run and set their parameters; an unticked stage collapses to its title. Every field has a tooltip taken from the stage's documentation; leave an optional field empty (or `None`) to use the default.
 3. Set the Palace executable path in the `PalaceSimulator` stage.
 4. Optionally enter a **Seed** next to the run button: it fixes every random choice of the run (parameter draws, data splits, tuning, weight initialisation), so the same seed and inputs give the same samples and model. Leave it empty for an unseeded run.
 5. Click **Run pipeline**. Progress, the current stage, and the outcome show next to the progress bar (green when finished, red text on an error); the log panel mirrors what ORCA prints on the console. Validation problems, such as no geometry selected, appear inline instead of in a dialog. If the output directory already exists, the run continues from what is there (see [Resuming an interrupted run](#resuming-an-interrupted-run)); you are only asked to confirm when a stage has **Overwrite** enabled, because that stage deletes its earlier results.

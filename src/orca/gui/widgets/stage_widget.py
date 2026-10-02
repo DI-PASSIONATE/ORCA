@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from orca.gui.help_texts import parameter_tooltips, tooltip
 from orca.gui.theme import manager as theme_manager
+from orca.gui.theme import refresh_style
 from orca.pipeline.pipeline_stage import PipelineStage
 
 
@@ -42,12 +43,18 @@ class StageConfigWidget(QWidget):
         self.group_box.setChecked(True)
         self.group_box.setToolTip(tooltip("stage_group"))
 
-        form_layout = QFormLayout()
+        # The fields sit in a container of their own, so an unticked stage collapses to
+        # its title instead of showing a greyed-out form
+        group_layout = QVBoxLayout(self.group_box)
+        group_layout.setContentsMargins(0, 0, 0, 0)
+        self.fields = QWidget()
+        form_layout = QFormLayout(self.fields)
         form_layout.setSpacing(tokens.space_2)
         form_layout.setContentsMargins(
             tokens.space_3, tokens.space_2, tokens.space_3, tokens.space_3
         )
-        self.group_box.setLayout(form_layout)
+        group_layout.addWidget(self.fields)
+        self.group_box.toggled.connect(self._set_expanded)
 
         # Introspect __init__; the Args docstring supplies the tooltips
         sig = inspect.signature(self.stage_class.__init__)
@@ -71,6 +78,12 @@ class StageConfigWidget(QWidget):
                 self.set_widget_value(input_widget, param.default)
 
         layout.addWidget(self.group_box)
+
+    def _set_expanded(self, expanded: bool) -> None:
+        """Show the stage's fields while it is ticked; otherwise only its title remains."""
+        self.fields.setVisible(expanded)
+        self.group_box.setProperty("collapsed", not expanded)
+        refresh_style(self.group_box)
 
     def create_input_widget(self, param: inspect.Parameter):
         annotation = param.annotation
