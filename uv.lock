@@ -2324,6 +2324,8 @@ dependencies = [
     { name = "pyside6" },
     { name = "qtawesome" },
     { name = "scikit-rf" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' or (extra == 'extra-9-orca-rfic-cpu' and extra == 'extra-9-orca-rfic-cu126') or (extra == 'extra-9-orca-rfic-cpu' and extra == 'extra-9-orca-rfic-cu130') or (extra == 'extra-9-orca-rfic-cu126' and extra == 'extra-9-orca-rfic-cu130')" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'extra-9-orca-rfic-cpu' and extra == 'extra-9-orca-rfic-cu126') or (extra == 'extra-9-orca-rfic-cpu' and extra == 'extra-9-orca-rfic-cu130') or (extra == 'extra-9-orca-rfic-cu126' and extra == 'extra-9-orca-rfic-cu130')" },
     { name = "tqdm" },
 ]
 
@@ -2378,6 +2380,7 @@ requires-dist = [
     { name = "qtawesome" },
     { name = "scikit-learn", marker = "extra == 'train'" },
     { name = "scikit-rf" },
+    { name = "scipy", specifier = ">=1.15" },
     { name = "torch", marker = "extra == 'cpu'", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "orca-rfic", extra = "cpu" } },
     { name = "torch", marker = "extra == 'cu126'", index = "https://download.pytorch.org/whl/cu126", conflict = { package = "orca-rfic", extra = "cu126" } },
     { name = "torch", marker = "extra == 'cu130'", index = "https://download.pytorch.org/whl/cu130", conflict = { package = "orca-rfic", extra = "cu130" } },

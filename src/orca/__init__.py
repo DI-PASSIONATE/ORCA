@@ -1,7 +1,12 @@
 # Import stuff here so that they are available at the package level (i.e. from orca import ORCA, BaseGeometry, InputParameters)
 
 from .geometry.base_geometry import BaseGeometry
-from .geometry.input_parameters import InputParameterIterator
+from .geometry.input_parameters import (
+    ChoiceParameter,
+    GeometryParameter,
+    InputParameterIterator,
+    RangeParameter,
+)
 from .orca import ORCA
 from .pipeline.context import PipelineContext
 from .pipeline.drc_stage import DRCChecker
@@ -16,11 +21,13 @@ from .training.spec import FrequencyMode, IOSpec
 __all__ = [
     "ORCA",
     "BaseGeometry",
+    "ChoiceParameter",
     "DRCChecker",
     "FlatReImCodec",
     "FrequencyMode",
     "GDSConverter",
     "GDSGenerator",
+    "GeometryParameter",
     "IOSpec",
     "InputParameterIterator",
     "OutputCodec",
@@ -28,6 +35,7 @@ __all__ = [
     "PhysicsGuarantees",
     "PipelineContext",
     "PipelineStage",
+    "RangeParameter",
     "UpperTriangleReImCodec",
 ]
 

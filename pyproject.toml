@@ -60,6 +60,7 @@ dependencies = [
     "klayout",
     "gdspy",
     "numpy",
+    "scipy>=1.15",
     "tqdm",
     "pandas",
     "PySide6",

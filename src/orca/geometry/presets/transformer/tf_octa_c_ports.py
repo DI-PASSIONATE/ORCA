@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from orca import BaseGeometry
 from orca.geometry.cells.transformer import check_tf_octa_c_parameters, tf_octa_c
-from orca.geometry.input_parameters import InputParameterIterator
+from orca.geometry.input_parameters import InputParameterIterator, RangeParameter
 from orca.geometry.presets.paths import StackupXML
 
 if TYPE_CHECKING:
@@ -16,20 +16,15 @@ if TYPE_CHECKING:
 
 
 def _input_parameters() -> InputParameterIterator:
+    # All in µm, on a 0.1 µm grid
     return InputParameterIterator(
-        picking_strategy="random",
+        RangeParameter("bottom_winding_diameter", 20.0, 120.0, step=0.1),
+        RangeParameter("top_winding_diameter", 20.0, 120.0, step=0.1),
+        RangeParameter("center_displacement", 0.0, 15.0, step=0.1),
+        RangeParameter("bottom_linewidth", 2.0, 12.0, step=0.1),
+        RangeParameter("top_linewidth", 2.0, 12.0, step=0.1),
+        picking_strategy="sobol",
         frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
-        bottom_winding_diameter=[
-            x / 10 for x in range(200, 1201, 1)
-        ],  # 20.0 to 120.0 in 0.1 steps
-        top_winding_diameter=[
-            x / 10 for x in range(200, 1201, 1)
-        ],  # 20.0 to 120.0 in 0.1 steps
-        center_displacement=[
-            x / 10 for x in range(0, 151, 1)
-        ],  # 0.0 to 15.0 in 0.1 steps
-        bottom_linewidth=[x / 10 for x in range(20, 121, 1)],  # 2.0 to 12.0 in 0.1 steps
-        top_linewidth=[x / 10 for x in range(20, 121, 1)],  # 2.0 to 12.0 in 0.1 steps
     )
 
 
