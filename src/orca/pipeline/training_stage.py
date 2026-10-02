@@ -41,6 +41,9 @@ class ModelTrainer(PipelineStage):
         tuning_max_epochs: int = 30,
         batch_sizes: list[int] | None = None,
         regularization: bool = False,
+        lr_schedule: str = "cosine",
+        warmup_epochs: float = 1.0,
+        grad_clip_norm: float | None = 1.0,
         seed: int = 11,
     ):
         """
@@ -76,6 +79,13 @@ class ModelTrainer(PipelineStage):
             regularization: Also tune the weight decay and the model's regularization
                 (dropout for the MLP). Without it, AdamW's default weight decay and no
                 dropout are used, unless hyperparameters set them.
+            lr_schedule: "cosine" decays the learning rate smoothly to 1% of its initial
+                value over the epoch limit; "plateau" halves it whenever the validation
+                loss stalls. Used by the tuning trials and the final training.
+            warmup_epochs: Epochs over which the learning rate rises linearly to its
+                tuned value at the start of every training; 0 disables the warmup.
+            grad_clip_norm: Largest gradient norm of an optimizer step; larger gradients
+                are scaled down. None disables clipping.
             seed: Seed for the data splits, the tuner and the weight initialisation.
         """
         super().__init__(name="Model Trainer", index=4)
@@ -92,6 +102,13 @@ class ModelTrainer(PipelineStage):
         self.tuning_max_epochs = tuning_max_epochs
         self.batch_sizes = batch_sizes
         self.regularization = regularization
+        self.training_defaults = {
+            "lr_schedule": lr_schedule,
+            "warmup_epochs": warmup_epochs,
+            "grad_clip_norm": grad_clip_norm,
+        }
+        # Checked now, so a typo fails before hours of tuning rather than after
+        TrainingConfig.from_hyperparameters(self.training_defaults)
         self.seed = seed
 
     def run(
@@ -152,7 +169,9 @@ class ModelTrainer(PipelineStage):
         )
 
         trainer = Trainer(
-            config=TrainingConfig.from_hyperparameters({"epochs": self.max_epochs, **hyperparameters}),
+            config=TrainingConfig.from_hyperparameters(
+                {"epochs": self.max_epochs, **self.training_defaults, **hyperparameters}
+            ),
             progress_callback=progress_callback,
             stage_name=self.name,
         )
@@ -227,6 +246,7 @@ class ModelTrainer(PipelineStage):
             max_epochs=self.tuning_max_epochs,
             batch_sizes=self.batch_sizes,
             regularization=self.regularization,
+            training_defaults=self.training_defaults,
         )
         hyperparameters = tuner.tune()
         logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {hyperparameters}")

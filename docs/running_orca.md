@@ -68,6 +68,9 @@ orca_instance = ORCA(
             # tuning_max_epochs=30,   # Epoch limit per cross-validation fold
             # batch_sizes=None,       # Batch sizes to tune over (None: 32-512)
             # regularization=False,   # Also tune weight decay and dropout
+            # lr_schedule="cosine",   # Learning-rate decay after warmup: "cosine" or "plateau"
+            # warmup_epochs=1.0,      # Linear learning-rate warmup at the start of training
+            # grad_clip_norm=1.0,     # Gradient-norm clipping; None disables it
             # seed=11,                # Splits, tuner and weight initialisation
         ),
         orca.OnnxExporter(),

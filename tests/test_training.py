@@ -1,5 +1,6 @@
 """Training, tuning and testing on a small synthetic 2-port dataset (no Palace needed)."""
 
+import itertools
 import json
 import math
 import os
@@ -26,6 +27,7 @@ from orca.training.models.mlp import OrcaMLP
 from orca.training.normalize import MinMaxNormalizer, StandardNormalizer
 from orca.training.trainer import (
     DEFAULT_BATCH_SIZES,
+    LearningRateSchedule,
     Trainer,
     TrainingConfig,
     make_batches,
@@ -361,3 +363,88 @@ def test_missing_hyperparameter_file_fails_before_loading(result_dir, tmp_path):
 
     with pytest.raises(FileNotFoundError, match="neither a dict nor an existing JSON file"):
         ModelTrainer(hyperparameters=str(tmp_path / "missing.json")).run(context)
+
+
+def _learning_rates(config: TrainingConfig, steps_per_epoch: int, n_steps: int) -> list[float]:
+    optimizer = torch.optim.SGD([torch.nn.Parameter(torch.zeros(1))], lr=config.learning_rate)
+    schedule = LearningRateSchedule(optimizer, config, steps_per_epoch)
+    rates = []
+    for _ in range(n_steps):
+        schedule.before_step()
+        rates.append(optimizer.param_groups[0]["lr"])
+    return rates
+
+
+def test_learning_rate_warms_up_then_decays_along_a_cosine():
+    config = TrainingConfig(epochs=4, learning_rate=1.0, warmup_epochs=1, device=torch.device("cpu"))
+
+    rates = _learning_rates(config, steps_per_epoch=10, n_steps=40)
+
+    assert rates[:10] == pytest.approx([(i + 1) / 10 for i in range(10)])
+    assert rates[10] == pytest.approx(1.0)
+    assert all(later < earlier for earlier, later in itertools.pairwise(rates[10:]))
+    assert rates[-1] < 2 * config.min_lr_ratio
+
+
+def test_plateau_schedule_starts_after_the_warmup():
+    config = TrainingConfig(
+        learning_rate=1.0,
+        lr_schedule="plateau",
+        warmup_epochs=1,
+        scheduler_patience=0,
+        device=torch.device("cpu"),
+    )
+    optimizer = torch.optim.SGD([torch.nn.Parameter(torch.zeros(1))], lr=1.0)
+    schedule = LearningRateSchedule(optimizer, config, steps_per_epoch=4)
+
+    for _ in range(2):  # Half the warmup: a worse validation loss changes nothing
+        schedule.before_step()
+    schedule.after_epoch(1.0)
+    schedule.after_epoch(2.0)
+    assert optimizer.param_groups[0]["lr"] == pytest.approx(0.5)
+
+    for _ in range(2):  # Warmup done: the plateau schedule takes over
+        schedule.before_step()
+    schedule.after_epoch(1.0)
+    schedule.after_epoch(2.0)
+    schedule.before_step()
+    assert optimizer.param_groups[0]["lr"] == pytest.approx(config.scheduler_factor)
+
+
+@pytest.mark.parametrize("max_norm", [0.5, None])
+def test_gradients_are_clipped_to_the_configured_norm(result_dir, monkeypatch, max_norm):
+    dataset = _loaded(result_dir)
+    clipped_to = []
+    clip = torch.nn.utils.clip_grad_norm_
+
+    def spy(parameters, norm, *args, **kwargs):
+        clipped_to.append(norm)
+        return clip(parameters, norm, *args, **kwargs)
+
+    monkeypatch.setattr(torch.nn.utils, "clip_grad_norm_", spy)
+    config = TrainingConfig.from_hyperparameters(
+        {**TINY_MLP, "grad_clip_norm": max_norm}, device=dataset.device
+    )
+    Trainer(config, verbose=False).fit(
+        OrcaMLP.from_spec(dataset.io_spec, TINY_MLP), dataset, dataset
+    )
+
+    assert set(clipped_to) == ({max_norm} if max_norm is not None else set())
+
+
+def test_unknown_schedule_fails_when_the_stage_is_built():
+    with pytest.raises(ValueError, match="Unknown lr_schedule"):
+        ModelTrainer(lr_schedule="cosin")
+
+
+def test_tuning_trials_use_the_stage_training_settings(result_dir):
+    tuner = HyperparameterTuner(
+        OrcaMLP,
+        _loaded(result_dir),
+        n_fold_cv=2,
+        n_trials=1,
+        training_defaults={"grad_clip_norm": -1.0},
+    )
+
+    with pytest.raises(ValueError, match="grad_clip_norm must be positive"):
+        tuner.tune()

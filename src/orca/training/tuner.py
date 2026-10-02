@@ -126,6 +126,9 @@ class HyperparameterTuner:
             :data:`~orca.training.trainer.DEFAULT_BATCH_SIZES`.
         regularization (bool): Also search the weight decay and the architecture's
             regularization hyperparameters (dropout for the MLP).
+        training_defaults (dict[str, Any] | None): Trainer settings every trial uses
+            but that are not searched, such as ``lr_schedule`` or ``grad_clip_norm``
+            (see :class:`~orca.training.trainer.TrainingConfig`).
     """
 
     def __init__(
@@ -142,6 +145,7 @@ class HyperparameterTuner:
         max_epochs: int = 30,
         batch_sizes: list[int] | None = None,
         regularization: bool = False,
+        training_defaults: dict[str, Any] | None = None,
     ):
         self.model_cls = model_cls
         self.dataset = dataset
@@ -156,6 +160,7 @@ class HyperparameterTuner:
         self.max_epochs = max_epochs
         self.batch_sizes = batch_sizes
         self.regularization = regularization
+        self.training_defaults = training_defaults or {}
         self._deadline = math.inf
         self.study: optuna.Study | None = None
         # The folds depend only on the data, so every trial is scored on the same split
@@ -202,7 +207,9 @@ class HyperparameterTuner:
 
     def _objective(self, trial: optuna.Trial) -> float:
         hyperparameters = suggest_hyperparameters(trial, self.search_space)
-        config = TrainingConfig.from_hyperparameters(hyperparameters, epochs=self.max_epochs)
+        config = TrainingConfig.from_hyperparameters(
+            {**self.training_defaults, **hyperparameters}, epochs=self.max_epochs
+        )
         fold_losses = [
             self._run_fold(trial, config, hyperparameters, fold_idx, train_indices, val_indices)
             for fold_idx, (train_indices, val_indices) in enumerate(self.folds)

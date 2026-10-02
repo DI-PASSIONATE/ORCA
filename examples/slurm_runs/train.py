@@ -23,6 +23,7 @@ def main():
                 n_trials=100,
                 batch_sizes=[1024, 2048, 4096, 8192, 16384],
                 tuning_max_epochs=30,
+                basis="chebyshev",
                 # Stop tuning after 16 h, leaving the rest of the 24 h limit for the final
                 # training, the export and the test. A trial still running at that point is
                 # pruned after its current epoch.

@@ -21,7 +21,7 @@ from torch.optim import AdamW, Optimizer
 from torch.utils.data import DataLoader, Dataset, Subset
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
     from orca.training.models.base_model import OrcaModel
 
@@ -32,6 +32,9 @@ def default_device() -> torch.device:
 
 #: Batch sizes the tuner chooses from when none are given.
 DEFAULT_BATCH_SIZES = (32, 64, 128, 256, 512)
+
+#: Learning-rate schedules the trainer supports, see :attr:`TrainingConfig.lr_schedule`.
+LR_SCHEDULES = ("cosine", "plateau")
 
 
 @dataclass
@@ -47,10 +50,23 @@ class TrainingConfig:
         patience: Epochs without validation improvement before stopping early.
         optimizer_cls: Optimizer factory, called as
             ``optimizer_cls(params, lr=..., weight_decay=...)``.
-        scheduler_factor: Factor by which ReduceLROnPlateau scales the learning rate.
-        scheduler_patience: Plateau length, in epochs, before the scheduler reacts.
-            Keep it below ``patience``, or early stopping ends the run before the
-            learning rate is ever lowered.
+        lr_schedule: How the learning rate changes after the warmup. ``"cosine"`` decays
+            it every step along a half cosine, reaching ``min_lr_ratio`` times the
+            initial rate after ``epochs`` epochs. ``"plateau"`` lowers it by
+            ``scheduler_factor`` whenever the validation loss stalls.
+        warmup_epochs: Epochs over which the learning rate rises linearly from almost
+            zero to ``learning_rate``, step by step. Fractions are allowed; 0 disables it.
+            Without a warmup, AdamW's first steps on freshly initialised weights can
+            throw a large network far off, and a run then spends epochs recovering.
+        min_lr_ratio: Final learning rate of the cosine schedule, relative to
+            ``learning_rate``.
+        grad_clip_norm: Largest total gradient norm of an optimizer step; larger
+            gradients are scaled down to it. Keeps a single bad batch from undoing the
+            training so far. ``None`` disables clipping.
+        scheduler_factor: Factor by which the plateau schedule scales the learning rate.
+        scheduler_patience: Plateau length, in epochs, before the plateau schedule
+            reacts. Keep it below ``patience``, or early stopping ends the run before
+            the learning rate is ever lowered.
         device: Device to train on.
     """
 
@@ -60,9 +76,27 @@ class TrainingConfig:
     weight_decay: float = 1e-2
     patience: int = 10
     optimizer_cls: Callable[..., Optimizer] = AdamW
+    lr_schedule: str = "cosine"
+    warmup_epochs: float = 1.0
+    min_lr_ratio: float = 1e-2
+    grad_clip_norm: float | None = 1.0
     scheduler_factor: float = 0.5
     scheduler_patience: int = 4
     device: torch.device = field(default_factory=default_device)
+
+    def __post_init__(self) -> None:
+        if self.lr_schedule not in LR_SCHEDULES:
+            raise ValueError(
+                f"Unknown lr_schedule {self.lr_schedule!r}; choose one of {list(LR_SCHEDULES)}."
+            )
+        if self.warmup_epochs < 0:
+            raise ValueError(f"warmup_epochs must not be negative, got {self.warmup_epochs}.")
+        if not 0 <= self.min_lr_ratio <= 1:
+            raise ValueError(f"min_lr_ratio must lie in [0, 1], got {self.min_lr_ratio}.")
+        if self.grad_clip_norm is not None and self.grad_clip_norm <= 0:
+            raise ValueError(
+                f"grad_clip_norm must be positive or None, got {self.grad_clip_norm}."
+            )
 
     @classmethod
     def from_hyperparameters(cls, hyperparameters: dict[str, Any], **overrides) -> TrainingConfig:
@@ -72,7 +106,17 @@ class TrainingConfig:
             hyperparameters (dict[str, Any]): Combined trainer and model hyperparameters.
             **overrides: Explicit values that take precedence over the dictionary.
         """
-        known = {"epochs", "batch_size", "learning_rate", "weight_decay", "patience"}
+        known = {
+            "epochs",
+            "batch_size",
+            "learning_rate",
+            "weight_decay",
+            "patience",
+            "lr_schedule",
+            "warmup_epochs",
+            "min_lr_ratio",
+            "grad_clip_norm",
+        }
         values = {k: v for k, v in hyperparameters.items() if k in known}
         values.update(overrides)
         return cls(**values)
@@ -174,12 +218,61 @@ class _TensorBatches:
 
 def make_batches(
     dataset: Dataset, batch_size: int, shuffle: bool
-) -> Iterable[tuple[torch.Tensor, torch.Tensor]]:
+) -> _TensorBatches | DataLoader:
     """Mini-batches of ``dataset``, sliced from stacked tensors where it has them."""
     stacked = _stacked_tensors(dataset)
     if stacked is not None:
         return _TensorBatches(*stacked, batch_size=batch_size, shuffle=shuffle)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+
+class LearningRateSchedule:
+    """The learning rate of a :class:`Trainer` run: a linear warmup, then the configured schedule.
+
+    The warmup and the cosine decay set the rate before every optimizer step, so they
+    are smooth even when one epoch is thousands of steps; the plateau schedule reacts
+    to the validation loss once per epoch, starting after the warmup.
+
+    Args:
+        optimizer (Optimizer): Optimizer whose learning rate is controlled.
+        config (TrainingConfig): Supplies the schedule and its parameters.
+        steps_per_epoch (int): Optimizer steps in one epoch.
+    """
+
+    def __init__(self, optimizer: Optimizer, config: TrainingConfig, steps_per_epoch: int):
+        self.optimizer = optimizer
+        self.config = config
+        self.warmup_steps = round(config.warmup_epochs * steps_per_epoch)
+        self.total_steps = config.epochs * steps_per_epoch
+        self.steps_taken = 0
+        self.plateau = (
+            torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, factor=config.scheduler_factor, patience=config.scheduler_patience
+            )
+            if config.lr_schedule == "plateau"
+            else None
+        )
+
+    def before_step(self) -> None:
+        """Set the learning rate of the optimizer step about to be taken."""
+        base = self.config.learning_rate
+        step = self.steps_taken
+        self.steps_taken += 1
+        if step < self.warmup_steps:
+            self._set((step + 1) / self.warmup_steps * base)
+        elif self.plateau is None:
+            progress = (step - self.warmup_steps) / max(1, self.total_steps - self.warmup_steps)
+            minimum = self.config.min_lr_ratio * base
+            self._set(minimum + (base - minimum) * 0.5 * (1 + math.cos(math.pi * progress)))
+
+    def after_epoch(self, val_loss: float) -> None:
+        """Let the plateau schedule react to the epoch's validation loss."""
+        if self.plateau is not None and self.steps_taken >= self.warmup_steps:
+            self.plateau.step(val_loss)
+
+    def _set(self, learning_rate: float) -> None:
+        for group in self.optimizer.param_groups:
+            group["lr"] = learning_rate
 
 
 class Trainer:
@@ -245,9 +338,7 @@ class Trainer:
         optimizer = config.optimizer_cls(
             model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
         )
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, factor=config.scheduler_factor, patience=config.scheduler_patience
-        )
+        schedule = LearningRateSchedule(optimizer, config, steps_per_epoch=len(train_loader))
 
         best_loss = float("inf")
         best_state = None
@@ -258,9 +349,9 @@ class Trainer:
         self._report(0, "Starting training")
 
         for epoch in range(config.epochs):
-            train_loss = self._train_epoch(model, criterion, optimizer, train_loader)
+            train_loss = self._train_epoch(model, criterion, optimizer, schedule, train_loader)
             val_loss = self._validate(model, criterion, val_loader)
-            scheduler.step(val_loss)
+            schedule.after_epoch(val_loss)
 
             if val_loss < best_loss:
                 best_loss = val_loss
@@ -313,7 +404,7 @@ class Trainer:
         loader = make_batches(dataset, batch_size or self.config.batch_size, shuffle=False)
         return self._run_eval(model, criterion, loader, desc="Testing")
 
-    def _train_epoch(self, model, criterion, optimizer, loader) -> float:
+    def _train_epoch(self, model, criterion, optimizer, schedule, loader) -> float:
         model.train()
         # Summed on the device and read once per epoch: reading it every step would make
         # the CPU wait for the GPU after each batch
@@ -329,6 +420,9 @@ class Trainer:
             optimizer.zero_grad()
             loss = criterion(model(x), y)
             loss.backward()
+            if self.config.grad_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_clip_norm)
+            schedule.before_step()
             optimizer.step()
 
             # Weighted by batch size, so a short last batch counts for what it holds
