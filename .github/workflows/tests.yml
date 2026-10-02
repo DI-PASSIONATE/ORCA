@@ -42,7 +42,13 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
+      # Simulation-only HPC nodes install ORCA without the train extra (no torch) and often
+      # without libGLU, which the gmsh wheel needs and this runner lacks too.
+      - name: Check the simulation-only install imports
+        run: |
+          uv sync --locked --python ${{ matrix.python-version }}
+          uv run --python ${{ matrix.python-version }} python -c "import orca; orca.GDSGenerator, orca.GDSConverter, orca.PalaceSimulator"
       - name: Install dependencies
-        run: uv sync --python ${{ matrix.python-version }}
+        run: uv sync --locked --python ${{ matrix.python-version }} --extra train --extra cpu
       - name: Run tests
-        run: uv run --python ${{ matrix.python-version }} pytest --cov --cov-report=term-missing
+        run: uv run --python ${{ matrix.python-version }} --extra train --extra cpu pytest --cov --cov-report=term-missing
