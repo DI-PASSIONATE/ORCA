@@ -133,6 +133,14 @@ class SimulationLauncher(ABC):
         fast with a clear message instead of a hanging or failing simulation. No-op by default.
         """
 
+    def launch_failed(self, output: str) -> bool:  # noqa: ARG002 - only schedulers can refuse
+        """
+        Whether a failed command never started the simulation because the launcher refused it,
+        judged from the tail of its output. Such a refusal says nothing about the model, so the
+        launch is retried instead of failing the simulation. Never by default.
+        """
+        return False
+
     def describe(self) -> str:
         """One-line description of the slots for the log."""
         return f"{len(self.slots)} in parallel ({', '.join(self.slots)})"

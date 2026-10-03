@@ -223,6 +223,12 @@ class SlurmLauncher(SimulationLauncher):
             )
         logger.info(f"srun launch check passed in {len(self._slots)} slot(s).")
 
+    def launch_failed(self, output: str) -> bool:
+        # srun's refusal to create the step, e.g. "Unable to create step for job 4285287: Memory
+        # required by task is not available". It comes and goes with the controller's step
+        # accounting, so the same command succeeds a little later.
+        return "Unable to create step" in output
+
     def describe(self) -> str:
         nodes = sorted({node for node, _ in self._slots.values()})
         per_node = "one per node" if self.bind == "node" else f"one per {self.bind} domain"

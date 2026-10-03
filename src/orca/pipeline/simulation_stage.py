@@ -277,6 +277,7 @@ class PalaceSimulator(PipelineStage):
             cmd=launcher.command(slot, self.palace_executable, num_processes, palace_config_name),
             touchstone_type=self.touchstone_type,
             save_log=self.save_log,
+            launch_failed=launcher.launch_failed,
         )
 
         return index, palace_config_name, success

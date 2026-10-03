@@ -62,7 +62,7 @@ orca_instance = ORCA(
             # test_frac=0.15,         # Fraction of geometries held out for testing
             # val_frac=0.15,          # Fraction of the rest used for validation
             # n_train_samples=None,   # Optional cap on training geometries
-            # n_fold_cv=5,            # Cross-validation folds (by geometry) during tuning
+            # n_fold_cv=5,            # Cross-validation folds (by geometry) during tuning; 1 = val split
             # n_trials=200,           # Optuna trials
             # tuning_timeout=None,    # Stop tuning after this many seconds
             # max_epochs=100,         # Epoch limit of the final training

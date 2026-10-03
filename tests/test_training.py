@@ -17,6 +17,7 @@ skrf = pytest.importorskip("skrf")
 from orca import ORCA
 from orca.geometry.base_geometry import BaseGeometry
 from orca.geometry.input_parameters import InputParameterIterator, RangeParameter
+from orca.pipeline import training_stage
 from orca.pipeline.context import PipelineContext
 from orca.pipeline.test_model_stage import ModelTester
 from orca.pipeline.training_stage import ModelTrainer, order_parameter_columns
@@ -190,6 +191,55 @@ class _BrokenMLP(OrcaMLP):
 class _DivergingMLP(OrcaMLP):
     def forward(self, x):
         return super().forward(x) * math.nan
+
+
+def test_tuner_scores_a_single_fold_on_the_holdout(result_dir):
+    dataset = _loaded(result_dir)
+    holdout = {"toy_0.s2p", "toy_5.s2p", "toy_11.s2p"}
+    tuner = HyperparameterTuner(
+        OrcaMLP, dataset, n_fold_cv=1, n_trials=1, max_epochs=2, holdout_groups=holdout
+    )
+
+    ((train, val),) = tuner.folds
+    assert {dataset.sample_groups[i] for i in val} == holdout
+    assert not {dataset.sample_groups[i] for i in train} & holdout
+    assert len(train) + len(val) == len(dataset)
+
+    tuner.tune()
+
+    assert tuner.study is not None
+    (trial,) = tuner.study.trials
+    assert sorted(trial.intermediate_values) == [0, 1]
+
+
+def test_holdout_tuning_needs_holdout_groups(result_dir):
+    dataset = _loaded(result_dir)
+    with pytest.raises(ValueError, match="pass its geometries as holdout_groups"):
+        HyperparameterTuner(OrcaMLP, dataset, n_fold_cv=1)
+    with pytest.raises(ValueError, match="at least 1"):
+        HyperparameterTuner(OrcaMLP, dataset, n_fold_cv=0)
+
+
+def test_stage_tunes_on_its_validation_split_with_one_fold(result_dir, tmp_path, monkeypatch):
+    holdouts = []
+
+    class RecordingTuner(HyperparameterTuner):
+        def __init__(self, *args, **kwargs):
+            holdouts.append(kwargs["holdout_groups"])
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(training_stage, "HyperparameterTuner", RecordingTuner)
+    context = PipelineContext(
+        geometry=ToyGeometry(), base_dir=str(tmp_path / "run"), result_dir_override=result_dir, seed=2
+    )
+    trainer = ModelTrainer(
+        n_fold_cv=1, n_trials=1, tuning_max_epochs=1, max_epochs=1, batch_sizes=[16]
+    )
+
+    context = trainer.run(context)
+
+    split = pd.read_csv(context.split_csv_path)
+    assert holdouts == [set(split.loc[split["split"] == "val", "name"])]
 
 
 def test_tuner_reraises_bugs_instead_of_pruning(result_dir):

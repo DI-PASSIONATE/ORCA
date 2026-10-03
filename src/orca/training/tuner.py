@@ -2,7 +2,8 @@
 
 :class:`HyperparameterTuner` runs an optuna study over the union of three search
 spaces - the trainer's own, the architecture's, and the basis expansion's - scoring
-each trial with k-fold cross-validation over geometries.
+each trial with k-fold cross-validation over geometries, or on one fixed hold-out set of
+geometries for a dataset large enough that a single split scores trials reliably.
 """
 
 from __future__ import annotations
@@ -21,6 +22,8 @@ from orca.logger import logger
 from orca.training.trainer import EpochResult, Trainer, TrainingConfig
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from orca.training.basis_expansion import BasisExpansion
     from orca.training.datasets.base_dataset import BaseDataset
     from orca.training.models.base_model import OrcaModel
@@ -112,7 +115,9 @@ class HyperparameterTuner:
         basis_cls (type[BasisExpansion] | None): Basis expansion to build each model
             with. Its search space is tuned alongside the model's. ``None`` trains
             on the raw inputs.
-        n_fold_cv (int): Number of cross-validation folds per trial.
+        n_fold_cv (int): Number of cross-validation folds per trial. 1 scores every trial
+            on ``holdout_groups`` alone instead: one training per trial, on more data than
+            any fold of a 2-fold split.
         n_trials (int): Number of optuna trials to run.
         seed (int | None): Seed for the fold split and the default sampler; None leaves
             both unseeded.
@@ -130,6 +135,8 @@ class HyperparameterTuner:
         training_defaults (dict[str, Any] | None): Trainer settings every trial uses
             but that are not searched, such as ``lr_schedule`` or ``grad_clip_norm``
             (see :class:`~orca.training.trainer.TrainingConfig`).
+        holdout_groups (Collection[str] | None): Groups (result files) to validate on when
+            ``n_fold_cv`` is 1, e.g. the validation split of the final training.
     """
 
     def __init__(
@@ -147,6 +154,7 @@ class HyperparameterTuner:
         batch_sizes: list[int] | None = None,
         regularization: bool = False,
         training_defaults: dict[str, Any] | None = None,
+        holdout_groups: Collection[str] | None = None,
     ):
         self.model_cls = model_cls
         self.dataset = dataset
@@ -165,7 +173,18 @@ class HyperparameterTuner:
         self._deadline = math.inf
         self.study: optuna.Study | None = None
         # The folds depend only on the data, so every trial is scored on the same split
-        self.folds = group_kfold_indices(dataset.sample_groups, n_fold_cv, seed)
+        if n_fold_cv == 1:
+            if holdout_groups is None:
+                raise ValueError(
+                    "n_fold_cv=1 scores trials on a fixed hold-out set; pass its geometries "
+                    "as holdout_groups."
+                )
+            in_holdout = np.isin(np.asarray(dataset.sample_groups), list(holdout_groups))
+            self.folds = [(np.flatnonzero(~in_holdout), np.flatnonzero(in_holdout))]
+        elif n_fold_cv > 1:
+            self.folds = group_kfold_indices(dataset.sample_groups, n_fold_cv, seed)
+        else:
+            raise ValueError(f"n_fold_cv must be at least 1, got {n_fold_cv}.")
 
     @property
     def search_space(self) -> dict[str, Any]:
@@ -225,7 +244,7 @@ class HyperparameterTuner:
         A trial whose training diverges or runs out of memory is pruned: those are
         properties of the hyperparameters. Any other exception is a bug and propagates.
         """
-        fold_label = f"Fold {fold_idx + 1}/{self.n_fold_cv}"
+        fold_label = "Hold-out" if self.n_fold_cv == 1 else f"Fold {fold_idx + 1}/{self.n_fold_cv}"
         best_loss = math.inf
 
         def report(epoch: EpochResult) -> None:

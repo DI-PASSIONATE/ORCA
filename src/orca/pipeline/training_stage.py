@@ -67,13 +67,16 @@ class ModelTrainer(PipelineStage):
                 stopping and checkpoint selection) in the final training (default: 0.15).
             n_train_samples: Optional limit on the number of geometries used for training
                 and tuning.
-            n_fold_cv: Number of folds for cross-validation during hyperparameter tuning (default: 5).
+            n_fold_cv: Number of folds for cross-validation during hyperparameter tuning
+                (default: 5). 1 tunes on the train/validation split of the final training
+                instead, one training per trial; enough with a few thousand geometries.
             n_trials: Number of optuna trials during hyperparameter tuning (default: 200).
             tuning_timeout: Stop starting new tuning trials after this many seconds.
                 None runs all n_trials.
             max_epochs: Epoch limit of the final training; early stopping usually ends
                 it sooner. An "epochs" entry in hyperparameters takes precedence.
-            tuning_max_epochs: Epoch limit of each cross-validation fold during tuning.
+            tuning_max_epochs: Epoch limit of each cross-validation fold (or of the one
+                hold-out training) during tuning.
             batch_sizes: Batch sizes the tuning searches, e.g. [1024, 2048, 4096]. None
                 searches 32 to 512. Ignored when hyperparameters are given.
             regularization: Also tune the weight decay and the model's regularization
@@ -159,7 +162,7 @@ class ModelTrainer(PipelineStage):
             hyperparameters = given_hyperparameters
             logger.info(f"Using provided hyperparameters for training: {hyperparameters}")
         else:
-            hyperparameters = self._tune(geometry, result_dir, train_val_df, seed)
+            hyperparameters = self._tune(geometry, result_dir, train_val_df, val_df, seed)
 
         # The training split owns the normalization statistics; validation reuses them,
         # so no validation data leaks into the normalization of the training data.
@@ -233,10 +236,12 @@ class ModelTrainer(PipelineStage):
         geometry: "BaseGeometry",
         result_dir: str,
         train_val_df: pd.DataFrame,
+        val_df: pd.DataFrame,
         seed: int | None,
     ) -> dict[str, Any]:
         """
-        Search the hyperparameters with cross-validation over the train/validation rows.
+        Search the hyperparameters with cross-validation over the train/validation rows, or
+        on the validation rows of the final training if `n_fold_cv` is 1.
 
         A method of its own so the tuning data, which can fill most of a GPU, is
         released before the final training loads its splits.
@@ -258,6 +263,8 @@ class ModelTrainer(PipelineStage):
             batch_sizes=self.batch_sizes,
             regularization=self.regularization,
             training_defaults=self.training_defaults,
+            # The dataset labels each sample with its result file, the name column of the table
+            holdout_groups=set(val_df["name"]) if self.n_fold_cv == 1 else None,
         )
         hyperparameters = tuner.tune()
         logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {hyperparameters}")
