@@ -22,171 +22,72 @@ Gianluca Simone\*, David Lurz\*, Martin Grund\*, Fabian Schneider°, Michael Loo
 > [!NOTE]
 > ORCA is still under active development. The current codebase is functional and can be used for experimentation, but we keep adding features, improving documentation, and refining the API. If you encounter any issues or have questions, please [open an issue](https://github.com/DI-PASSIONATE/ORCA/issues) or reach out.
 
-**ORCA** is an open-source EDA tool for AI-assisted RFIC design: a pipeline for building neural network surrogate models of RF integrated circuit components from parametric layouts (the bundled examples are on-chip inductors and transformers). Instead of running a slow electromagnetic (EM) simulation for every candidate geometry during circuit design, ORCA runs the simulations once, learns the mapping from geometry parameters to S-parameters, and hands the result to circuit optimizers like [COBRA](https://github.com/DI-PASSIONATE/COBRA) as a portable ONNX model.
-It combines:
+**ORCA** builds neural-network surrogate models of RF integrated circuit components, such as on-chip inductors and transformers. Instead of running a slow electromagnetic (EM) simulation for every candidate geometry during circuit design, ORCA runs the simulations once and learns how the geometry parameters map to S-parameters. It hands the result to circuit optimizers like [COBRA](https://github.com/DI-PASSIONATE/COBRA) as a portable ONNX model.
 
-- parametric GDS layout generation (via [gdsfactory](https://github.com/gdsfactory/gdsfactory)),
-- full-wave electromagnetic simulation (via [Palace](https://github.com/awslabs/palace)),
-- and machine learning model training and export (PyTorch → ONNX).
+Given a parametric geometry class, ORCA:
 
-Given a geometry class with configurable parameters, ORCA automatically:
+1. generates thousands of GDS layout variants with [gdsfactory](https://github.com/gdsfactory/gdsfactory) and drops those that fail the design rules, checked with [KLayout](https://www.klayout.de/),
+2. meshes them with [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2) and [gmsh](https://gmsh.info/), then runs full-wave EM simulations with [Palace](https://github.com/awslabs/palace),
+3. trains a [PyTorch](https://pytorch.org/) model to predict S-parameters from the geometry and frequency, with hyperparameters tuned by [Optuna](https://optuna.org/),
+4. exports it to [ONNX](https://onnx.ai/) and tests it against held-out simulations.
 
-1. generates thousands of differently parameterized GDS layout variants,
-2. converts them to simulation meshes and runs full-wave EM simulations,
-3. trains a neural network to predict S-parameters from geometry inputs,
-4. exports the trained model to a portable ONNX file,
-5. and tests the model against held-out simulation data.
-
-The resulting ONNX model can then be loaded by [COBRA](https://github.com/DI-PASSIONATE/COBRA) for fast circuit-level optimization — no EM simulation required at optimization time. Created models can easily be shared via Hugging Face Hub for others to use in their own design flows and reduce redundant EM simulations across the community.
+The whole flow is built on open-source tools, from layout to trained model.
 
 ![ORCA pipeline overview: parametric GDS generation, Palace EM simulation, PyTorch training and ONNX export of an RFIC component surrogate model](https://github.com/DI-PASSIONATE/ORCA/raw/main/docs/orca.png)
 
 ## Key Features
 
-- **Parametric layout generation** — sample thousands of GDS variants of an RFIC component from a small Python geometry class.
-- **Open-source full-wave EM simulation** — finite-element S-parameter extraction with [Palace](https://github.com/awslabs/palace); runs on a laptop, a multi-socket workstation or a Slurm HPC cluster.
-- **Machine learning surrogate models** — PyTorch models with automatic normalization and Optuna hyperparameter tuning.
-- **Portable ONNX export** — the trained model runs with `onnxruntime` only; no PyTorch needed at inference time.
-- **Built-in validation** — held-out test set evaluation of the exported model.
-- **GUI and scripting workflows** — click through the pipeline or drive it from Python; remote execution on OpenStack.
-- **Model sharing** — publish surrogates on the Hugging Face Hub (`orca-surrogate` tag) for the whole community to reuse.
-- **Technology-agnostic** — bring your own layer stackup XML; no PDK dependency.
+- **Parametric layout generation**: sample thousands of buildable GDS variants from a small Python geometry class.
+- **Open-source full-wave EM simulation**: S-parameters from [Palace](https://github.com/awslabs/palace) on a laptop, a workstation or a Slurm HPC cluster.
+- **Surrogate models**: PyTorch models with automatic normalization and Optuna hyperparameter tuning.
+- **Portable ONNX export**: the model runs with `onnxruntime` alone; COBRA loads it directly.
+- **Built-in validation**: error statistics of the exported model on held-out geometries.
+- **GUI and scripting**: click through the pipeline or drive it from Python.
+- **Model sharing**: publish surrogates on the Hugging Face Hub for others to reuse.
+- **Technology-agnostic**: bring your own layer stackup XML.
 
-## How ORCA Fits with COBRA
-
-ORCA is the model-building side of the flow.
-
-- **ORCA** takes a geometry class, runs EM simulations, and produces a trained surrogate model (e.g. `tf_octa_c_ports.onnx`).
-- [COBRA](https://github.com/DI-PASSIONATE/COBRA) loads that ONNX model and uses it to predict S-parameters during optimization loops, without re-running EM simulations.
-- When COBRA's optional EM fine-tuning is enabled, it calls back into ORCA's geometry classes to regenerate GDS layouts for verification.
-
-In short: **ORCA builds the model, COBRA uses it** to optimize circuits quickly and can verify/refine with real EM simulations.
+ORCA builds the model; [COBRA](https://github.com/DI-PASSIONATE/COBRA) uses it to optimize circuits without running EM simulations, and can call back into ORCA's geometry classes to verify a design with EM.
 
 ## Installation
 
-### Requirements
+ORCA needs Python 3.11–3.13 and, for the EM simulations, [Palace](https://awslabs.github.io/palace/stable/install/index.html). It is published on PyPI as [`orca-rfic`](https://pypi.org/project/orca-rfic/); the import package and the GUI command are called `orca`.
 
-- Python 3.11–3.13
-- [Palace](https://awslabs.github.io/palace/stable/) (for running EM simulations)
-
-Install Palace separately by following [the Palace installation instructions](https://awslabs.github.io/palace/stable/install/index.html). Recommendations: apptainer for local installation / testing, spack for HPC clusters.
-
-### For users: install from PyPI
-
-ORCA is published as [`orca-rfic`](https://pypi.org/project/orca-rfic/). The import package and the GUI command are both still called `orca`.
+**From PyPI**, with pip or uv in a virtual environment:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install "orca-rfic[train]"   # full pipeline
-pip install orca-rfic            # simulation only, no PyTorch
+pip install "orca-rfic[train]"      # full pipeline
+pip install orca-rfic               # layout generation and simulation only, no PyTorch
+
+uv pip install "orca-rfic[train]"   # the same with uv
 ```
 
-Upgrade later with `pip install -U "orca-rfic[train]"`.
-
-### For developers: install from source
-
-#### Option A: Using `uv` (recommended)
-
-1. Clone the repository:
+**From source** with [uv](https://docs.astral.sh/uv/) (recommended for development):
 
 ```bash
 git clone https://github.com/DI-PASSIONATE/ORCA
 cd ORCA
+uv sync --extra train --extra cpu     # CPU-only PyTorch
+uv sync --extra train --extra cu130   # or CUDA 13.0 (driver >= 580); cu126 for older drivers
+uv sync                               # or simulation only, no PyTorch
 ```
 
-2. Install `uv` (if needed):
+Run ORCA with `uv run orca` or after `source .venv/bin/activate`. The [installation guide](https://di-passionate.github.io/ORCA/setup/) also covers installing from source with pip; [HPC_INSTALL.md](https://github.com/DI-PASSIONATE/ORCA/blob/main/examples/slurm_runs/HPC_INSTALL.md) shows an install on a Slurm cluster.
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+## Quickstart
 
-3. Install a supported Python version:
-
-```bash
-uv python install 3.13
-```
-
-4. Create and activate a virtual environment:
-
-```bash
-uv venv --python 3.13
-source .venv/bin/activate
-```
-
-5. Install ORCA in editable mode. The `train` extra adds PyTorch and the other model-training dependencies; leave it out for a simulation-only install (GDS generation, conversion and Palace simulation), e.g. on an HPC cluster:
-
-```bash
-uv pip install -e ".[train]"   # full pipeline, PyTorch from PyPI
-uv pip install -e .            # simulation only, no PyTorch
-```
-
-   To pick a specific PyTorch build, use `uv sync` with one of the build selectors defined in `pyproject.toml` instead:
-
-```bash
-uv sync --extra train --extra cpu     # CPU-only PyTorch wheels
-uv sync --extra train --extra cu130   # CUDA 13.0 wheels (driver >= 580)
-uv sync --extra train --extra cu126   # CUDA 12.6 wheels for older drivers
-```
-
-#### Option B: Using standard `venv` + `pip`
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/DI-PASSIONATE/ORCA
-cd ORCA
-```
-
-2. Create and activate a virtual environment:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-3. Install ORCA. The `train` extra adds PyTorch and the other model-training dependencies; leave it out for a simulation-only install:
-
-```bash
-pip install -U pip
-pip install -e ".[train]"   # full pipeline
-pip install -e .            # simulation only, no PyTorch
-```
-
-   pip installs the PyPI build of PyTorch (CUDA-bundled on Linux). For a CPU-only or a specific CUDA build, install torch first with the command from [PyTorch.org](https://pytorch.org/get-started/locally/), then run the `pip install -e ".[train]"` line above; pip keeps the version already installed.
-
-## Running ORCA
-
-ORCA supports three usage modes.
-
-### 1. GUI mode
-
-After installation, start the GUI with:
+Start the GUI with:
 
 ```bash
 orca
 ```
 
-The GUI lets you:
-
-- select a geometry preset or load a custom geometry class,
-- configure pipeline stages and parameters (each field has a tooltip),
-- monitor simulation and training progress and the log in real time,
-- test the trained model,
-- switch between a light and a dark theme, or follow the system setting.
-
-### 2. Python script mode
-
-For direct integration into scripts or automated workflows:
+Or run the pipeline from a Python script:
 
 ```python
 import orca
-from orca import ORCA
 from orca.geometry.presets import TransformerOcta
 
-geometry = TransformerOcta()
-
-orca_instance = ORCA(
+pipeline = orca.ORCA(
     [
         orca.GDSGenerator(num_samples=1000),
         orca.DRCChecker(),
@@ -198,180 +99,37 @@ orca_instance = ORCA(
     ]
 )
 
-if __name__ == "__main__":
-    # seed fixes every random choice of the run; leave it out for an unseeded run
-    orca_instance.run(geometry=geometry, num_processes=16, seed=40)
+if __name__ == "__main__":  # required: worker processes re-import this script
+    pipeline.run(geometry=TransformerOcta(), num_processes=16, seed=40)
 ```
 
-Wrap the call in `if __name__ == "__main__":` (or a `main()` function) as shown: ORCA runs GDS generation and conversion in worker processes, and on platforms whose default start method is `spawn` (macOS, Windows) every worker re-imports your script. Without the guard each worker would start its own pipeline.
-
-This generates 1000 parameterized layout variants, runs EM simulations, trains a model, exports it to ONNX, and evaluates its accuracy.
-You can omit any stage (e.g. skip `GDSGenerator` and `GDSConverter` if simulation data already exists).
+Each stage can be left out, e.g. to retrain on existing simulation results. An interrupted run picks up where it stopped when started again. See the [quickstart](https://di-passionate.github.io/ORCA/running_orca/) for every stage option.
 
 ## Pipeline Stages
 
-| Stage | Class | Description |
-|-------|-------|-------------|
-| GDS generation | `GDSGenerator` | Creates parameterized GDS layout files from a geometry class |
-| Design-rule check | `DRCChecker` | Snaps layouts to the manufacturing grid and drops those violating the IHP SG13G2 rules |
-| GDS conversion | `GDSConverter` | Converts GDS files to Palace-compatible simulation meshes using gds2palace |
-| EM simulation | `PalaceSimulator` | Runs full-wave EM simulations in Palace and stores results as Touchstone files |
-| Model training | `ModelTrainer` | Trains a PyTorch MLP to map geometry parameters + frequency to S-parameters |
-| ONNX export | `OnnxExporter` | Exports the trained model to a portable ONNX file for use in COBRA |
-| Model testing | `ModelTester` | Evaluates prediction accuracy on held-out simulation data |
+| Stage | Class | What it does |
+|-------|-------|--------------|
+| GDS generation | `GDSGenerator` | Samples the geometry's parameters and draws a GDS layout for each |
+| Design-rule check | `DRCChecker` | Snaps layouts to the manufacturing grid and drops those that violate the IHP SG13G2 rules |
+| GDS conversion | `GDSConverter` | Meshes the layouts for Palace with [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2) |
+| EM simulation | `PalaceSimulator` | Runs Palace and stores the S-parameters as Touchstone files |
+| Model training | `ModelTrainer` | Trains (and by default tunes) a PyTorch model from geometry and frequency to S-parameters |
+| ONNX export | `OnnxExporter` | Exports the model to a self-contained ONNX file for COBRA |
+| Model testing | `ModelTester` | Reports the model's error on held-out geometries |
 
-Each stage reads from and writes to a shared context dictionary, so stages can be run independently or composed freely.
+The [pipeline documentation](https://di-passionate.github.io/ORCA/pipeline/) describes each stage in detail.
 
-## How ORCA Works Internally
+## Custom Geometries
 
-ORCA runs a linear pipeline. Each stage receives a context dictionary and adds its outputs for the next stage.
+To build a surrogate of your own component, write a `BaseGeometry` subclass that defines its parameters and draws its layout, and pair it with a layer stackup XML and a Palace simulation config (`.simcfg`). The [custom classes guide](https://di-passionate.github.io/ORCA/custom_class/) walks through it; the bundled presets (`InductorOcta`, `TransformerOcta`) are reference implementations.
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                        ORCA pipeline                         │
-│                                                              │
-│  ┌──────────────┐   GDS files    ┌──────────────────┐        │
-│  │ GDSGenerator │───────────────▶│    DRCChecker    │        │
-│  │              │                │ (grid + SG13G2)  │        │
-│  └──────────────┘                └────────┬─────────┘        │
-│                                           │ clean layouts    │
-│                                           ▼                  │
-│                                  ┌──────────────────┐        │
-│                                  │   GDSConverter   │        │
-│                                  │ (gds2palace mesh)│        │
-│                                  └────────┬─────────┘        │
-│                                           │ mesh files       │
-│                                           ▼                  │
-│                                  ┌──────────────────┐        │
-│                                  │ PalaceSimulator  │        │
-│                                  │ (full-wave EM)   │        │
-│                                  └────────┬─────────┘        │
-│                                           │ Touchstone .sNp  │
-│                                           ▼                  │
-│                                  ┌──────────────────┐        │
-│                                  │  ModelTrainer    │        │
-│                                  │ (PyTorch MLP)    │        │
-│                                  └────────┬─────────┘        │
-│                                           │ trained model    │
-│                                           ▼                  │
-│                                  ┌──────────────────┐        │
-│                                  │  OnnxExporter    │────────▶ .onnx (→ COBRA)
-│                                  └────────┬─────────┘        │
-│                                           │                  │
-│                                           ▼                  │
-│                                  ┌──────────────────┐        │
-│                                  │   ModelTester    │        │
-│                                  └──────────────────┘        │
-└──────────────────────────────────────────────────────────────┘
-```
+## Sharing Models
 
-### Stage 1 — GDS generation (`GDSGenerator`)
+Trained models can be published on the Hugging Face Hub with the `orca-surrogate` tag, where COBRA and other users can find them. See [Sharing Models on Hugging Face](https://di-passionate.github.io/ORCA/sharing_models/).
 
-The geometry class's `input_parameter_iterator` samples parameter combinations — by default with a scrambled Sobol' sequence, a space-filling design that covers the parameter box more evenly than random draws, with a small share of the draws moved onto the faces, edges and corners of the box — drawing each parameter from its declared distribution: uniform, or log-uniform to put more samples at the small end of its range (see `docs/custom_class.md`). For each combination, `create_gds_file()` is called to produce a GDS layout file. The number of samples is set by `num_samples`; the run seed (`ORCA.run(seed=...)`) makes the draws reproducible. Every draw is first passed to the geometry's `is_feasible()`; combinations it rejects (a winding that does not fit its diameter, a feed gap wider than the octagon's side) are counted and replaced by further draws (with all but the grid strategies), so `num_samples` buildable layouts come out; parameters the iterator lists in `kept_on_rejection` keep their value while the others are redrawn around it, so a rejection cannot skew their distribution. A geometry that still raises `ValueError` in `create_gds_file()` costs a sample, and the stage warns when it delivered fewer layouts than requested. At the end the stage plots the coverage to `geometries/<name>_coverage.png` (`plot_coverage=False` turns it off): a pair plot of every two parameters with the layouts over the rejected draws, which tells gaps in the sampling apart from regions that cannot be built, and a histogram of each parameter.
+## Documentation
 
-### Stage 2 — Design-rule check (`DRCChecker`)
-
-Every generated layout is snapped to the manufacturing grid (5 nm for SG13G2) and checked against the IHP SG13G2 back-end design rules with KLayout: off-grid vertices, edge angles, acute corners, minimum metal width and spacing, and via size, spacing and enclosure. The rule names follow the PDK's KLayout deck (`TM2.a`, `TV2.d`, ...). Off-grid vertices are repaired in place; layouts with remaining violations are reported in `<name>_drc_report.csv` and left out of the later stages, so parameter combinations that draw unbuildable geometry never reach the simulator or the model.
-
-### Stage 3 — GDS conversion (`GDSConverter`)
-
-Each GDS file that passed DRC is converted to a Palace-ready simulation setup using [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2). The geometry's `stackup_xml` defines the physical layer stackup and material properties; the `simconfig_filename` defines the simulation parameters (port positions, frequency sweep, mesh settings).
-
-### Stage 4 — EM simulation (`PalaceSimulator`)
-
-Palace runs a full-wave finite-element EM simulation for each layout variant and writes the S-parameters to a Touchstone file (`.sNp`). Simulations are distributed across available CPU cores. The `palace_executable` argument can point to a local binary or a container invocation (e.g. `apptainer exec palace.sif palace`).
-
-Several simulations can run at once, each already parallelized internally with MPI (`num_processes` ranks per simulation). `bind` chooses what one simulation gets — a whole `"node"`, one `"socket"` or one `"numa"` domain — and `num_parallel_sims=0` uses all such slots:
-
-- `PalaceSimulator(num_parallel_sims=0, bind="numa")` runs one simulation per NUMA domain of the current machine, each pinned with `numactl` (e.g. 2 or 4 at once on a multi-socket workstation).
-- `PalaceSimulator(launcher="slurm", num_parallel_sims=0, bind="numa")` does the same on every node of a Slurm allocation (`sbatch --nodes=N`), each simulation launched as an `srun` job step pinned to its node and cores. See [examples/slurm_runs](https://github.com/DI-PASSIONATE/ORCA/tree/main/examples/slurm_runs) for a job script.
-
-Palace is memory-bandwidth bound, so several smaller simulations confined to their own NUMA domain usually give a higher throughput than one simulation spread over a whole node — as long as one simulation fits into a domain's memory (use `bind="socket"` otherwise). The layout is derived from the machine or allocation at runtime, so `num_parallel_sims` and `num_processes` are capped to what is actually available. Pass `save_log=True` to keep each simulation's full Palace output in `palace.log` in its simulation folder (off by default, Palace prints a lot); failures are reported either way.
-
-### Stage 5 — Model training (`ModelTrainer`)
-
-A PyTorch MLP is trained on the simulation data. Inputs are geometry parameters and frequency; outputs are the real and imaginary parts of each S-parameter entry. Normalization is defined in the geometry's dataset and applied automatically. An optional basis expansion of the inputs — for example a Chebyshev expansion of frequency — is chosen on the stage itself with `ModelTrainer(basis="chebyshev")`; it lives inside the model, so it is tuned with it and exported into the ONNX graph. Hyperparameters such as learning rate, batch size, and network depth can be passed to `ModelTrainer`.
-
-The result table is split by geometry, never by frequency point: `test_frac` of the geometries are held out for `ModelTester`, and `val_frac` of the rest select the best checkpoint during training. The split is recorded in `models/<name>_split.csv`. Without `hyperparameters`, Optuna tunes them with `n_fold_cv`-fold cross-validation over the geometries, so every fold is scored on layouts the model has not seen (`n_trials` trials, or until `tuning_timeout` seconds have passed). The number of epochs is not tuned: each fold runs up to `tuning_max_epochs` with early stopping, the final model up to `max_epochs`, and a trial that falls behind the others at the same fold and epoch is pruned after any epoch. The batch sizes searched are `batch_sizes` (32 to 512 if not given); for a per-point dataset with millions of samples, larger ones such as `[1024, 2048, 4096]` train much faster. A trial that diverges or runs out of memory is pruned; any other error stops the stage. Every training, in tuning and in the final run, starts with a linear learning-rate warmup over `warmup_epochs` (default 1) and then follows `lr_schedule`: `"cosine"` (default) decays the rate smoothly to 1% of its tuned value over the epoch limit, `"plateau"` halves it whenever the validation loss stalls. Gradients are clipped to a total norm of `grad_clip_norm` (default 1.0; `None` disables it), so one bad batch cannot undo the progress so far. The MLP's width is searched on a log scale from 64 to 2048 and its depth from 2 to 8 layers, so small networks are tried as often as large ones. With `regularization=True` the weight decay and the model's own regularization (dropout for the MLP) are tuned too; otherwise AdamW's default weight decay and no dropout are used. The hyperparameters a run trained with are saved to `models/<name>_hyperparameters.json`, and `hyperparameters` accepts the path of such a file as well as a dict, so a later run can retrain with them without tuning again. Each Touchstone file is parsed once per run, for tuning and the final training together. The run seed (`ORCA.run(seed=...)`) fixes the splits, the tuner and the weight initialisation, so two runs with the same seed and data train the same model.
-
-### Stage 6 — ONNX export (`OnnxExporter`)
-
-The trained PyTorch model is exported to ONNX format with a fixed frequency sweep as part of the model signature. The resulting `.onnx` file is self-contained and can be run with `onnxruntime` — no PyTorch installation required at inference time. The metadata carries `input_parameter_ranges`, `input_constraints` (which part of those ranges is buildable — the part the model was trained on) and `physics_guarantees` for the consumer.
-
-### Stage 7 — Model testing (`ModelTester`)
-
-The trained model (or, if training did not run in this pipeline, the exported ONNX model) is evaluated against the held-out geometries listed in `models/<name>_split.csv`. Without that file, for example for a model tested against a fresh results folder, every row of the result table is used and a warning says so. Besides the mean absolute S-parameter error and the median relative error of each electrical parameter, the stage reports the spread: the median, 95th percentile and worst geometry, the error in each of `n_frequency_bands` frequency bands, and the 95th percentile of each electrical parameter's error. The errors of every test geometry, next to its parameters, are written to `models/<name>_test_errors.csv`, for example to plot the error against each parameter and find under-sampled regions. The error is also resolved over frequency: `models/<name>_errors_vs_frequency.png` shows, for the S-parameters and each electrical parameter, the median and the 25th–75th and 5th–95th percentiles over the test geometries at every frequency point, so you can see which frequency ranges the model gets right; the values are in `models/<name>_errors_vs_frequency.csv`. The coupling factor k is reported as an absolute error, since a relative one explodes for weakly coupled layouts. Prediction errors are logged to help assess whether the surrogate is accurate enough for use in COBRA.
-
-## Custom Geometry
-
-To train a surrogate for your own component, create three files:
-
-1. **A Python class** extending `BaseGeometry` — defines geometry parameters, GDS generation, and model architecture.
-2. **A stackup XML file** — defines the physical layer stack (materials, thicknesses, conductor layers).
-3. **A simulation config file** (`.simcfg`) — defines port positions, frequency sweep, and mesh settings for Palace.
-
-See the [Custom Classes documentation](https://di-passionate.github.io/ORCA/custom_class/) for a full walkthrough and examples.
-
-The built-in `TransformerOcta` preset (`src/orca/geometry/presets/transformer/tf_octa_c_ports.py`) is a good reference implementation.
-
-## Sharing Models on Hugging Face
-
-After training a surrogate model with ORCA, you can publish it to [Hugging Face](https://huggingface.co) so that COBRA — or anyone else — can discover and use it directly.
-
-### Requirements
-
-- A Hugging Face account
-- The `huggingface_hub` Python package: `pip install huggingface_hub`
-
-### File structure
-
-Each model repository must contain exactly two files named after the model:
-
-| File | Description |
-|------|-------------|
-| `<model_name>.onnx` | The exported ONNX surrogate model produced by `OnnxExporter` |
-| `<model_name>.py` | The Python geometry class (subclass of `BaseGeometry`) used to generate and train the model |
-
-The geometry class file is required so that COBRA can reconstruct the parameter space, call back into the geometry for EM verification, and correctly pre-process inference inputs.
-
-### Step-by-step upload
-
-1. **Create a new model repository** at [https://huggingface.co/new](https://huggingface.co/new).  
-   Set visibility to **Public** and note the repository ID (e.g. `your-username/tf-octa-c-ports`). Click on "Create model".
-
-2. Create a **Model Card** (essentially just a structured README) for your repository. Click on "Add Model Card". From there, add the tag "orca-surrogate" to make it discoverable by COBRA and other users looking for ORCA. The model card should then include this section:
-
-   ```markdown
-   ---
-   tags:
-   - orca-surrogate
-   ```
-
-3. **Upload the files** using the `huggingface_hub` library:
-   ```python
-   from huggingface_hub import HfApi
-
-   api = HfApi()
-   repo_id = "your-username/tf-octa-c-ports"  # replace with your repo
-
-   api.upload_file(path_or_fileobj="tf_octa_c_ports.onnx", path_in_repo="tf_octa_c_ports.onnx", repo_id=repo_id)
-   api.upload_file(path_or_fileobj="tf_octa_c_ports.py",   path_in_repo="tf_octa_c_ports.py",   repo_id=repo_id)
-   ```
-   Or via the Hugging Face web interface: go to your repository → **Files** → **Add file → Upload files**.
-
-4. **Verify** the repository contains both `<model_name>.onnx` and `<model_name>.py` and is tagged `orca-surrogate`.
-
-### Using a shared model in COBRA
-
-Once uploaded, COBRA can query all public `orca-surrogate` models or load a specific one directly by its Hugging Face repository ID. Refer to the [COBRA documentation](https://github.com/DI-PASSIONATE/COBRA) for details on how to point COBRA at a Hugging Face model repository.
-
-
-## Troubleshooting
-
-- If the `orca` command is not found, ensure your virtual environment is activated and reinstall with `pip install -e .`.
-- If Palace simulations fail, verify Palace is installed and available in your `PATH`, or adjust the `palace_executable` argument.
-- If GDS conversion fails, verify that [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2) is installed and that the stackup XML matches your technology.
-- If `orca.ModelTrainer`, `orca.OnnxExporter` or `orca.ModelTester` raise `ModuleNotFoundError` (torch, sklearn, optuna, onnx...), the training dependencies are not installed: `pip install -e ".[train]"`.
+The full documentation is at [di-passionate.github.io/ORCA](https://di-passionate.github.io/ORCA/), including [troubleshooting](https://di-passionate.github.io/ORCA/troubleshooting/).
 
 ## Cite This Work
 
