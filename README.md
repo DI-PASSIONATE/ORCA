@@ -125,7 +125,7 @@ To build a surrogate of your own component, write a `BaseGeometry` subclass that
 
 ## Sharing Models
 
-Trained models can be published on the Hugging Face Hub with the `orca-surrogate` tag, where COBRA and other users can find them. See [Sharing Models on Hugging Face](https://di-passionate.github.io/ORCA/sharing_models/).
+Trained models can be published on the Hugging Face Hub with the `orca-rfic` tag, where COBRA and other users can find them. See [Sharing Models on Hugging Face](https://di-passionate.github.io/ORCA/sharing_models/).
 
 ## Documentation
 

@@ -2,7 +2,7 @@
 title: Sharing Models on Hugging Face
 description: >-
   Publish an ORCA-trained ONNX surrogate model of an RF passive to the Hugging
-  Face Hub with the orca-surrogate tag so COBRA and other designers can reuse it
+  Face Hub with the orca-rfic tag so COBRA and other designers can reuse it
   without re-running EM simulations.
 ---
 
@@ -17,26 +17,26 @@ After training a surrogate model with ORCA, you can publish it to [Hugging Face]
 
 ## File structure
 
-Each model repository must contain exactly two files named after the model:
+Each model repository must contain exactly two files, named exactly like the repository (COBRA looks for `<repository name>.onnx`, so `your-username/tf_octa_c_ports` holds `tf_octa_c_ports.onnx`):
 
 | File | Description |
 |------|-------------|
-| `<model_name>.onnx` | The exported ONNX surrogate model produced by `OnnxExporter` |
-| `<model_name>.py` | The Python geometry class (subclass of `BaseGeometry`) used to generate and train the model |
+| `<repository name>.onnx` | The exported ONNX surrogate model produced by `OnnxExporter` |
+| `<repository name>.py` | The Python geometry class (subclass of `BaseGeometry`) used to generate and train the model |
 
 The geometry class file is required so that COBRA can reconstruct the parameter space, call back into the geometry for EM verification, and correctly pre-process inference inputs.
 
 ## Step-by-step upload
 
 1. **Create a new model repository** at [https://huggingface.co/new](https://huggingface.co/new).
-   Set visibility to **Public** and note the repository ID (e.g. `your-username/tf-octa-c-ports`). Click on "Create model".
+   Set visibility to **Public** and note the repository ID (e.g. `your-username/tf_octa_c_ports`, named like the model files). Click on "Create model".
 
-2. Create a **Model Card** (essentially just a structured README) for your repository. Click on "Add Model Card". From there, add the tag `orca-surrogate` to make it discoverable by COBRA and other users looking for ORCA models. The model card should then include this section:
+2. Create a **Model Card** (essentially just a structured README) for your repository. Click on "Add Model Card". From there, add the tag `orca-rfic` to make it discoverable by COBRA and other users looking for ORCA models. The model card should then include this section:
 
     ```markdown
     ---
     tags:
-    - orca-surrogate
+    - orca-rfic
     ```
 
 3. **Upload the files** using the `huggingface_hub` library:
@@ -45,7 +45,7 @@ The geometry class file is required so that COBRA can reconstruct the parameter 
     from huggingface_hub import HfApi
 
     api = HfApi()
-    repo_id = "your-username/tf-octa-c-ports"  # replace with your repo
+    repo_id = "your-username/tf_octa_c_ports"  # replace with your repo
 
     api.upload_file(path_or_fileobj="tf_octa_c_ports.onnx", path_in_repo="tf_octa_c_ports.onnx", repo_id=repo_id)
     api.upload_file(path_or_fileobj="tf_octa_c_ports.py",   path_in_repo="tf_octa_c_ports.py",   repo_id=repo_id)
@@ -53,8 +53,8 @@ The geometry class file is required so that COBRA can reconstruct the parameter 
 
     Or via the Hugging Face web interface: go to your repository → **Files** → **Add file → Upload files**.
 
-4. **Verify** the repository contains both `<model_name>.onnx` and `<model_name>.py` and is tagged `orca-surrogate`.
+4. **Verify** the repository contains both `<repository name>.onnx` and `<repository name>.py` and is tagged `orca-rfic`.
 
 ## Using a shared model in COBRA
 
-Once uploaded, COBRA can query all public `orca-surrogate` models or load a specific one directly by its Hugging Face repository ID. Refer to the [COBRA documentation](https://github.com/DI-PASSIONATE/COBRA) for details on how to point COBRA at a Hugging Face model repository.
+Once uploaded, COBRA can query all public `orca-rfic` models or load a specific one directly by its Hugging Face repository ID. Refer to the [COBRA documentation](https://github.com/DI-PASSIONATE/COBRA) for details on how to point COBRA at a Hugging Face model repository.

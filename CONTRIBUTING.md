@@ -149,9 +149,9 @@ This produces:
 
 1. Sign in to [huggingface.co](https://huggingface.co) (create a free account if needed).
 2. Go to [huggingface.co/new](https://huggingface.co/new) and create a new model repository.
-   - Choose a descriptive name (e.g. `ihp-sg13g2-transformer-octa`).
+   - Name it exactly like your model files without the extension (e.g. `tf_octa_c_ports` for `tf_octa_c_ports.onnx`); COBRA looks for `<repository name>.onnx`.
    - Set visibility to **Public**.
-   - Note your repository ID, which takes the form `your-username/your-model-name`.
+   - Note your repository ID, which takes the form `your-username/your_model_name`.
 3. Click **Create model**.
 
 ### Step 3 — Add a Model Card
@@ -159,12 +159,12 @@ This produces:
 A Model Card is a structured README that describes your model. It makes your model discoverable by COBRA and other ORCA users.
 
 1. In your new repository, click **Add Model Card**.
-2. At the top of the file add the `orca-surrogate` tag so the model appears in community searches:
+2. At the top of the file add the `orca-rfic` tag so the model appears in community searches:
 
    ```markdown
    ---
    tags:
-   - orca-surrogate
+   - orca-rfic
    ---
    ```
 
@@ -190,7 +190,7 @@ Then upload both required files:
 from huggingface_hub import HfApi
 
 api = HfApi()
-repo_id = "your-username/your-model-name"  # replace with your repository ID
+repo_id = "your-username/your_model_name"  # replace with your repository ID
 
 api.upload_file(
     path_or_fileobj="your_model_name.onnx",
@@ -218,11 +218,11 @@ Both files must be present and share the same base name for COBRA to load the mo
 Before announcing your model, confirm:
 
 - [ ] The repository is **public**.
-- [ ] The Model Card contains the `orca-surrogate` tag.
+- [ ] The Model Card contains the `orca-rfic` tag.
 - [ ] Both `<model_name>.onnx` and `<model_name>.py` are present in the repository.
 - [ ] The geometry class file is self-contained (all custom imports are available or documented).
 
-Once published, your model will automatically be discoverable by COBRA and anyone searching for `orca-surrogate` models on Hugging Face. Consider also opening a [discussion or issue](https://github.com/DI-PASSIONATE/ORCA/issues) in the ORCA repository to announce your contribution so the community knows about it!
+Once published, your model will automatically be discoverable by COBRA and anyone searching for `orca-rfic` models on Hugging Face. Consider also opening a [discussion or issue](https://github.com/DI-PASSIONATE/ORCA/issues) in the ORCA repository to announce your contribution so the community knows about it!
 
 ---
 
