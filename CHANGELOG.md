@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-03
+
+### Added
+
+- Interrupted runs resume: `GDSGenerator`, `GDSConverter` and `PalaceSimulator` record each
+  finished sample right away and, started again, only produce the missing ones. Each takes
+  `overwrite=True` to start from scratch instead.
+- `ORCA.run(seed=...)`, also a **Seed** field in the GUI: one seed for the whole run (parameter
+  draws, data splits, tuning, weight initialisation).
+- `RangeParameter` and `ChoiceParameter` declare a geometry's parameters, with a step, an
+  integer type and uniform or log sampling per parameter.
+- Sobol' (now the default) and Latin hypercube sampling, with a share of the samples on the
+  boundary of the parameter box (`boundary_fraction`). `kept_on_rejection` keeps chosen
+  parameters evenly distributed when infeasible draws are rejected.
+- `GDSGenerator` plots the sampled parameters to `geometries/<name>_coverage.png`.
+- `ModelTrainer` options: `val_frac`, `tuning_timeout`, `max_epochs`, `tuning_max_epochs`,
+  `batch_sizes`, `regularization`, `lr_schedule`, `warmup_epochs`, `grad_clip_norm` and
+  `allow_tf32`. `n_fold_cv=1` tunes on the validation split, without cross-validation.
+- The tuned hyperparameters are saved to `models/<name>_hyperparameters.json`, and
+  `ModelTrainer(hyperparameters=...)` accepts the path of such a file.
+- `ModelTester` reports error percentiles, the worst geometry and the error per frequency band
+  (`n_frequency_bands`), and writes per-geometry errors and an error-vs-frequency plot to
+  `models/`.
+- `StackupXML` enum for the stackups shipped with the presets.
+- Slurm example scripts for training on a GPU cluster (`examples/slurm_runs/train.py`).
+
+### Changed
+
+- **Breaking:** `InputParameterIterator` takes `RangeParameter` / `ChoiceParameter` objects
+  instead of value lists as keyword arguments.
+- **Breaking:** `GDSGenerator(seed=...)` is removed; use `ORCA.run(seed=...)`.
+- **Breaking:** Presets moved into one folder per device; import them as
+  `from orca.geometry.presets import InductorOcta, TransformerOcta`.
+- **Breaking:** The presets use gds2palace's current IHP stackups (`SG13G2_FEM_200um`,
+  `SG13G2_FEM_200um_passi3D`); `SG13G2_nosub.xml` and `SG13G2_200um.xml` are removed.
+- **Breaking:** `TransformerOcta` takes `relative_displacement` (a share of the mean winding
+  diameter) instead of `center_displacement`, and its layout was reworked.
+- `InductorOcta` has a centre-tap port, a ring ground on Metal5, allows a single turn, and uses
+  more accurate simulation settings. Models trained on the old presets need retraining.
+- Data is split by geometry, never by frequency point, and the split is saved to
+  `models/<name>_split.csv` for `ModelTester`.
+- Faster training: each Touchstone file is parsed once per run, and batches are drawn from
+  tensors kept on the GPU.
+- A simulation that Slurm refuses to launch is retried after a delay before it counts as failed.
+- The GUI collapses unticked stages and only asks for confirmation when a stage will overwrite
+  earlier results.
+- Requires gds2palace 0.8.0 or newer.
+- The Hugging Face tag for shared models is now `orca-rfic` (was `orca-surrogate`).
+
 ## [1.5.0] - 2026-09-24
 
 ### Added

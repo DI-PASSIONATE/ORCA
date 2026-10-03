@@ -2307,7 +2307,7 @@ wheels = [
 
 [[package]]
 name = "orca-rfic"
-version = "1.5.0"
+version = "2.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "colorlog" },
@@ -2364,7 +2364,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "colorlog" },
-    { name = "gds2palace", specifier = ">=0.7.0" },
+    { name = "gds2palace", specifier = ">=0.8.0" },
     { name = "gdsfactory" },
     { name = "gdspy" },
     { name = "klayout" },

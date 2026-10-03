@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "orca-rfic"
-version = "1.5.0"
+version = "2.0.0"
 description = "ORCA - Open RF Integrated Circuit Automation: an open-source EDA tool for AI-assisted RFIC design that builds neural network surrogate models of RFIC components (gdsfactory GDS generation, Palace EM simulation, PyTorch training, ONNX export for COBRA)"
 readme = "README.md"
 keywords = [
@@ -56,7 +56,7 @@ requires-python = ">=3.11,<3.14"
 dependencies = [
     "scikit-rf",
     "gdsfactory",
-    "gds2palace>=0.7.0",
+    "gds2palace>=0.8.0",
     "klayout",
     "gdspy",
     "numpy",
