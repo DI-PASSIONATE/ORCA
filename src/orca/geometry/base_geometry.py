@@ -3,9 +3,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
+    import numpy as np
+    import skrf as rf
+
     from orca.geometry.input_parameters import InputParameterIterator
     from orca.training.datasets.base_dataset import BaseDataset
 
@@ -21,6 +24,10 @@ class BaseGeometry(ABC):
     stackup_xml: str
     simconfig_filename: str
     input_parameter_iterator: InputParameterIterator
+
+    #: Electrical parameters whose test error is an absolute difference rather than a
+    #: relative one, e.g. a coupling factor that is close to zero for weak coupling.
+    absolute_error_parameters: ClassVar[frozenset[str]] = frozenset()
 
     @property
     def input_iterator(self) -> InputParameterIterator:
@@ -83,6 +90,30 @@ class BaseGeometry(ABC):
         constraints, which a consumer reads as "the whole parameter box".
         """
         return []
+
+    def electrical_parameters(self, ntwk: rf.Network) -> dict[str, np.ndarray]:  # noqa: ARG002 - hook with a default
+        """
+        The figures of merit of a simulated or predicted network, which ``ModelTester``
+        reports the model's error for, next to the S-parameter error.
+
+        Which port is which is a property of the layout, so the geometry decides how to
+        read its network: for example the differential L, R and Q of an inductor whose
+        center tap is AC-grounded. :mod:`orca.utils.postprocessing` has the usual ones
+        (:func:`~orca.utils.postprocessing.inductor_parameters`,
+        :func:`~orca.utils.postprocessing.transformer_parameters`). Import it inside
+        this method, as the presets do.
+
+        The default returns nothing, so only the S-parameter error is reported.
+
+        Args:
+            ntwk (rf.Network): The network, simulated or predicted.
+
+        Returns:
+            dict: Parameter name to a curve over ``ntwk.f`` or to a scalar (a 0-d
+            array), such as a self-resonance frequency. Errors are relative unless the
+            name is in :attr:`absolute_error_parameters`.
+        """
+        return {}
 
     @staticmethod
     @abstractmethod

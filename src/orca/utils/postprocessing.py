@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 import matplotlib.pyplot as plt
 import numpy as np
 import skrf as rf
@@ -5,70 +7,113 @@ import skrf as rf
 from orca.logger import logger
 
 
-def to_mixed_mode(ntwk):
-    """Mixed-mode view of a single-ended network, as a copy.
-
-    Returned separately rather than alongside the electrical parameters: callers
-    iterate over that dict computing per-curve errors, and a Network is not a
-    curve.
+def differential_impedance(
+    ntwk: rf.Network, pairs: Sequence[tuple[int, int]], shorted: Sequence[int] = ()
+) -> np.ndarray:
     """
-    mm_ntwk = ntwk.copy()
-    if ntwk.nports >= 4:
-        mm_ntwk.se2gmm(p=ntwk.nports // 2)
-    return mm_ntwk
+    The Z-matrix of port pairs driven differentially, each by a floating source.
+
+    The ports in ``shorted`` are AC-grounded (a center tap in differential operation);
+    every other port that is in no pair is left open. Entry ``(a, b)`` is the voltage
+    across pair ``a`` per current driven through pair ``b`` (into its first port, out of
+    its second): ``Z[pa, pb] - Z[pa, nb] - Z[na, pb] + Z[na, nb]`` of the network with
+    the shorted ports removed.
+
+    Args:
+        ntwk (rf.Network): The single-ended network.
+        pairs: ``(positive, negative)`` port indices, zero-based, per differential port.
+        shorted: Zero-based indices of the ports to short.
+
+    Returns:
+        np.ndarray: Complex, shape ``(n_freq, len(pairs), len(pairs))``.
+    """
+    kept = [port for port in range(ntwk.nports) if port not in shorted]
+    position = {port: i for i, port in enumerate(kept)}
+    # Shorting a port is dropping its row and column of Y; the inverse is then the
+    # Z-matrix with that port grounded and the rest open. A pseudo-inverse, since a
+    # winding without a path to ground has a singular Y (its common mode is undefined),
+    # while its differential impedance, orthogonal to that mode, is not.
+    z = np.linalg.pinv(ntwk.y[:, kept][:, :, kept])
+    z_diff = np.empty((len(ntwk.f), len(pairs), len(pairs)), dtype=complex)
+    for a, (pa, na) in enumerate(pairs):
+        for b, (pb, nb) in enumerate(pairs):
+            i, j, k, m = position[pa], position[na], position[pb], position[nb]
+            z_diff[:, a, b] = z[:, i, k] - z[:, i, m] - z[:, j, k] + z[:, j, m]
+    return z_diff
 
 
-def calculate_electrical_parameters(ntwk):
-    # 1. Single-ended to Mixed-Mode Conversion
-    mm_ntwk = to_mixed_mode(ntwk)
+def inductor_parameters(
+    ntwk: rf.Network, ends: tuple[int, int] = (0, 1), shorted: Sequence[int] = ()
+) -> dict[str, np.ndarray]:
+    """
+    Differential inductance, resistance, quality factor and self-resonance of an inductor.
 
-    freq_ghz = ntwk.f / 1e9
-    omega = 2 * np.pi * ntwk.f
+    Args:
+        ntwk (rf.Network): The single-ended network.
+        ends: Zero-based ports at the two ends of the winding.
+        shorted: Ports to AC-ground, such as a center tap.
 
-    # Extract Differential Z-parameters for lumped metrics
-    # Index 0 = Primary Diff (d1), Index 1 = Secondary Diff (d2)
-    z_d11 = mm_ntwk.z[:, 0, 0]
-    z_d22 = mm_ntwk.z[:, 1, 1]
-    z_d12 = mm_ntwk.z[:, 0, 1]
-
-    # Calculate Parameters
+    Returns:
+        dict: ``L`` [nH], ``R`` [Ohm] and ``Q`` over frequency, and ``srf_f`` [GHz],
+        where the reactance first turns capacitive (NaN if it stays inductive).
+    """
+    z = differential_impedance(ntwk, [ends], shorted)[:, 0, 0]
     with np.errstate(divide="ignore", invalid="ignore"):
-        Lp = np.imag(z_d11) / omega * 1e9
-        Ls = np.imag(z_d22) / omega * 1e9
-        Rp, Rs = np.real(z_d11), np.real(z_d22)
-        Qp = np.imag(z_d11) / np.real(z_d11)
-        Qs = np.imag(z_d22) / np.real(z_d22)
-        k = np.abs(np.imag(z_d12)) / np.sqrt(np.abs(np.imag(z_d11) * np.imag(z_d22)))
-
-    im = np.imag(z_d11)
-    cross = np.where(im[:-1] * im[1:] < 0)[0]   # actual sign changes only
-
-    f_min = 20.0
-    cross = cross[freq_ghz[cross] >= f_min]
-
-    if cross.size == 0:
-        # NaN rather than None, so callers can do arithmetic on the result and
-        # filter it out with the usual isfinite() masks.
-        srf_f = float("nan")
-    else:
-        # Note: this index must not be called k - that name holds the coupling
-        # coefficient computed above.
-        cross_idx = cross[0]
-        f0, f1 = freq_ghz[cross_idx], freq_ghz[cross_idx + 1]
-        y0, y1 = im[cross_idx], im[cross_idx + 1]
-        srf_f = float(f0 - y0 * (f1 - f0) / (y1 - y0))
-
+        L = np.imag(z) / (2 * np.pi * ntwk.f) * 1e9
+        Q = np.imag(z) / np.real(z)
     return {
-        "Lp": np.array(Lp),
-        "Ls": np.array(Ls),
-        "Rp": np.array(Rp),
-        "Rs": np.array(Rs),
-        "Qp": np.array(Qp),
-        "Qs": np.array(Qs),
-        "k": np.array(k),
-        "z_d11": np.array(z_d11),
-        "srf_f": np.array(srf_f),
+        "L": L,
+        "R": np.real(z),
+        "Q": Q,
+        "srf_f": np.array(_first_inductive_to_capacitive(ntwk.f / 1e9, np.imag(z))),
     }
+
+
+def transformer_parameters(
+    ntwk: rf.Network,
+    primary: tuple[int, int],
+    secondary: tuple[int, int],
+    shorted: Sequence[int] = (),
+) -> dict[str, np.ndarray]:
+    """
+    Inductance, resistance and quality factor of both windings of a transformer, their
+    coupling factor, and the primary's self-resonance, all differential.
+
+    Args:
+        ntwk (rf.Network): The single-ended network.
+        primary: Zero-based ports at the two ends of the primary winding.
+        secondary: The same for the secondary winding.
+        shorted: Ports to AC-ground, such as the center taps.
+
+    Returns:
+        dict: ``Lp``, ``Ls`` [nH], ``Rp``, ``Rs`` [Ohm], ``Qp``, ``Qs`` and ``k`` over
+        frequency, and ``srf_f`` [GHz] of the primary (NaN if it stays inductive).
+    """
+    z = differential_impedance(ntwk, [primary, secondary], shorted)
+    omega = 2 * np.pi * ntwk.f
+    zp, zs, zm = z[:, 0, 0], z[:, 1, 1], z[:, 0, 1]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return {
+            "Lp": np.imag(zp) / omega * 1e9,
+            "Ls": np.imag(zs) / omega * 1e9,
+            "Rp": np.real(zp),
+            "Rs": np.real(zs),
+            "Qp": np.imag(zp) / np.real(zp),
+            "Qs": np.imag(zs) / np.real(zs),
+            "k": np.abs(np.imag(zm)) / np.sqrt(np.abs(np.imag(zp) * np.imag(zs))),
+            "srf_f": np.array(_first_inductive_to_capacitive(ntwk.f / 1e9, np.imag(zp))),
+        }
+
+
+def _first_inductive_to_capacitive(freq_ghz: np.ndarray, reactance: np.ndarray) -> float:
+    """Where a reactance first falls from positive to negative, interpolated linearly; NaN if never."""
+    cross = np.flatnonzero((reactance[:-1] > 0) & (reactance[1:] <= 0))
+    if cross.size == 0:
+        return float("nan")
+    i = cross[0]
+    f0, f1 = freq_ghz[i], freq_ghz[i + 1]
+    x0, x1 = reactance[i], reactance[i + 1]
+    return float(f0 - x0 * (f1 - f0) / (x1 - x0))
 
 
 def pointwise_relative_error(pred, gt) -> np.ndarray:
@@ -120,83 +165,55 @@ def median_relative_error(pred, gt) -> float:
     return float(np.median(errors)) if errors.size else float("nan")
 
 
-def plot_rfic_transformer_metrics(ntwk):
-    metrics = calculate_electrical_parameters(ntwk)
-    mm_ntwk = to_mixed_mode(ntwk)
-    freq = ntwk.f / 1e9
-    Lp, Ls = metrics["Lp"], metrics["Ls"]
-    Rp, Rs = metrics["Rp"], metrics["Rs"]
-    Qp, Qs = metrics["Qp"], metrics["Qs"]
-    k = metrics["k"]
-    z_d11 = metrics["z_d11"]
+def plot_electrical_parameters(
+    frequencies: np.ndarray,
+    reference: dict[str, np.ndarray],
+    predicted: dict[str, np.ndarray] | None = None,
+    title: str = "",
+) -> None:
+    """
+    Show each electrical parameter over frequency, the reference against a prediction.
 
-    # Setup Plot
-    fig, axes = plt.subplots(3, 2, figsize=(14, 10))
-    fig.suptitle(
-        f"RFIC Transformer Report: {ntwk.name}", fontsize=16, fontweight="bold"
+    One panel per curve; scalar parameters (such as ``srf_f``) are listed in the title
+    and marked as a vertical line. Shown with pyplot, for interactive use.
+
+    Args:
+        frequencies (np.ndarray): Frequencies in Hz.
+        reference (dict): Parameters of the reference, as a geometry's
+            ``electrical_parameters`` returns them.
+        predicted (dict | None): The same for the prediction.
+        title (str): Figure title.
+    """
+    curves = [name for name, value in reference.items() if np.ndim(value) == 1]
+    scalars = [name for name, value in reference.items() if np.ndim(value) == 0]
+    if not curves:
+        return
+    freq = frequencies / 1e9
+    n_columns = min(3, len(curves))
+    n_rows = -(-len(curves) // n_columns)
+    fig, axes = plt.subplots(
+        n_rows, n_columns, figsize=(4.8 * n_columns, 3.4 * n_rows), squeeze=False
     )
+    labels = [
+        f"{name}: {float(reference[name]):.3g}"
+        + (f" (predicted {float(predicted[name]):.3g})" if predicted and name in predicted else "")
+        for name in scalars
+    ]
+    fig.suptitle("  |  ".join([title, *labels]) if labels else title, fontsize=13)
 
-    # Subplot 1: S-Parameters (S11 & S21 Mixed-Mode)
-    axes[0, 0].plot(
-        freq,
-        mm_ntwk.s_db[:, 1, 0],
-        label="Sdd21 (Insertion Loss)",
-        color="teal",
-        lw=2.5,
-    )
-    axes[0, 0].plot(
-        freq,
-        mm_ntwk.s_db[:, 0, 0],
-        label="Sdd11 (Return Loss)",
-        color="darkorange",
-        ls="--",
-    )
-    axes[0, 0].set_title("Mixed-Mode S-Parameters", fontsize=14)
-    axes[0, 0].set_ylabel("Magnitude [dB]")
-    axes[0, 0].legend()
-
-    # Subplot 2: Inductance (Lp & Ls)
-    axes[0, 1].plot(freq, Lp, label="Lp (Primary)", color="blue")
-    axes[0, 1].plot(freq, Ls, label="Ls (Secondary)", color="cyan")
-    axes[0, 1].set_title("Inductance [nH]", fontsize=14)
-    axes[0, 1].set_ylabel("L [nH]")
-    axes[0, 1].legend()
-
-    # Subplot 3: Quality Factor (Qp & Qs)
-    axes[1, 0].plot(freq, Qp, label="Qp (Primary)", color="red")
-    axes[1, 0].plot(freq, Qs, label="Qs (Secondary)", color="magenta")
-    axes[1, 0].set_title("Quality Factor (Q)", fontsize=14)
-    axes[1, 0].set_ylabel("Q")
-    axes[1, 0].legend()
-
-    # Subplot 4: Resistance (Rp & Rs)
-    axes[1, 1].plot(freq, Rp, label="Rp (Primary)", color="darkgreen")
-    axes[1, 1].plot(freq, Rs, label="Rs (Secondary)", color="lime")
-    axes[1, 1].set_title("Loss / Resistance [Ω]", fontsize=14)
-    axes[1, 1].set_ylabel("R [Ω]")
-    axes[1, 1].legend()
-
-    # Subplot 5: Coupling Coefficient (k)
-    axes[2, 0].plot(freq, k, color="purple", lw=2)
-    axes[2, 0].set_title("Coupling Coefficient (k)", fontsize=14)
-    axes[2, 0].set_ylabel("k")
-    axes[2, 0].set_ylim(0, 1.1)
-
-    # Subplot 6: Reactance & SRF Identification
-    axes[2, 1].plot(freq, np.imag(z_d11), label="Im(Zdd11)", color="brown")
-    axes[2, 1].axhline(0, color="black", lw=1)  # y=0 line to find zero-crossing
-    srf_f = metrics["srf_f"]
-    if np.isfinite(srf_f):
-        axes[2, 1].axvline(
-            srf_f, color="red", linestyle=":", label=f"SRF: {srf_f:.2f} GHz"
-        )
-    axes[2, 1].set_title("Primary Reactance & SRF", fontsize=14)
-    axes[2, 1].set_ylabel("Im(Z) [Ω]")
-    axes[2, 1].legend()
-
-    for ax in axes.flat:
+    for ax, name in zip(axes.flat, curves, strict=False):
+        ax.plot(freq, reference[name], color="black", lw=2, label="Reference")
+        if predicted is not None and name in predicted:
+            ax.plot(freq, predicted[name], color="tab:blue", ls="--", label="Predicted")
+        for scalar in scalars:
+            if np.isfinite(reference[scalar]):
+                ax.axvline(float(reference[scalar]), color="red", ls=":", lw=1)
+        ax.set_title(name)
         ax.set_xlabel("Frequency [GHz]")
         ax.grid(True, alpha=0.3)
+    axes.flat[0].legend()
+    for ax in list(axes.flat)[len(curves) :]:
+        ax.set_visible(False)
 
     plt.tight_layout()
     plt.show()

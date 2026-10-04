@@ -14,6 +14,9 @@ from orca.geometry.input_parameters import InputParameterIterator, RangeParamete
 from orca.geometry.presets.paths import StackupXML
 
 if TYPE_CHECKING:
+    import numpy as np
+    import skrf as rf
+
     from orca.training.datasets.base_dataset import BaseDataset
 
 # All ports run up from a ground on Metal5 (matches "from_layername": "Metal5" in
@@ -90,6 +93,13 @@ class InductorOcta(BaseGeometry):
             input_normalizer=MinMaxNormalizer(self.input_parameter_iterator),
             output_normalizer=StandardNormalizer(),
         )
+
+    def electrical_parameters(self, ntwk: "rf.Network") -> dict[str, "np.ndarray"]:
+        from orca.utils.postprocessing import inductor_parameters
+
+        # Ports 1 and 2 feed the two ends (LA, LB); port 3, the center tap, is AC-grounded
+        # as in differential use
+        return inductor_parameters(ntwk, ends=(0, 1), shorted=(2,))
 
     def feasibility_constraints(self) -> list[str]:
         # get_min_outer_diameter as one expression; kept in step with it by a test.

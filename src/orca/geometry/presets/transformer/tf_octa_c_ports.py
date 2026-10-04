@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from orca import BaseGeometry
 from orca.geometry.cells.transformer import check_tf_octa_c_parameters, tf_octa_c
@@ -9,6 +9,9 @@ from orca.geometry.input_parameters import InputParameterIterator, RangeParamete
 from orca.geometry.presets.paths import StackupXML
 
 if TYPE_CHECKING:
+    import numpy as np
+    import skrf as rf
+
     from orca.training.datasets.base_dataset import BaseDataset
 
 # Layout choices fixed for every sample (µm). They are part of the device the model
@@ -73,6 +76,17 @@ class TransformerOcta(BaseGeometry):
     input_parameter_iterator: InputParameterIterator = field(
         default_factory=_input_parameters
     )
+
+    # Close to zero for weakly coupled windings, where a relative error says nothing
+    absolute_error_parameters: ClassVar[frozenset[str]] = frozenset({"k"})
+
+    def electrical_parameters(self, ntwk: "rf.Network") -> dict[str, "np.ndarray"]:
+        from orca.utils.postprocessing import transformer_parameters
+
+        # Ports (simcfg order): 1 op, 2 on (top winding), 3 ip, 4 in (bottom winding),
+        # 5 oci and 6 ico (the center taps), which are AC-grounded as in differential use.
+        # The top winding (op/on) is the primary, as in COBRA's Lp/Qp goals.
+        return transformer_parameters(ntwk, primary=(0, 1), secondary=(2, 3), shorted=(4, 5))
 
     def create_dataset(self) -> "BaseDataset":
         # Imported here so the geometry can be drawn and simulated without the
