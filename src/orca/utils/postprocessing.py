@@ -106,8 +106,11 @@ def transformer_parameters(
 
 
 def _first_inductive_to_capacitive(freq_ghz: np.ndarray, reactance: np.ndarray) -> float:
-    """Where a reactance first falls from positive to negative, interpolated linearly; NaN if never."""
-    cross = np.flatnonzero((reactance[:-1] > 0) & (reactance[1:] <= 0))
+    """
+    Where a reactance first falls from positive to negative, interpolated linearly; NaN if
+    never. The DC point is skipped: its reactance is zero up to rounding, of either sign.
+    """
+    cross = np.flatnonzero((freq_ghz[:-1] > 0) & (reactance[:-1] > 0) & (reactance[1:] <= 0))
     if cross.size == 0:
         return float("nan")
     i = cross[0]

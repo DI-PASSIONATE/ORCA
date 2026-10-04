@@ -22,7 +22,7 @@ from orca.logger import logger
 from orca.training.trainer import EpochResult, Trainer, TrainingConfig
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Callable, Collection
 
     from orca.training.basis_expansion import BasisExpansion
     from orca.training.datasets.base_dataset import BaseDataset
@@ -137,6 +137,9 @@ class HyperparameterTuner:
             (see :class:`~orca.training.trainer.TrainingConfig`).
         holdout_groups (Collection[str] | None): Groups (result files) to validate on when
             ``n_fold_cv`` is 1, e.g. the validation split of the final training.
+        criterion_factory (Callable | None): Builds the loss of each trial from its
+            freshly built model, e.g. an :class:`~orca.training.losses.SParameterLoss`
+            around the model's default loss. ``None`` trains with the model's default loss.
     """
 
     def __init__(
@@ -155,6 +158,7 @@ class HyperparameterTuner:
         regularization: bool = False,
         training_defaults: dict[str, Any] | None = None,
         holdout_groups: Collection[str] | None = None,
+        criterion_factory: Callable[[OrcaModel], Callable[..., torch.Tensor]] | None = None,
     ):
         self.model_cls = model_cls
         self.dataset = dataset
@@ -170,6 +174,7 @@ class HyperparameterTuner:
         self.batch_sizes = batch_sizes
         self.regularization = regularization
         self.training_defaults = training_defaults or {}
+        self.criterion_factory = criterion_factory
         self._deadline = math.inf
         self.study: optuna.Study | None = None
         # The folds depend only on the data, so every trial is scored on the same split
@@ -263,7 +268,13 @@ class HyperparameterTuner:
 
         basis = self.basis_cls.from_spec(self.spec, hyperparameters) if self.basis_cls else None
         model = self.model_cls.from_spec(self.spec, hyperparameters, basis)
-        trainer = Trainer(config=config, stage_name=f"Tuning ({fold_label})", verbose=False)
+        criterion = self.criterion_factory(model) if self.criterion_factory else None
+        trainer = Trainer(
+            config=config,
+            criterion=criterion,
+            stage_name=f"Tuning ({fold_label})",
+            verbose=False,
+        )
         try:
             result = trainer.fit(
                 model=model,

@@ -15,12 +15,17 @@ dataset, the trainer or the export stage.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 import skrf as rf
 
 from orca.training.guarantees import PhysicsGuarantees
+
+if TYPE_CHECKING:
+    # Only for annotations: `import orca` loads this module, and has to work in a
+    # simulation-only install without PyTorch.
+    import torch
 
 
 class OutputCodec(ABC):
@@ -64,6 +69,24 @@ class OutputCodec(ABC):
             np.ndarray: Complex array of shape (n_freq, n_ports, n_ports).
         """
 
+    def decode_tensor(self, raw: torch.Tensor) -> torch.Tensor:
+        """Differentiable :meth:`decode` of a batch of denormalized outputs, in torch.
+
+        The loss terms that work on the S-matrix (``ModelTrainer(admittance_weight=...,
+        passivity_weight=...)``) need it; a codec that does not implement it cannot be
+        trained with them.
+
+        Args:
+            raw (torch.Tensor): Outputs of shape ``(batch, output_dim)``.
+
+        Returns:
+            torch.Tensor: Complex S-matrices of shape ``(batch, n_ports, n_ports)``.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement decode_tensor, which the admittance "
+            "and passivity loss terms need."
+        )
+
     def to_network(self, raw: np.ndarray, frequencies: np.ndarray) -> rf.Network:
         """Decode model outputs and wrap them in a ``skrf.Network``."""
         s = self.decode(np.asarray(raw))
@@ -99,6 +122,12 @@ class FlatReImCodec(OutputCodec):
         n = self.n_ports
         raw = np.asarray(raw).reshape(-1, n, n, 2)
         return (raw[..., 0] + 1j * raw[..., 1]).astype(np.complex64)
+
+    def decode_tensor(self, raw: torch.Tensor) -> torch.Tensor:
+        import torch  # Local: see the TYPE_CHECKING import
+
+        pairs = raw.reshape(-1, self.n_ports, self.n_ports, 2)
+        return torch.complex(pairs[..., 0], pairs[..., 1])
 
 
 class UpperTriangleReImCodec(OutputCodec):
@@ -167,3 +196,17 @@ class UpperTriangleReImCodec(OutputCodec):
         s[:, rows, cols] = entries
         s[:, cols, rows] = entries  # mirror; the diagonal is written twice, harmlessly
         return s
+
+    def decode_tensor(self, raw: torch.Tensor) -> torch.Tensor:
+        import torch  # Local: see the TYPE_CHECKING import
+
+        n = self.n_ports
+        pairs = raw.reshape(-1, self.n_entries, 2)
+        entries = torch.complex(pairs[..., 0], pairs[..., 1])
+        # Gathered rather than written into a zero matrix, so autograd sees one plain
+        # indexing operation: entry (i, j) and entry (j, i) both read triangle entry k.
+        rows, cols = self._triangle_indices()
+        entry_of = np.empty((n, n), dtype=np.int64)
+        entry_of[rows, cols] = entry_of[cols, rows] = np.arange(self.n_entries)
+        index = torch.as_tensor(entry_of.reshape(-1), device=raw.device)
+        return entries[:, index].reshape(-1, n, n)

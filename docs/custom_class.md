@@ -55,6 +55,7 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 
 **Optional methods:**
 
+- `electrical_parameters(ntwk) -> dict[str, np.ndarray]` — The figures of merit of a network of this geometry, which `ModelTester` reports the model's error for next to the S-parameter error: curves over `ntwk.f` (such as L, R and Q) and scalars as 0-d arrays (such as the self-resonance frequency `srf_f`). Which port is which is a property of the layout, so the geometry decides how to read its network. `orca.utils.postprocessing` has the usual ones, with the ports given explicitly: `inductor_parameters(ntwk, ends, shorted)` and `transformer_parameters(ntwk, primary, secondary, shorted)`, which drive each winding differentially with its center tap (`shorted`) AC-grounded. Import it inside the method. The default returns nothing, so only the S-parameter error is reported. Errors are relative, except for the names in the class attribute `absolute_error_parameters` (e.g. `frozenset({"k"})` for a coupling factor that is near zero for weak coupling). With `ModelTester(plot=True)` the same parameters are plotted, reference against prediction.
 - `feasibility_constraints() -> list[str]` — The same rules as `is_feasible()`, written as boolean expressions over the input parameter names, e.g. `"bottom_linewidth <= bottom_winding_diameter / 3"`. `OnnxExporter` stores them in the model's `input_constraints` metadata, so COBRA can refuse a query for a geometry that cannot be built instead of returning a prediction the model was never trained for. The grammar is a small subset of Python (arithmetic, comparisons, `and`/`or`/`not`, `a if c else b`, and `abs min max sqrt sin cos tan radians ceil floor round`, plus `pi` and `sqrt2`), documented in `orca.geometry.constraints`; anything else is rejected at export. Derive the strings from the same numbers as `is_feasible()` and add a test that they agree on random draws (see `tests/test_constraints.py` for the presets' version).
 - `is_feasible(params) -> bool` — Whether a parameter combination describes a layout that can be drawn (default: always `True`). `GDSGenerator` calls it for every draw of the iterator; rejected draws are counted and, with the `"sobol"`, `"lhs"` and `"random"` strategies, replaced by further draws, so the requested number of samples is met with buildable layouts only. Put cheap, closed-form constraints between parameters here — a winding that must fit its diameter, a feed gap that must fit the octagon's side. The presets derive it from the same check their cell code runs, so the two cannot disagree.
 
@@ -131,6 +132,16 @@ class TransformerOcta(BaseGeometry):
             input_normalizer=MinMaxNormalizer(self.input_parameter_iterator),
             output_normalizer=StandardNormalizer(),
         )
+
+    # Close to zero for weakly coupled windings, where a relative error says nothing
+    absolute_error_parameters: ClassVar[frozenset[str]] = frozenset({"k"})
+
+    def electrical_parameters(self, ntwk: "rf.Network") -> dict[str, "np.ndarray"]:
+        from orca.utils.postprocessing import transformer_parameters
+
+        # Zero-based ports: 0 op, 1 on (top winding), 2 ip, 3 in (bottom winding),
+        # 4 and 5 the center taps, AC-grounded as in differential use
+        return transformer_parameters(ntwk, primary=(0, 1), secondary=(2, 3), shorted=(4, 5))
 
     @staticmethod
     def create_gds_file(name: str, output_path: str, params: dict[str, Any]) -> str:

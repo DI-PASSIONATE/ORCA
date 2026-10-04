@@ -12,7 +12,9 @@ from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
 from orca.training.basis_expansion import BasisExpansion, get_basis_class
 from orca.training.datasets.base_dataset import BaseDataset
+from orca.training.losses import SParameterLoss, srf_sample_weights
 from orca.training.models.base_model import OrcaModel, get_model_class
+from orca.training.spec import FrequencyMode
 from orca.training.trainer import Trainer, TrainingConfig
 from orca.training.tuner import HyperparameterTuner
 
@@ -45,6 +47,9 @@ class ModelTrainer(PipelineStage):
         warmup_epochs: float = 1.0,
         grad_clip_norm: float | None = 1.0,
         allow_tf32: bool = False,
+        admittance_weight: float = 0.0,
+        passivity_weight: float = 0.0,
+        above_srf_weight: float = 1.0,
     ):
         """
         Initializes the ModelTrainer stage with the architecture to train and optional
@@ -93,6 +98,23 @@ class ModelTrainer(PipelineStage):
                 (Ampere and newer, e.g. A100): faster, with 10 instead of 23 mantissa
                 bits in the multiplies. Tuning and the final training use it; testing and
                 the exported model stay in full FP32.
+            admittance_weight: Weight of a loss term on the relative error of the
+                predicted admittance matrix Y, of Y as a whole and of its real part, which
+                track L and Q far more closely than S does (see
+                orca.training.losses.admittance_error). 0 (default) leaves it out;
+                0.1 to 1 puts it on the scale of the S-parameter loss.
+            passivity_weight: Weight of a penalty on predicted S-matrices whose largest
+                singular value exceeds 1 (or the simulated one, where that is larger).
+                0 (default) leaves it out.
+            above_srf_weight: Loss weight of the frequency points above each geometry's
+                first self-resonance, relative to the points below it; e.g. 0.1 spends
+                the model's capacity on the band an inductor is used in. 1 (default)
+                weights all points alike. The resonance is found in the simulated
+                S-parameters (orca.training.losses.first_self_resonance).
+
+        The three loss options need a per-point dataset. They change what the
+        validation loss measures, so losses are only comparable between runs with the
+        same options.
         """
         super().__init__(name="Model Trainer", index=4)
         self.model_cls = get_model_class(model)
@@ -114,8 +136,15 @@ class ModelTrainer(PipelineStage):
             "grad_clip_norm": grad_clip_norm,
             "allow_tf32": allow_tf32,
         }
+        self.admittance_weight = admittance_weight
+        self.passivity_weight = passivity_weight
+        self.above_srf_weight = above_srf_weight
         # Checked now, so a typo fails before hours of tuning rather than after
         TrainingConfig.from_hyperparameters(self.training_defaults)
+        if admittance_weight < 0 or passivity_weight < 0:
+            raise ValueError("admittance_weight and passivity_weight must not be negative.")
+        if above_srf_weight <= 0:
+            raise ValueError(f"above_srf_weight must be positive, got {above_srf_weight}.")
 
     def run(
         self,
@@ -172,18 +201,14 @@ class ModelTrainer(PipelineStage):
         val_dataset = geometry.dataset.new_split(directory=result_dir, data_df=val_df)
         geometry.dataset.clear_cache()
         self._check_compatibility(train_dataset)
+        criterion_factory = self._criterion_factory(train_dataset)
+        self._weight_samples(train_dataset)
+        self._weight_samples(val_dataset)
 
         logger.info(
             f"Loaded {len(train_dataset)} training samples and {len(val_dataset)} validation samples for model training. Beginning training..."
         )
 
-        trainer = Trainer(
-            config=TrainingConfig.from_hyperparameters(
-                {"epochs": self.max_epochs, **self.training_defaults, **hyperparameters}
-            ),
-            progress_callback=progress_callback,
-            stage_name=self.name,
-        )
         spec = train_dataset.io_spec
         basis = self.basis_cls.from_spec(spec, hyperparameters) if self.basis_cls else None
 
@@ -191,11 +216,16 @@ class ModelTrainer(PipelineStage):
         if seed is not None:
             torch.manual_seed(seed)
 
-        result = trainer.fit(
-            model=self.model_cls.from_spec(spec, hyperparameters, basis),
-            train_dataset=train_dataset,
-            val_dataset=val_dataset,
+        model = self.model_cls.from_spec(spec, hyperparameters, basis)
+        trainer = Trainer(
+            config=TrainingConfig.from_hyperparameters(
+                {"epochs": self.max_epochs, **self.training_defaults, **hyperparameters}
+            ),
+            criterion=criterion_factory(model) if criterion_factory else None,
+            progress_callback=progress_callback,
+            stage_name=self.name,
         )
+        result = trainer.fit(model=model, train_dataset=train_dataset, val_dataset=val_dataset)
         if not math.isfinite(result.best_loss):
             raise RuntimeError(
                 "Training diverged: the validation loss was never finite. Lower the learning "
@@ -251,6 +281,7 @@ class ModelTrainer(PipelineStage):
             directory=result_dir, data_df=train_val_df, fit_normalizers=True
         )
         self._check_compatibility(train_val_dataset)
+        self._weight_samples(train_val_dataset)
         tuner = HyperparameterTuner(
             model_cls=self.model_cls,
             dataset=train_val_dataset,
@@ -265,10 +296,49 @@ class ModelTrainer(PipelineStage):
             training_defaults=self.training_defaults,
             # The dataset labels each sample with its result file, the name column of the table
             holdout_groups=set(val_df["name"]) if self.n_fold_cv == 1 else None,
+            criterion_factory=self._criterion_factory(train_val_dataset),
         )
         hyperparameters = tuner.tune()
         logger.info(f"Hyperparameter tuning completed. Best hyperparameters: {hyperparameters}")
         return hyperparameters
+
+    @property
+    def _custom_loss(self) -> bool:
+        """Whether any loss option asks for more than the model's default loss."""
+        return self.admittance_weight > 0 or self.passivity_weight > 0 or self.above_srf_weight != 1
+
+    def _criterion_factory(
+        self, dataset: BaseDataset
+    ) -> Callable[[OrcaModel], SParameterLoss] | None:
+        """
+        The loss of each model trained on ``dataset``'s outputs, or None for the model's
+        default loss. A factory, since the data term is the default loss of the model.
+        """
+        if not self._custom_loss:
+            return None
+        if type(dataset).frequency_mode is not FrequencyMode.PER_POINT:
+            raise ValueError(
+                "ModelTrainer's admittance_weight, passivity_weight and above_srf_weight need "
+                f"a per-point dataset, but {type(dataset).__name__} lays out frequency as "
+                f"{type(dataset).frequency_mode.name}."
+            )
+        codec, output_normalizer = dataset.codec, dataset.output_normalizer
+
+        def build(model: OrcaModel) -> SParameterLoss:
+            return SParameterLoss(
+                model.default_loss(),
+                codec=codec,
+                output_normalizer=output_normalizer,
+                admittance_weight=self.admittance_weight,
+                passivity_weight=self.passivity_weight,
+            )
+
+        return build
+
+    def _weight_samples(self, dataset: BaseDataset) -> None:
+        """Weight the frequency points above each geometry's self-resonance, if asked to."""
+        if self.above_srf_weight != 1:
+            dataset.set_sample_weights(srf_sample_weights(dataset, self.above_srf_weight))
 
     def _save_split(
         self,

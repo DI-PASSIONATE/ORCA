@@ -178,47 +178,47 @@ class TrainingResult:
         return len(self.history)
 
 
-def _stacked_tensors(dataset: Dataset) -> tuple[torch.Tensor, torch.Tensor] | None:
-    """The inputs and targets of ``dataset`` as two tensors, if it keeps them stacked.
+def _stacked_tensors(dataset: Dataset) -> tuple[torch.Tensor, ...] | None:
+    """The inputs, targets and any per-sample extras of ``dataset`` as stacked tensors.
 
     Datasets exposing ``tensors`` (ORCA's datasets and ``TensorDataset``) and ``Subset``
-    views of them qualify; anything else returns ``None``.
+    views of them qualify; anything else returns ``None``. ORCA's datasets append their
+    sample weights, if set, as a third tensor.
     """
     if isinstance(dataset, Subset):
         stacked = _stacked_tensors(dataset.dataset)
         if stacked is None:
             return None
         indices = torch.as_tensor(dataset.indices, dtype=torch.long, device=stacked[0].device)
-        return stacked[0][indices], stacked[1][indices]
+        return tuple(tensor[indices] for tensor in stacked)
     tensors = getattr(dataset, "tensors", None)
-    if isinstance(tensors, tuple) and len(tensors) == 2:  # (inputs, targets)
+    if isinstance(tensors, tuple) and len(tensors) >= 2:  # (inputs, targets, *extras)
         return tensors
     return None
 
 
 class _TensorBatches:
-    """Mini-batches cut from two stacked tensors."""
+    """Mini-batches cut from stacked tensors of equal length, all sliced alike."""
 
-    def __init__(self, inputs: torch.Tensor, targets: torch.Tensor, batch_size: int, shuffle: bool):
-        self.inputs = inputs
-        self.targets = targets
+    def __init__(self, tensors: tuple[torch.Tensor, ...], batch_size: int, shuffle: bool):
+        self.tensors = tensors
         self.batch_size = batch_size
         self.shuffle = shuffle
 
     def __len__(self) -> int:
-        return math.ceil(len(self.inputs) / self.batch_size)
+        return math.ceil(len(self.tensors[0]) / self.batch_size)
 
-    def __iter__(self) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
-        n = len(self.inputs)
+    def __iter__(self) -> Iterator[tuple[torch.Tensor, ...]]:
+        n = len(self.tensors[0])
         if self.shuffle:
-            order = torch.randperm(n, device=self.inputs.device)
+            order = torch.randperm(n, device=self.tensors[0].device)
             for start in range(0, n, self.batch_size):
                 batch = order[start : start + self.batch_size]
-                yield self.inputs[batch], self.targets[batch]
+                yield tuple(tensor[batch] for tensor in self.tensors)
         else:
             for start in range(0, n, self.batch_size):
                 end = start + self.batch_size
-                yield self.inputs[start:end], self.targets[start:end]
+                yield tuple(tensor[start:end] for tensor in self.tensors)
 
 
 @contextlib.contextmanager
@@ -238,7 +238,7 @@ def make_batches(
     """Mini-batches of ``dataset``, sliced from stacked tensors where it has them."""
     stacked = _stacked_tensors(dataset)
     if stacked is not None:
-        return _TensorBatches(*stacked, batch_size=batch_size, shuffle=shuffle)
+        return _TensorBatches(stacked, batch_size=batch_size, shuffle=shuffle)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
@@ -296,7 +296,9 @@ class Trainer:
 
     Args:
         config (TrainingConfig | None): Training hyperparameters. Defaults are used if omitted.
-        criterion (Callable | None): Loss to optimize. If omitted, the model's
+        criterion (Callable | None): Loss to optimize, called as
+            ``criterion(prediction, target)``, or as ``criterion(prediction, target,
+            sample_weights)`` for a dataset with sample weights. If omitted, the model's
             :meth:`~orca.training.models.base_model.OrcaModel.default_loss` is used.
         progress_callback (Callable | None): Called as
             ``(stage_name, current_epoch, total_epochs, message)`` after every epoch.
@@ -307,7 +309,7 @@ class Trainer:
     def __init__(
         self,
         config: TrainingConfig | None = None,
-        criterion: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None,
+        criterion: Callable[..., torch.Tensor] | None = None,
         progress_callback: Callable[[str, int, int, str], None] | None = None,
         stage_name: str = "Training",
         verbose: bool = True,
@@ -428,14 +430,12 @@ class Trainer:
         total = torch.zeros((), device=self.config.device)
         count = 0
 
-        for batch_x, batch_y in tqdm.tqdm(
-            loader, desc="Training", leave=False, disable=not self.verbose
-        ):
-            x = batch_x.to(self.config.device)
-            y = batch_y.to(self.config.device)
+        for batch in tqdm.tqdm(loader, desc="Training", leave=False, disable=not self.verbose):
+            # Inputs, targets, and the sample weights if the dataset has them
+            x, y, *weights = (tensor.to(self.config.device) for tensor in batch)
 
             optimizer.zero_grad()
-            loss = criterion(model(x), y)
+            loss = criterion(model(x), y, *weights)
             loss.backward()
             if self.config.grad_clip_norm is not None:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_clip_norm)
@@ -461,10 +461,9 @@ class Trainer:
             iterator = tqdm.tqdm(loader, desc=desc, leave=False, disable=not self.verbose)
 
         with torch.no_grad():
-            for batch_x, batch_y in iterator:
-                x = batch_x.to(self.config.device)
-                y = batch_y.to(self.config.device)
-                total += criterion(model(x), y) * len(x)
+            for batch in iterator:
+                x, y, *weights = (tensor.to(self.config.device) for tensor in batch)
+                total += criterion(model(x), y, *weights) * len(x)
                 count += len(x)
 
         return total.item() / count

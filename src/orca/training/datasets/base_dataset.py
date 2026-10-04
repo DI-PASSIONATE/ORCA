@@ -43,6 +43,8 @@ class BaseDataset(ABC, torch.utils.data.Dataset[tuple[torch.Tensor, torch.Tensor
         # The normalized samples, stacked once loading is done
         self.inputs = torch.empty(0)
         self.targets = torch.empty(0)
+        # Optional loss weight of each sample, see set_sample_weights
+        self.sample_weights: torch.Tensor | None = None
         # Parsed Touchstone files, shared by every split made with new_split()
         self._touchstone_cache: dict[tuple[str, int], tuple[np.ndarray, np.ndarray]] = {}
         self.input_normalizer = input_normalizer
@@ -95,10 +97,30 @@ class BaseDataset(ABC, torch.utils.data.Dataset[tuple[torch.Tensor, torch.Tensor
         self._touchstone_cache.clear()
 
     @property
-    def tensors(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """All normalized inputs and targets, stacked along the first dimension.
+    def tensors(self) -> tuple[torch.Tensor, ...]:
+        """All normalized inputs and targets, stacked along the first dimension, followed
+        by the sample weights if any are set. The trainer batches all of them alike.
         """
-        return self.inputs, self.targets
+        if self.sample_weights is None:
+            return self.inputs, self.targets
+        return self.inputs, self.targets, self.sample_weights
+
+    def set_sample_weights(self, weights: torch.Tensor | None) -> None:
+        """
+        Weight each sample's contribution to the loss, e.g. with
+        :func:`~orca.training.losses.srf_sample_weights`. The trainer then hands the
+        weights of each batch to the loss as a third argument, so the loss has to
+        accept them (:class:`~orca.training.losses.SParameterLoss` does).
+
+        Args:
+            weights (torch.Tensor | None): One weight per sample; None removes them.
+        """
+        if weights is not None and weights.shape != (len(self.inputs),):
+            raise ValueError(
+                f"Expected one weight per sample, shape ({len(self.inputs)},), "
+                f"got {tuple(weights.shape)}."
+            )
+        self.sample_weights = weights
 
     @property
     def io_spec(self) -> IOSpec:
