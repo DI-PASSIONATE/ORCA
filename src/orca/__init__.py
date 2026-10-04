@@ -62,6 +62,7 @@ _TRAINING_EXPORTS = {
     "HyperparameterTuner": ".training.tuner",
     "ComplexMSELoss": ".training.losses",
     "MSEPlusLogCoshLoss": ".training.losses",
+    "SParameterLoss": ".training.losses",
     "NetworkPredictor": ".training.predictors",
     "TorchNetworkPredictor": ".training.predictors",
     "OnnxNetworkPredictor": ".training.predictors",
