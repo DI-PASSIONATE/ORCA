@@ -8,9 +8,10 @@ import klayout.db as kdb
 import pytest
 
 from orca.geometry.cells.transformer import check_tf_octa_c_parameters, tf_octa_c
-from orca.geometry.drc import check_gds_file
+from orca.geometry.drc import check_gds_file, port_contacts
 from orca.geometry.layers import SG13G2
 from orca.geometry.presets import TransformerOcta
+from orca.simulation.simulate import read_simconfig
 
 _names = itertools.count()
 
@@ -78,6 +79,29 @@ def test_each_winding_with_its_feeds_and_tap_is_one_polygon(tmp_path):
 
     for layer in (SG13G2.TopMetal1, SG13G2.TopMetal2):
         assert _metal(path, layer).count() == 1
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        # Draws whose port markers were rounded 5 nm past the feed ends: all six ports,
+        # the right-hand ones (op, on, ico) and the left-hand ones (ip, in, oci) open
+        {"bottom_winding_diameter": 28.5, "top_winding_diameter": 23.6,
+         "relative_displacement": 0.17, "bottom_linewidth": 7.8, "top_linewidth": 6.2},
+        {"bottom_winding_diameter": 28.6, "top_winding_diameter": 24.7,
+         "relative_displacement": 0.02, "bottom_linewidth": 7.6, "top_linewidth": 5.2},
+        {"bottom_winding_diameter": 29.2, "top_winding_diameter": 28.8,
+         "relative_displacement": 0.07, "bottom_linewidth": 3.5, "top_linewidth": 3.1},
+    ],
+    ids=["all-open", "right-open", "left-open"],
+)
+def test_port_markers_touch_the_feed_ends(tmp_path, params):
+    geometry = TransformerOcta()
+    ports = port_contacts(read_simconfig(geometry.simconfig_filename), geometry.stackup_xml)
+
+    result = check_gds_file(_draw(tmp_path, params), ports=ports)
+
+    assert result.port_findings == {}
 
 
 def test_feed_gap_wider_than_the_flat_side_is_rejected():
