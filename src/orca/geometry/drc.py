@@ -8,16 +8,20 @@ values are those of the PDK's KLayout rule deck (``sg13g2_tech_default.json``)
 and the rule names follow its report (``TM2.a``, ``TV2.c``, ...), so a finding
 here can be looked up in the IHP design rule manual directly.
 
-Two entry points: :func:`snap_to_grid` moves every vertex of a layout onto
-the grid, and :func:`check_layout` counts the violations per rule. Only the
-*drawing* datatype of each layer is checked, as in the PDK deck; pin, text and
-the gds2palace port layers are left alone.
+Three entry points: :func:`snap_to_grid` moves every vertex of a layout onto
+the grid, :func:`check_layout` counts the violations per rule, and
+:func:`check_ports` checks that every gds2palace port marker touches the metals
+its port connects (:func:`port_contacts` reads those from a simconfig). Only the
+*drawing* datatype of each layer is checked, as in the PDK deck; pin and text
+layers are left alone.
 """
 
 from __future__ import annotations
 
+import itertools
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import klayout.db as kdb
 
@@ -110,14 +114,34 @@ class DRCResult:
     """Vertices moved onto the grid before checking (0 when snapping was off)."""
     violations: dict[str, int] = field(default_factory=dict)
     """Violation count per rule name; rules without findings are absent."""
+    port_findings: dict[str, int] = field(default_factory=dict)
+    """Port markers that do not touch their metal, per finding (see :func:`check_ports`)."""
 
     @property
     def clean(self) -> bool:
-        return not self.violations
+        return not self.violations and not self.port_findings
+
+    @property
+    def ports_connected(self) -> bool:
+        return not self.port_findings
 
     @property
     def total(self) -> int:
-        return sum(self.violations.values())
+        return sum(self.violations.values()) + sum(self.port_findings.values())
+
+
+@dataclass(frozen=True)
+class PortContact:
+    """The metals one gds2palace port marker has to touch to excite the layout."""
+
+    number: int
+    """Port number, as in the simconfig and the Touchstone file."""
+    marker_layer: int
+    """GDS layer number of the port marker (``source_layernum``)."""
+    metals: tuple[tuple[str, int], ...]
+    """``(layer name, GDS layer number)`` of every metal the port connects."""
+    datatypes: tuple[int, ...] = (0,)
+    """Datatypes gds2palace reads the marker and the metals from (the simconfig's ``purpose``)."""
 
 
 def _snap(value: int, grid: int) -> int:
@@ -270,7 +294,135 @@ def check_layout(
     return violations
 
 
-def check_gds_file(path: str, grid_nm: int = GRID_NM, snap: bool = True) -> DRCResult:
+def port_contacts(simconfig: dict[str, Any], stackup_xml: str) -> tuple[PortContact, ...]:
+    """The metals each port of a simconfig has to touch, with GDS numbers from the stackup.
+
+    A port between two layers (``from_layername``/``to_layername``, a vertical sheet
+    in gds2palace) has to touch both; an in-plane port (``target_layername``) the one.
+
+    Args:
+        simconfig: Simulation configuration as read by ``read_simconfig``.
+        stackup_xml: gds2palace stackup XML that maps the layer names to GDS numbers.
+
+    Returns:
+        tuple[PortContact, ...]: One entry per port, in simconfig order.
+
+    Raises:
+        ValueError: A port names a layer the stackup does not define.
+    """
+    # The stackup is a trusted file shipped with the geometry, not external input
+    root = ET.parse(stackup_xml).getroot()  # noqa: S314
+    layer_numbers = {
+        element.get("Name"): int(element.get("Layer", ""))
+        for element in root.iter("Layer")
+        if element.get("Name") and element.get("Layer", "").isdigit()
+    }
+    datatypes = tuple(simconfig.get("saved_values", {}).get("purpose", [0]))
+
+    contacts = []
+    for port in simconfig["ports"]:
+        target = port.get("target_layername")
+        names = [target] if target else [port.get("from_layername"), port.get("to_layername")]
+        metals = []
+        for name in filter(None, names):
+            if name not in layer_numbers:
+                raise ValueError(
+                    f"Port {port['portnumber']} connects layer {name!r}, which the stackup "
+                    f"{stackup_xml} does not define."
+                )
+            metals.append((name, layer_numbers[name]))
+        contacts.append(
+            PortContact(
+                number=port["portnumber"],
+                marker_layer=port["source_layernum"],
+                metals=tuple(metals),
+                datatypes=datatypes,
+            )
+        )
+    return tuple(contacts)
+
+
+def check_ports(layout: kdb.Layout, ports: tuple[PortContact, ...]) -> dict[str, int]:
+    """Count the port markers of *layout* that do not touch the metals their port connects.
+
+    gds2palace places each port where its marker is drawn and does not check that
+    the port meets the conductors. A marker a few nanometres off its metal still
+    meshes and simulates, but as an open circuit: the S-parameters then describe
+    another circuit than the parameters say, with no error anywhere. Touching an
+    edge is enough, as for a vertical port sheet on the end face of a feed line.
+
+    - ``port<N>.missing``: no marker on the port's layer;
+    - ``port<N>.open_<layer>``: markers that neither overlap nor touch ``<layer>``.
+
+    Args:
+        layout: Layout to check. It is not modified.
+        ports: The ports to check, from :func:`port_contacts`.
+
+    Returns:
+        dict[str, int]: Finding counts keyed by name; empty when every port is connected.
+    """
+    findings: dict[str, int] = {}
+    metals: dict[tuple[int, tuple[int, ...]], kdb.Region] = {}
+    for port in ports:
+        markers = _markers(layout, port.marker_layer, port.datatypes)
+        if not markers:
+            findings[f"port{port.number}.missing"] = 1
+            continue
+        for name, layer_number in port.metals:
+            key = (layer_number, port.datatypes)
+            if key not in metals:
+                metals[key] = _region(layout, layer_number, port.datatypes)
+            open_markers = sum(marker.interacting(metals[key]).is_empty() for marker in markers)
+            if open_markers:
+                findings[f"port{port.number}.open_{name}"] = open_markers
+    return findings
+
+
+def _region(layout: kdb.Layout, layer_number: int, datatypes: tuple[int, ...]) -> kdb.Region:
+    """Everything drawn on a layer in any of *datatypes*, flattened and merged."""
+    region = kdb.Region()
+    for datatype in datatypes:
+        index = layout.find_layer(layer_number, datatype)
+        if index is not None:
+            for top in layout.top_cells():
+                region += kdb.Region(top.begin_shapes_rec(index))
+    return region.merged()
+
+
+def _markers(
+    layout: kdb.Layout, layer_number: int, datatypes: tuple[int, ...]
+) -> list[kdb.Region | kdb.Edges]:
+    """Each port marker on a layer, in top-cell coordinates.
+
+    A zero-width path, gds2palace's vertical port sheet, has no area, so it is
+    returned as its centre line; any other shape as its polygon.
+    """
+    markers: list[kdb.Region | kdb.Edges] = []
+    for datatype in datatypes:
+        index = layout.find_layer(layer_number, datatype)
+        if index is None:
+            continue
+        for top in layout.top_cells():
+            iterator = top.begin_shapes_rec(index)
+            while not iterator.at_end():
+                shape, trans = iterator.shape(), iterator.trans()
+                if shape.is_path() and shape.path.width == 0:
+                    points = [trans * p for p in shape.path.each_point()]
+                    markers.append(
+                        kdb.Edges([kdb.Edge(a, b) for a, b in itertools.pairwise(points)])
+                    )
+                elif not shape.is_text():
+                    markers.append(kdb.Region(shape.polygon.transformed(trans)))
+                iterator.next()
+    return markers
+
+
+def check_gds_file(
+    path: str,
+    grid_nm: int = GRID_NM,
+    snap: bool = True,
+    ports: tuple[PortContact, ...] = (),
+) -> DRCResult:
     """Check one GDS file, optionally snapping it to the grid first.
 
     Args:
@@ -278,6 +430,8 @@ def check_gds_file(path: str, grid_nm: int = GRID_NM, snap: bool = True) -> DRCR
         grid_nm: Manufacturing grid in nanometres.
         snap: Snap all vertices to the grid and write the file back before
             checking. Off-grid vertices are then repaired rather than reported.
+        ports: Ports whose markers must touch their metals (:func:`check_ports`),
+            checked after snapping; empty skips the port check.
 
     Returns:
         DRCResult: Vertices moved and the violations found.
@@ -289,7 +443,11 @@ def check_gds_file(path: str, grid_nm: int = GRID_NM, snap: bool = True) -> DRCR
         moved = snap_to_grid(layout, grid_nm)
         if moved:
             layout.write(path)
-    return DRCResult(snapped_vertices=moved, violations=check_layout(layout, grid_nm))
+    return DRCResult(
+        snapped_vertices=moved,
+        violations=check_layout(layout, grid_nm),
+        port_findings=check_ports(layout, ports),
+    )
 
 
 def _grid_dbu(layout: kdb.Layout, grid_nm: int) -> int:

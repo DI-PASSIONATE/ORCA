@@ -7,9 +7,10 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import tqdm
 
-from orca.geometry.drc import GRID_NM, DRCResult, check_gds_file
+from orca.geometry.drc import GRID_NM, DRCResult, PortContact, check_gds_file, port_contacts
 from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
+from orca.simulation.simulate import read_simconfig
 
 if TYPE_CHECKING:
     from orca.pipeline.context import PipelineContext
@@ -27,6 +28,11 @@ class DRCChecker(PipelineStage):
     cannot be built. This stage repairs what can be repaired in place (the grid)
     and records the rest, so the conversion stage only picks up clean layouts.
 
+    It also checks that every port marker of the geometry's simconfig touches the
+    metals its port connects. A marker that misses its metal by a few nanometres
+    still simulates, as an open circuit, so the result describes another circuit
+    than the parameters say. Such layouts are always left out.
+
     Outputs, in the geometry folder: ``<name>_drc_report.csv`` with the
     violation counts of every layout, and ``<name>_drc.csv``, the parameter
     table of the layouts that passed, in the same layout as the GDS table.
@@ -34,7 +40,11 @@ class DRCChecker(PipelineStage):
     """
 
     def __init__(
-        self, grid_nm: int = GRID_NM, snap_to_grid: bool = True, drop_violations: bool = True
+        self,
+        grid_nm: int = GRID_NM,
+        snap_to_grid: bool = True,
+        drop_violations: bool = True,
+        check_ports: bool = True,
     ):
         """
         Args:
@@ -44,6 +54,10 @@ class DRCChecker(PipelineStage):
             drop_violations (bool): Leave layouts with violations out of the parameter
                 table the later stages use. Off, every layout goes on and the violations
                 are only reported.
+            check_ports (bool): Check that every port marker touches the metals its port
+                connects in the simconfig. Layouts with an open port are left out
+                whatever ``drop_violations`` says: their simulation would describe a
+                circuit with that port disconnected.
         """
         super().__init__(name="DRC Checker", index=1)
         if grid_nm <= 0:
@@ -51,6 +65,7 @@ class DRCChecker(PipelineStage):
         self.grid_nm = grid_nm
         self.snap_to_grid = snap_to_grid
         self.drop_violations = drop_violations
+        self.check_ports = check_ports
 
     def run(
         self,
@@ -67,6 +82,7 @@ class DRCChecker(PipelineStage):
 
         gds_data = pd.read_csv(gds_csv)
         gds_dir = os.path.dirname(gds_csv)
+        ports = self._port_contacts(context) if self.check_ports else ()
         logger.info(
             f"Starting DRC of {len(gds_data)} GDS files on a {self.grid_nm} nm grid "
             f"using {context.num_processes} CPU cores."
@@ -76,7 +92,11 @@ class DRCChecker(PipelineStage):
         with ProcessPoolExecutor(max_workers=context.num_processes) as executor:
             futures = {
                 executor.submit(
-                    check_gds_file, os.path.join(gds_dir, name), self.grid_nm, self.snap_to_grid
+                    check_gds_file,
+                    os.path.join(gds_dir, name),
+                    self.grid_nm,
+                    self.snap_to_grid,
+                    ports,
                 ): name
                 for name in gds_data["name"]
             }
@@ -105,7 +125,10 @@ class DRCChecker(PipelineStage):
                     "snapped_vertices": results[name].snapped_vertices,
                     "violations": results[name].total,
                     "rules": ";".join(
-                        f"{rule}:{count}" for rule, count in sorted(results[name].violations.items())
+                        f"{rule}:{count}"
+                        for rule, count in sorted(
+                            (results[name].violations | results[name].port_findings).items()
+                        )
                     ),
                 }
                 for name in gds_data["name"]
@@ -114,12 +137,15 @@ class DRCChecker(PipelineStage):
         report.to_csv(context.drc_report_path, index=False)
 
         clean = gds_data["name"].map(lambda name: results[name].clean)
-        passed = gds_data if not self.drop_violations else gds_data[clean]
+        connected = gds_data["name"].map(lambda name: results[name].ports_connected)
+        passed = gds_data[clean] if self.drop_violations else gds_data[connected]
         passed.to_csv(context.drc_csv_path, index=False)
 
         summary: Counter[str] = Counter()
         for result in results.values():
             summary.update(result.violations)
+            summary.update(result.port_findings)
+        self._log_open_ports(results, context.drc_report_path)
         self._log_summary(
             len(gds_data),
             int(clean.sum()),
@@ -131,6 +157,22 @@ class DRCChecker(PipelineStage):
         context.drc_csv = context.drc_csv_path
         context.drc_summary = dict(sorted(summary.items()))
         return context
+
+    @staticmethod
+    def _port_contacts(context: "PipelineContext") -> tuple[PortContact, ...]:
+        """The metals each port of the geometry has to touch, from its simconfig and stackup."""
+        geometry = context.geometry
+        return port_contacts(read_simconfig(geometry.simconfig_filename), geometry.stackup_xml)
+
+    @staticmethod
+    def _log_open_ports(results: dict[str, DRCResult], report_path: str) -> None:
+        open_ports = [name for name, result in results.items() if not result.ports_connected]
+        if open_ports:
+            logger.error(
+                f"{len(open_ports)} of {len(results)} layouts have port markers that do not "
+                "touch their metal; they would simulate as open circuits and were dropped. "
+                f"Examples: {', '.join(open_ports[:5])}. Details are in {report_path}."
+            )
 
     def _log_summary(
         self, total: int, n_clean: int, summary: Counter[str], snapped: int, report_path: str

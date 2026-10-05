@@ -13,7 +13,7 @@ ORCA runs a linear pipeline. Each stage receives a context dictionary and adds i
 
 ```mermaid
 flowchart TB
-    A[GDSGenerator] -- GDS files --> X["DRCChecker<br/>(grid snap + SG13G2 rules)"]
+    A[GDSGenerator] -- GDS files --> X["DRCChecker<br/>(grid snap + SG13G2 rules + port contact)"]
     X -- clean layouts --> B["GDSConverter<br/>(gds2palace mesh)"]
     B -- mesh files --> C["PalaceSimulator<br/>(full-wave EM)"]
     C -- "Touchstone .sNp" --> D["ModelTrainer<br/>(PyTorch MLP)"]
@@ -32,6 +32,8 @@ The geometry class's `input_parameter_iterator` samples parameter combinations �
 Every generated layout is snapped to the manufacturing grid and checked against the IHP SG13G2 back-end design rules with KLayout: vertices off the grid, edge angles other than 0/45/90° (0/90° on vias), acute corners, minimum metal width and spacing (`M1`, `M2`–`M5`, `TM1`, `TM2`), and via size, spacing and metal enclosure (`V1`–`V4`, `TV1`, `TV2`). The rule values and names are those of the PDK's own KLayout deck, so a finding such as `TV2.d` can be looked up in the SG13G2 design rule manual; the rule table lives in `orca.geometry.drc`.
 
 Off-grid vertices are repaired rather than reported: `snap_to_grid=True` (the default) moves every vertex onto the `grid_nm` grid (5 nm for SG13G2) and writes the GDS file back, so geometry code does not need its own snapping. Layouts with remaining violations are left out of the parameter table the later stages use (`drop_violations=True`); the stage writes `<name>_drc_report.csv` with the per-layout counts and `<name>_drc.csv` with the layouts that passed, both next to the GDS files, and logs a summary. This is where parameter combinations that draw unbuildable geometry — a winding folded over itself, a via clipped by a miter — are stopped before they cost simulation time or teach the model shapes that cannot be fabricated.
+
+The stage also checks every layout against the geometry's `.simcfg` (`check_ports=True`, the default): each port's marker — the shape on its `source_layernum` — has to overlap or touch the metals the port connects (`from_layername` and `to_layername`, or `target_layername` for an in-plane port, with GDS numbers from the stackup XML). gds2palace places a port wherever its marker is drawn and does not check that it meets a conductor, so a marker a few nanometres off its feed line still meshes and simulates, as an open circuit: the S-parameters then describe a different circuit than the parameter table says, and nothing fails. The report lists such layouts as `port<N>.missing` or `port<N>.open_<layer>`, and they are left out of the parameter table even with `drop_violations=False`.
 
 ## Stage 3 — GDS conversion (`GDSConverter`)
 
