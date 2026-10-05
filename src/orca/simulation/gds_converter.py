@@ -144,14 +144,19 @@ def worst_element_quality(mesh_filename: str) -> float:
         mesh_filename (str): Path to the ``.msh`` file.
 
     Returns:
-        float: The lowest quality of any volume element; NaN for a mesh without one.
+        float: The lowest quality of any volume element; NaN for a mesh without one, and
+        -inf for a mesh gmsh cannot read back. gmsh occasionally writes such a corrupt mesh
+        (elements referencing node 0, which does not exist), which Palace cannot use either.
     """
     import gmsh  # imported here like in create_palace_model_from_gds (libGLU on HPC nodes)
 
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.open(mesh_filename)
+        try:
+            gmsh.open(mesh_filename)
+        except Exception:  # noqa: BLE001 - gmsh raises a bare Exception for an unreadable mesh
+            return float("-inf")
         _, tags, _ = gmsh.model.mesh.getElements(3)
         lowest = [
             min(gmsh.model.mesh.getElementQualities(element_tags, "minSICN"))

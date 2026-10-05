@@ -24,14 +24,15 @@ if TYPE_CHECKING:
 # than upstream's Metal1 frame D/2 away, which makes large inductors very large. The
 # feeds run out to the ring's outer edge, where the ports sit, so each port's
 # reference plane is the boundary of the cell and simulated cells can be placed side
-# by side, ports touching. All ports
+# by side, ports touching. With the 20 µm gap and the 10 µm ring the feeds reach 30 µm
+# beyond the outer diameter, the lead length of the upstream example. All ports
 # run up from the Metal5 ground (matches "from_layername": "Metal5" in the simcfg):
 # ports 1/2 to the feeds, port 3 to the center tap on TopMetal2. The feeds are on
 # TopMetal1, as the simcfg says, except for a single turn, which feeds on TopMetal2;
 # simulation_ports moves ports 1/2 there for N == 1, as the upstream script does.
 GROUND_LAYER = 67       # Metal5
 GROUND_SPACING = 20.0   # µm, gap between the inductor's outer diameter and the ring
-GROUND_DEPTH = 20.0     # µm, width of the ground ring bars
+GROUND_DEPTH = 10.0     # µm, width of the ground ring bars, as the transformer's
 SINGLE_TURN_FEED_LAYER = "TopMetal2"  # stackup name of the metal a single turn feeds on
 
 

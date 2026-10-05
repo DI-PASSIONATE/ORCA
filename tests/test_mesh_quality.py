@@ -29,6 +29,17 @@ def _tetrahedron_mesh(path, apex_height: float) -> str:
     return str(path)
 
 
+def test_a_mesh_gmsh_cannot_read_back_is_worst(tmp_path):
+    # gmsh occasionally writes elements that reference node 0, which does not exist
+    path = _tetrahedron_mesh(tmp_path / "corrupt.msh", 1.0)
+    with open(path) as f:
+        text = f.read().replace("1 4 2 1 1 1 2 3 4", "1 4 2 1 1 0 2 3 4")
+    with open(path, "w") as f:
+        f.write(text)
+
+    assert worst_element_quality(path) == float("-inf")
+
+
 def test_worst_quality_of_a_regular_and_a_flat_tetrahedron(tmp_path):
     good = worst_element_quality(_tetrahedron_mesh(tmp_path / "good.msh", 1.0))
     flat = worst_element_quality(_tetrahedron_mesh(tmp_path / "flat.msh", 0.0))
@@ -37,7 +48,7 @@ def test_worst_quality_of_a_regular_and_a_flat_tetrahedron(tmp_path):
     assert abs(flat) < 1e-12
 
 
-QUALITY = {"good.gds": 0.01, "poor.gds": 5e-5, "flat.gds": -1.7e-14}
+QUALITY = {"good.gds": 0.01, "poor.gds": 5e-5, "flat.gds": -1.7e-14, "corrupt.gds": float("-inf")}
 
 
 def _fake_conversion(geometry_name, params, output_dir, gds_filename, stackup_xml,
@@ -61,8 +72,11 @@ def test_flat_meshes_are_left_out_and_reported(tmp_path, monkeypatch, caplog):
 
     assert sorted(pd.read_csv(context.palace_csv_path)["name"]) == ["good.gds", "poor.gds"]
     report = pd.read_csv(context.mesh_report_path).set_index("name")["worst_element_quality"]
-    assert all(math.isclose(report[name], q, abs_tol=1e-15) for name, q in QUALITY.items())
+    assert all(
+        report[name] == q or math.isclose(report[name], q, abs_tol=1e-15)
+        for name, q in QUALITY.items()
+    )
     messages = " ".join(r.getMessage() for r in caplog.records)
-    assert "1 of 3 meshes contain flat or inverted elements" in messages
+    assert "2 of 4 meshes contain flat, inverted or corrupt elements" in messages
     assert "refined_cellsize = 2 µm" in messages
-    assert "1 of 3 meshes have poorly shaped elements" in messages
+    assert "1 of 4 meshes have poorly shaped elements" in messages

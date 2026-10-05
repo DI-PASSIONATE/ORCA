@@ -116,7 +116,7 @@ class TransformerOcta(BaseGeometry):
     """
 
     name: str = "tf_octa_c_ports"
-    stackup_xml: str = StackupXML.SG13G2_FEM_200um  # from orca.geometry.presets
+    stackup_xml: str = StackupXML.SG13G2_FEM_200um_passi3D  # from orca.geometry.presets
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
     input_parameter_iterator: InputParameterIterator = field(default_factory=_input_parameters)
 

@@ -1,7 +1,5 @@
 import orca
-from orca.geometry.presets import TransformerOcta
-
-# from orca.geometry.presets import InductorOcta
+from orca.geometry.presets import InductorOcta, TransformerOcta
 
 PLOT = False
 
@@ -21,6 +19,7 @@ hyperparameters = {
 def main():
     # Use predefined geometry from examples
     geometry = TransformerOcta(name="transformer_octa")
+    geometry = InductorOcta(name="inductor_octa")
 
     orca_instance = orca.ORCA(
         [

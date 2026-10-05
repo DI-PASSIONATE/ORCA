@@ -22,8 +22,11 @@ CENTER_TAP_WIDTH = 3.0
 #: Gap between the two feed lines of a winding: the crossing 3 µm tap plus 1 µm on
 #: either side. Close feeds are a tight differential pair with a small loop inductance.
 FEED_GAP = 5.0
-#: The ports sit on the ground ring's inner edge, GROUND_SPACING - GROUND_RING_WIDTH =
-#: 10 µm beyond the windings' vertices, so short feeds are part of every model.
+#: The Metal5 ground ring keeps GROUND_SPACING = 20 µm clear of the windings' outermost
+#: metal and is GROUND_RING_WIDTH = 10 µm wide, as the inductor's. The feeds run across it
+#: to its outer edge, 30 µm beyond the windings, where the ports sit: the reference planes
+#: are the boundary of the cell, so simulated cells (inductors too) can be abutted with
+#: touching ports. The feeds and their crossing of the ring are part of every model.
 GROUND_SPACING = 20.0
 GROUND_RING_WIDTH = 10.0
 
@@ -67,11 +70,16 @@ class TransformerOcta(BaseGeometry):
 
     One single-turn winding on TopMetal2 (ports ``op``/``on`` on the right, center tap
     ``oci`` to the left) over one on TopMetal1 (ports ``ip``/``in`` on the left, center
-    tap ``ico`` to the right), inside a Metal5 ground ring the ports refer to.
+    tap ``ico`` to the right), inside a Metal5 ground ring the ports refer to. The ports
+    sit on the ring's outer edge.
     """
 
     name: str = "tf_octa_c_ports"
-    stackup_xml: str = StackupXML.SG13G2_FEM_200um
+    # Conformal SiO2/passivation over TopMetal2, as for the inductor (gds2palace L6n2
+    # study). The simcfg meshes it with refined_cellsize = 2: the ports are flush with
+    # the ring's outer edge, and at coarser sizes gmsh can fill that plane with flat
+    # tetrahedra that Palace cannot solve (GDSConverter drops such meshes).
+    stackup_xml: str = StackupXML.SG13G2_FEM_200um_passi3D
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
     input_parameter_iterator: InputParameterIterator = field(
         default_factory=_input_parameters

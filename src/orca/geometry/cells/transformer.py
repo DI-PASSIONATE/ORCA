@@ -20,10 +20,51 @@ def _ensure_active_pdk() -> None:
     except ValueError:
         gf.gpdk.PDK.activate()
 
+def _outer_flat(diameter: float, width: float) -> float:
+    """Distance from a winding's centre to the outer edge of its flat sides, on the grid.
+
+    The windings are octagons with flat sides facing +-x and +-y, so this is their
+    outermost metal in both directions (the feeds and center taps aside).
+    """
+    return round((diameter / 2.0 * math.cos(math.radians(22.5)) + width / 2.0) / _GRID) * _GRID
+
+
+def _ground_ring(
+    top_winding_diameter: float,
+    bottom_winding_diameter: float,
+    top_linewidth: float,
+    bottom_linewidth: float,
+    center_displacement: float,
+    gnd_upper_spacing: float,
+    gnd_lower_spacing: float,
+    gnd_side_spacing: float,
+    gnd_ring_width: float,
+) -> tuple[float, float, float, float]:
+    """Where the windings and the ground ring sit.
+
+    Returns:
+        tuple: The windings' offset from the origin (half the center displacement, on the
+        grid); the x of the ring's left and right outer edges, where the ports sit; and the
+        y of its top outer edge (the bottom one is at -y). The ring's inner edges keep
+        gnd_*_spacing from the windings' outermost metal.
+    """
+    # On the grid like the windings (at most 2.5 nm from the requested offset): an off-grid
+    # shift would take every vertex off the grid, and snapping them afterwards could tilt
+    # the 45 degree sides.
+    half_offset = round(center_displacement / 2.0 / _GRID) * _GRID
+    top = _outer_flat(top_winding_diameter, top_linewidth)
+    bottom = _outer_flat(bottom_winding_diameter, bottom_linewidth)
+    port_xr = max(half_offset + top, -half_offset + bottom) + gnd_upper_spacing + gnd_ring_width
+    port_xl = min(half_offset - top, -half_offset - bottom) - gnd_lower_spacing - gnd_ring_width
+    tf_y = max(top, bottom) + gnd_side_spacing + gnd_ring_width
+    on_grid = lambda x: round(x / _GRID) * _GRID  # noqa: E731 - one-line helper
+    return half_offset, on_grid(port_xl), on_grid(port_xr), on_grid(tf_y)
+
+
 def check_tf_octa_c_parameters(
     bottom_winding_diameter: float = 50.0,
     top_winding_diameter: float = 50.0,
-    center_displacement: float = 15.0,
+    center_displacement: float = 15.0,  # noqa: ARG001 - same arguments as tf_octa_c
     bottom_linewidth: float = 5.0,
     bottom_center_tap_width: float = 0.0,
     lower_feed_type: int = 1,
@@ -88,36 +129,20 @@ def check_tf_octa_c_parameters(
                 f"a {diameter:g} octagon."
             )
 
-    # The ports sit on the ring's inner edge, gnd_*_spacing - gnd_ring_width beyond the
-    # windings' vertices; closer than half a trace width, a feed would run back into its
-    # own winding instead of out of it.
-    for label, spacing in (("gnd_upper_spacing", gnd_upper_spacing), ("gnd_lower_spacing", gnd_lower_spacing)):
-        if spacing - gnd_ring_width < max(top_linewidth, bottom_linewidth) / 2.0:
+    # The ground ring keeps gnd_*_spacing from the windings' outermost metal; without a
+    # positive clearance it would run under the windings.
+    for label, spacing in (
+        ("gnd_upper_spacing", gnd_upper_spacing),
+        ("gnd_lower_spacing", gnd_lower_spacing),
+        ("gnd_side_spacing", gnd_side_spacing),
+    ):
+        if spacing <= 0:
             raise ValueError(
-                f"{label} - gnd_ring_width = {spacing - gnd_ring_width:g} puts the ports inside "
-                "the windings; it must be at least half the widest trace."
+                f"{label} = {spacing:g} puts the ground ring under the windings; it is the "
+                "clearance between them and must be positive."
             )
-
-    # Ground ring: the ports on both sides and the ring bars must leave a positive opening.
-    tf_y = max(top_winding_diameter, bottom_winding_diameter) / 2.0 + gnd_side_spacing
-    port_xr = (
-        max(
-            center_displacement / 2.0 + top_winding_diameter / 2.0,
-            -center_displacement / 2.0 + bottom_winding_diameter / 2.0,
-        )
-        + gnd_upper_spacing
-    )
-    port_xl = (
-        min(
-            center_displacement / 2.0 - top_winding_diameter / 2.0,
-            -center_displacement / 2.0 - bottom_winding_diameter / 2.0,
-        )
-        - gnd_lower_spacing
-    )
-    if not (port_xr - gnd_ring_width > port_xl + gnd_ring_width and tf_y - gnd_ring_width > 0):
-        raise ValueError(
-            "Ground ring dimensions are invalid due to port spacing. Adjust parameters."
-        )
+    if gnd_ring_width <= 0:
+        raise ValueError(f"gnd_ring_width = {gnd_ring_width:g} must be positive.")
 
 
 def tf_octa_c(
@@ -156,10 +181,11 @@ def tf_octa_c(
         upper_feed_type: Center tap of the upper winding, same encoding as lower_feed_type
             (port ``oci`` on layer 205 when set to 1).
         feedline_spacing: Feedline spacing (gap between inner sides of feed lines).
-        gnd_upper_spacing: Ring spacing on the upper winding side.
-        gnd_lower_spacing: Ring spacing on the lower winding side.
-        gnd_side_spacing: Ring spacing at the side.
-        gnd_ring_width: Ring width.
+        gnd_upper_spacing: Clearance from the windings' outermost metal to the ground
+            ring's inner edge on the right, the side of the upper winding's feeds.
+        gnd_lower_spacing: The same on the left, the side of the lower winding's feeds.
+        gnd_side_spacing: The same at the top and bottom.
+        gnd_ring_width: Ring width. The ports sit on the ring's outer edge.
         textlabel: Text placed at the transformer's centre on the TEXT layer, to read the
             dimensions in a layout viewer. Empty lists every dimension drawn.
     """
@@ -207,26 +233,18 @@ def tf_octa_c(
     # Top Center Tap goes LEFT. It crosses Bot Gap.
     fs_bot = max(feedline_spacing, top_centertap_width) if draw_top_tap else feedline_spacing
 
-    # Geometry Limits
-    tf_y = max(top_winding_diameter, bottom_winding_diameter) / 2.0 + gnd_side_spacing
-
-    # The windings are built on the manufacturing grid, so their centres are placed on it
-    # too (at most 2.5 nm from the requested offset): an off-grid shift would take every
-    # vertex off the grid, and snapping them afterwards could tilt the 45 degree sides.
-    half_offset = round(center_displacement / 2.0 / _GRID) * _GRID
-
-    def on_grid(x: float) -> float:
-        return round(x / _GRID) * _GRID
-
-    # X Limits for Ports, on the grid like the windings whose feeds end there
-    # Note: Winding edges are approx at center +/- diameter/2
-    top_right_x = half_offset + (top_winding_diameter / 2.0)
-    bot_right_x = -half_offset + (bottom_winding_diameter / 2.0)
-    port_xr = on_grid(max(top_right_x, bot_right_x) + gnd_upper_spacing)
-
-    top_left_x = half_offset - (top_winding_diameter / 2.0)
-    bot_left_x = -half_offset - (bottom_winding_diameter / 2.0)
-    port_xl = on_grid(min(top_left_x, bot_left_x) - gnd_lower_spacing)
+    # Windings and ground ring, the ring gnd_*_spacing clear of the windings' metal
+    half_offset, port_xl, port_xr, tf_y = _ground_ring(
+        top_winding_diameter,
+        bottom_winding_diameter,
+        top_linewidth,
+        bottom_linewidth,
+        center_displacement,
+        gnd_upper_spacing,
+        gnd_lower_spacing,
+        gnd_side_spacing,
+        gnd_ring_width,
+    )
 
     # -------------------------------------------------
     # 2. Helper: Winding Generator
@@ -288,7 +306,7 @@ def tf_octa_c(
         # which the SG13G2 angle rule rejects. Rounding the outer octagon's vertex offset
         # up and the inner one's down keeps the diagonal trace at least `width` wide.
         tan_22 = math.tan(math.radians(22.5))
-        outer = round((diameter / 2.0 * math.cos(math.radians(22.5)) + width / 2.0) / _GRID) * _GRID
+        outer = _outer_flat(diameter, width)
         inner = outer - width
         apothem = outer - width / 2.0  # flat side of the trace's centre line
         winding = region(octagon(outer, math.ceil(outer * tan_22 / _GRID) * _GRID)) - region(
@@ -333,8 +351,8 @@ def tf_octa_c(
         center_x=half_offset,
         center_y=0,
         rotation_deg=0,
-        feed_target_x=port_xr - gnd_ring_width,
-        centertap_target_x=port_xl + gnd_ring_width if draw_top_tap else None,
+        feed_target_x=port_xr,
+        centertap_target_x=port_xl if draw_top_tap else None,
         centertap_width=top_centertap_width,
     )
 
@@ -347,8 +365,8 @@ def tf_octa_c(
         center_x=-half_offset,
         center_y=0,
         rotation_deg=180,
-        feed_target_x=port_xl + gnd_ring_width,
-        centertap_target_x=port_xr - gnd_ring_width if draw_bottom_tap else None,
+        feed_target_x=port_xl,
+        centertap_target_x=port_xr if draw_bottom_tap else None,
         centertap_width=bottom_centertap_width,
     )
 
@@ -364,6 +382,9 @@ def tf_octa_c(
     y_bot_n = -fs_bot / 2.0 - bottom_linewidth / 2.0
 
     # Zero-width paths on port layers create Palace's 2D vertical port sheets.
+    # The feeds and center taps run across the ground ring to its outer edge, where the
+    # ports sit: the reference planes are the cell's boundary, so cells can be abutted
+    # with touching ports, as the inductor's.
 
     def add_port_marker(center, width, layer, orientation):
         dbu = c.layout().dbu
@@ -383,13 +404,13 @@ def tf_octa_c(
     # OP: top winding, right side, upper port
     c.add_port(
         name="op",
-        center=(port_xr - gnd_ring_width, y_top_p),
+        center=(port_xr, y_top_p),
         width=top_linewidth,
         orientation=0,
         layer=(201, 0),
     )
     add_port_marker(
-        (port_xr - gnd_ring_width, y_top_p),
+        (port_xr, y_top_p),
         top_linewidth,
         (201, 0),
         0,
@@ -397,13 +418,13 @@ def tf_octa_c(
     # ON: top winding, right side, lower port
     c.add_port(
         name="on",
-        center=(port_xr - gnd_ring_width, y_top_n),
+        center=(port_xr, y_top_n),
         width=top_linewidth,
         orientation=0,
         layer=(202, 0),
     )
     add_port_marker(
-        (port_xr - gnd_ring_width, y_top_n),
+        (port_xr, y_top_n),
         top_linewidth,
         (202, 0),
         0,
@@ -412,26 +433,26 @@ def tf_octa_c(
     if draw_top_tap:
         c.add_port(
             name="oci",
-            center=(port_xl + gnd_ring_width, 0.0),
+            center=(port_xl, 0.0),
             width=top_centertap_width,
             orientation=180,
             layer=(205, 0),
         )
         add_port_marker(
-            (port_xl + gnd_ring_width, 0.0), top_centertap_width, (205, 0), 180
+            (port_xl, 0.0), top_centertap_width, (205, 0), 180
         )
 
     ### BOT LAYER (ports on the LEFT) -> Port 3 and 4 -> Layer 203, 204
     # IP: bottom winding, left side, upper port
     c.add_port(
         name="ip",
-        center=(port_xl + gnd_ring_width, y_bot_p),
+        center=(port_xl, y_bot_p),
         width=bottom_linewidth,
         orientation=180,
         layer=(203, 0),
     )
     add_port_marker(
-        (port_xl + gnd_ring_width, y_bot_p),
+        (port_xl, y_bot_p),
         bottom_linewidth,
         (203, 0),
         180,
@@ -439,13 +460,13 @@ def tf_octa_c(
     # IN: bottom winding, left side, lower port
     c.add_port(
         name="in",
-        center=(port_xl + gnd_ring_width, y_bot_n),
+        center=(port_xl, y_bot_n),
         width=bottom_linewidth,
         orientation=180,
         layer=(204, 0),
     )
     add_port_marker(
-        (port_xl + gnd_ring_width, y_bot_n),
+        (port_xl, y_bot_n),
         bottom_linewidth,
         (204, 0),
         180,
@@ -454,13 +475,13 @@ def tf_octa_c(
     if draw_bottom_tap:
         c.add_port(
             name="ico",
-            center=(port_xr - gnd_ring_width, 0.0),
+            center=(port_xr, 0.0),
             width=bottom_centertap_width,
             orientation=0,
             layer=(206, 0),
         )
         add_port_marker(
-            (port_xr - gnd_ring_width, 0.0), bottom_centertap_width, (206, 0), 0
+            (port_xr, 0.0), bottom_centertap_width, (206, 0), 0
         )
 
     # -------------------------------------------------

@@ -36,7 +36,7 @@ class GDSConverter(PipelineStage):
     converted if the Palace table has no row for it with the same parameters, or
     its Palace config is gone.
 
-    Every new mesh is checked for flat or inverted elements, which Palace cannot
+    Every new mesh is checked for flat, inverted or corrupt elements, which Palace cannot
     solve (``HasPositiveFiniteDiagonal(...) is false``): such a sample is left out of
     the Palace table instead of failing on the cluster. The worst element quality of
     each mesh is written to ``<name>_mesh_report.csv`` next to the table.
@@ -236,9 +236,10 @@ class GDSConverter(PipelineStage):
         )
         if flat:
             logger.warning(
-                f"{len(flat)} of {len(qualities)} meshes contain flat or inverted elements "
-                f"(worst quality at or below {self.min_element_quality:g}) and were left out, "
-                f"as Palace cannot solve them. {hint} Samples: {', '.join(flat[:10])}"
+                f"{len(flat)} of {len(qualities)} meshes contain flat, inverted or corrupt "
+                f"elements (worst quality at or below {self.min_element_quality:g}; -inf: gmsh "
+                f"cannot read the mesh back) and were left out, as Palace cannot solve them. "
+                f"{hint} Samples: {', '.join(flat[:10])}"
                 f"{' ...' if len(flat) > 10 else ''}. Qualities are in {report_path}."
             )
         if poor:
