@@ -22,8 +22,8 @@ the upstream code does.  Layers (IHP SG13G2):
     TopMetal2 (134)  spiral windings
     TopMetal1 (126)  crossovers + feedlines
     TopVia2   (133)  vias
-    Metal1    (8)    ground frame (only when forEM=True; ``ground_layer`` picks
-                     another layer, ``ground_style`` a strip instead of a ring)
+    Metal1    (8)    ground frame, and ground under the feeds or port tabs (only
+                     when forEM=True; ``ground_layer`` picks another layer)
     201/202/203      EM ports (only when forEM=True)
 
 Standalone GDS build (just gdspy + matplotlib):
@@ -85,8 +85,6 @@ VIA_GAP = 1.06          # IHP TopVia2 rule TV2.b
 VIA_MARGIN = 0.5        # IHP TopVia2 rule TV2.c, TV2.d
 
 DELTA = 0.1             # size of EM port perpendicular to width
-GROUND_STRIP_OVERLAP = 2.0  # ground strip reaches this far past the feed ends
-GROUND_SLOT_WIDTH = 10.0    # gap cut into the right bar of a "slotted_ring" ground
 
 MU0 = 4 * math.pi * 1e-7
 
@@ -212,31 +210,20 @@ def calculate_octa_diameter(N, w, s, Ltarget, K1=2.15522, K2=3.61868, L0=0):
 # ====================
 
 def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=False,
-                       include_nofill=True, ground_layer=None, ring_spacing=None,
-                       ring_width=None, ground_style="ring", filename="inductor.gds",
+                       include_nofill=True, ground_layer=FRAME_LAYER_NUM, ring_spacing=None,
+                       ring_width=None, feeds_to_ring_edge=False, filename="inductor.gds",
                        textlabel=""):
     # Drawing unit and parameter unit is micron
-    # ground_layer: GDS layer number for the EM ground (forEM=True).
-    #   None -> FRAME_LAYER_NUM (8 = Metal1). Use 67 for Metal5, 250 for SUBGND.
-    # ground_style: "ring" draws a closed frame around the inductor with the
-    #   ports on its outer edge. "strip" draws one plate below the feed ends
-    #   only, so no closed loop surrounds the spiral; use it with a lossless
-    #   ground layer (SUBGND) as the common port reference. "slotted_ring" draws
-    #   the ring with a GROUND_SLOT_WIDTH gap in its right bar, so it is not a
-    #   closed loop either, and the ports sit on its inner part like on the
-    #   strip; use it when ports are on opposite sides (a center tap at the top
-    #   for odd N) and need one connected ground.
-    # ring_spacing: gap [um] from the inductor outer radius (D/2) to the inner
-    #   edge of the ground (forEM=True). None -> D/2 (original behaviour,
-    #   scales with diameter). Set e.g. 10 or 20 for a fixed clearance.
-    # ring_width: thickness [um] of the ground-ring frame, or depth of the
-    #   ground strip below the feed ends (forEM=True).
-    #   None -> min(20, 5*w) (original behaviour). Set e.g. 10 for a fixed width.
-    if ground_style not in ("ring", "strip", "slotted_ring"):
-        raise ValueError(
-            f"ground_style must be 'ring', 'strip' or 'slotted_ring', not {ground_style!r}")
-    if ground_layer is None:
-        ground_layer = FRAME_LAYER_NUM
+    # ORCA additions (all keep upstream's layout at their defaults):
+    #   include_nofill: also draw the OPDK nofill octagons when not forEM.
+    #   ground_layer: GDS layer of the EM ground frame (upstream: FRAME_LAYER_NUM, Metal1).
+    #   ring_spacing: gap [um] from the outer diameter to the frame (forEM). None: D/2 as
+    #     upstream, but at least past the 30 um feeds (see the frame below).
+    #   ring_width: width [um] of the frame bars (forEM). None: min(20, 5 w) as upstream.
+    #   feeds_to_ring_edge: run the feeds out to the frame's outer edge and put the ports
+    #     there (forEM), so the reference planes are the cell's boundary and layouts can
+    #     be placed side by side; instead of upstream's 30 um feeds over the ground under
+    #     the feedline.
 
     # GDSII setup
     lib = gdspy.GdsLibrary()
@@ -246,10 +233,12 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
     else:
         cellname = f"inductor2_N{N}_Do{D}_w{w}_s{s}"
 
-    try:
-        cell = lib.new_cell(cellname, overwrite_duplicate=True)
-    except ValueError:
-        cell = lib.new_cell("final_" + cellname, overwrite_duplicate=True)
+    # ORCA fix: upstream's lib.new_cell also registers the cell in gdspy's process-wide
+    # library, so drawing the same parameters a third time in one process (a reused
+    # worker meeting a repeated corner draw) failed even after its "final_" fallback.
+    # The cell only needs to live in this function's own library.
+    cell = gdspy.Cell(cellname, exclude_from_current=True)
+    lib.add(cell)
 
     # list with all geometries that we created
     all_geometries_list = []
@@ -279,24 +268,23 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
     # Inner diameter
     Di = gridsnap(D - 2 * N * w - 2 * (N - 1) * s)
 
-    # Ground-ring geometry (only present when forEM). Computed up front so the
-    # feed length can reach the ring.
+    # Ground frame (forEM), computed up front because the feeds may run out to it
     frame_width = min(20, gridsnap(5 * w)) if ring_width is None else gridsnap(ring_width)
-    frame_margin = gridsnap(D / 2) if ring_spacing is None else gridsnap(ring_spacing)
-
-    # Feed length: when forEM, extend the feedlines so the pins/ports land on the
-    # ground: just inside the ground strip / slotted ring, or GROUND_STRIP_OVERLAP
-    # inside the OUTER edge of the ring; otherwise keep the default.
-    # ORCA change: the ring's feeds used to end exactly on its outer edge. The end
-    # face of the feed, the port sheet and the ring's side face then lie in one
-    # plane, and gmsh fills that plane with flat, zero-volume tetrahedra in about
-    # 40% of the layouts with 4-5 turns, which Palace cannot solve.
-    if not forEM:
-        feed_length = 30
-    elif ground_style in ("strip", "slotted_ring"):
-        feed_length = gridsnap(frame_margin + GROUND_STRIP_OVERLAP)
+    if ring_spacing is not None:
+        frame_margin = gridsnap(ring_spacing)
+    elif feeds_to_ring_edge:
+        frame_margin = gridsnap(D / 2)
     else:
-        feed_length = gridsnap(frame_margin + frame_width - min(GROUND_STRIP_OVERLAP, frame_width / 2))
+        # ORCA fix: upstream places the frame D/2 outside the spiral. Below D = 64 um
+        # the 30 um feeds then cross the frame, so the ports end up over it or beyond it
+        # (open), and how much feed runs over ground depends on D. Keeping the frame
+        # 2 um beyond the feed ends gives every size upstream's large-D layout.
+        frame_margin = max(gridsnap(D / 2), 30 + 2)
+
+    # Feed length
+    feed_length = 30
+    if forEM and feeds_to_ring_edge:
+        feed_length = gridsnap(frame_margin + frame_width)
 
     # --- Feedline drawing  ---
     # for single turn, we draw everything on single layer TopMetal2;
@@ -625,17 +613,8 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
     if LBE:
         add_poly(all_geometries_list, layer=LBE_LAYER_NUM, purpose=PURPOSE_DRAWING, points=points)
 
-    # --- ground for EM simulation using gds2palace -------
-    # (frame_width / frame_margin were computed up front, near the feed length)
-    if forEM and ground_style == "strip":
-        # One plate below the feed ends, as in the gds2palace L6n2 study. It
-        # reaches GROUND_STRIP_OVERLAP past the feed ends so the port boxes sit
-        # on it, and its inner edge is frame_margin from the outer diameter.
-        y_feed_end = y0 - D / 2 - feed_length
-        add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
-                p1=(gridsnap(x0 - D / 2), gridsnap(y_feed_end + GROUND_STRIP_OVERLAP)),
-                p2=(gridsnap(x0 + D / 2), gridsnap(y_feed_end - frame_width)))
-    elif forEM:
+    # --- ground frame for EM simulation using gds2palace -------
+    if forEM:
         xmin_frame_inner = gridsnap(x0 - D / 2 - frame_margin)
         xmax_frame_inner = gridsnap(x0 + D / 2 + frame_margin)
         ymin_frame_inner = gridsnap(y0 - D / 2 - frame_margin)
@@ -649,18 +628,9 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
         add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
                 p1=(xmin_frame_outer, ymin_frame_outer),
                 p2=(xmin_frame_inner, ymax_frame_outer))
-        if ground_style == "slotted_ring":
-            # right bar in two pieces, so the frame is not a closed loop
-            add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
-                    p1=(xmax_frame_inner, ymin_frame_outer),
-                    p2=(xmax_frame_outer, gridsnap(y0 - GROUND_SLOT_WIDTH / 2)))
-            add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
-                    p1=(xmax_frame_inner, gridsnap(y0 + GROUND_SLOT_WIDTH / 2)),
-                    p2=(xmax_frame_outer, ymax_frame_outer))
-        else:
-            add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
-                    p1=(xmax_frame_inner, ymin_frame_outer),
-                    p2=(xmax_frame_outer, ymax_frame_outer))
+        add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
+                p1=(xmax_frame_inner, ymin_frame_outer),
+                p2=(xmax_frame_outer, ymax_frame_outer))
         add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
                 p1=(xmin_frame_inner, ymin_frame_inner),
                 p2=(xmax_frame_inner, ymin_frame_outer))
@@ -668,12 +638,22 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
                 p1=(xmin_frame_inner, ymax_frame_inner),
                 p2=(xmax_frame_inner, ymax_frame_outer))
 
-        # NOTE: the original gds2palace code added a "ground under feedline"
-        # rectangle here (filling the feed opening down to the ring). With the
-        # feed length now reaching the ring it overlapped the ring frame, so it
-        # is intentionally omitted — the ring is just the clean square frame.
+        if not feeds_to_ring_edge:
+            # ground under feedline at pin LA,LB
+            add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
+                    p1=(x0 - feedline_spacing / 2 - w, y0 - D / 2 - feed_length + 2),
+                    p2=(x0 + feedline_spacing / 2 + w, ymin_frame_inner))
 
-    # add all created shapes to cell now
+            if includeCenterTap and not is_even(N):
+                # ground under feedline at top side pin LC
+                add_box(all_geometries_list, layer=ground_layer, purpose=PURPOSE_DRAWING,
+                        p1=(x0 - feedline_spacing / 2 - w, y0 + D / 2 + feed_length - 2),
+                        p2=(x0 + feedline_spacing / 2 + w, ymax_frame_inner))
+
+    # add all created shapes to cell now. Upstream v4 snaps every polygon vertex to
+    # the 10 nm grid here; that narrows thin TopMetal2 traces below the 2 um minimum
+    # (TM2.a) at the miter joins, so ORCA leaves snapping to the DRCChecker stage
+    # (5 nm grid), as for every geometry.
     for geometry in all_geometries_list:
         cell.add(geometry)
 

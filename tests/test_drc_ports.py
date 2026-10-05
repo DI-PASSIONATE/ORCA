@@ -167,3 +167,46 @@ def test_drc_stage_checks_each_layout_with_its_own_ports(tmp_path):
 
     report = pd.read_csv(context.drc_report_path).set_index("name")
     assert not report["rules"].fillna("").str.contains("port").any(), report["rules"]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        # the smallest single turns
+        {"turns": 1, "width": 2.02, "space": 2.32, "diameter": 32.0},
+        {"turns": 1, "width": 2.1, "space": 2.98, "diameter": 34.0},
+        # a larger multi-turn spiral
+        {"turns": 3, "width": 6.0, "space": 3.0, "diameter": 200.0},
+    ],
+    ids=["small-D32", "small-D34", "large"],
+)
+def test_inductor_ports_sit_on_ground_at_every_size(tmp_path, params):
+    geometry = InductorOcta()
+    path = str(tmp_path / "inductor.gds")
+    geometry.create_gds_file("inductor", path, params)
+
+    result = check_gds_file(path, ports=port_contacts(geometry.ports_for(params), geometry.stackup_xml))
+
+    assert result.port_findings == {}
+
+
+@pytest.mark.parametrize("params", [{"turns": 1, "width": 2.46, "space": 2.36, "diameter": 32.0},
+                                    {"turns": 2, "width": 5.0, "space": 3.0, "diameter": 120.0},
+                                    {"turns": 3, "width": 8.0, "space": 4.1, "diameter": 260.0}],
+                         ids=["one-turn", "two-turns", "three-turns"])
+def test_inductor_ports_sit_on_the_ring_outer_edge(tmp_path, params):
+    # The reference planes are the cell's boundary, so simulated cells can be abutted
+    # with their ports touching: each port is flush with the ring's outer edge
+    path = str(tmp_path / "inductor.gds")
+    InductorOcta().create_gds_file("inductor", path, params)
+    layout = kdb.Layout()
+    layout.read(path)
+    top = layout.top_cell()
+    ring = kdb.Region(top.begin_shapes_rec(layout.find_layer(*SG13G2.Metal5))).bbox()
+
+    for marker_layer in (201, 202, 203):
+        marker = kdb.Region(top.begin_shapes_rec(layout.find_layer(marker_layer, 0))).bbox()
+        if marker.center().y < 0:
+            assert marker.bottom == ring.bottom
+        else:
+            assert marker.top == ring.top

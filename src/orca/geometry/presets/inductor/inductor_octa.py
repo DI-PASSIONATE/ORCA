@@ -19,16 +19,18 @@ if TYPE_CHECKING:
 
     from orca.training.datasets.base_dataset import BaseDataset
 
-# All ports run up from a ground on Metal5 (matches "from_layername": "Metal5" in
-# the simcfg): ports 1/2 to the feeds, port 3 to the center tap on TopMetal2. The
-# feeds are on TopMetal1, as the simcfg says, except for a single turn, which
-# symmetric_octa_IHP draws on TopMetal2 alone; simulation_ports moves ports 1/2
-# there for N == 1, so no pad or via has to bridge the gap. The ground is a closed square ring around the spiral for every N, so
-# one connected reference serves all three ports whether the center tap leaves
-# between the feeds (even N) or at the top (odd N). The feeds and the center tap end
-# 2 µm inside the ring's outer edge, where the ports sit.
+# The spiral is that of the upstream gds2palace example (synthesize_ihp_inductor_v4).
+# Its EM ground is a closed square Metal5 ring at a fixed distance around it, rather
+# than upstream's Metal1 frame D/2 away, which makes large inductors very large. The
+# feeds run out to the ring's outer edge, where the ports sit, so each port's
+# reference plane is the boundary of the cell and simulated cells can be placed side
+# by side, ports touching. All ports
+# run up from the Metal5 ground (matches "from_layername": "Metal5" in the simcfg):
+# ports 1/2 to the feeds, port 3 to the center tap on TopMetal2. The feeds are on
+# TopMetal1, as the simcfg says, except for a single turn, which feeds on TopMetal2;
+# simulation_ports moves ports 1/2 there for N == 1, as the upstream script does.
 GROUND_LAYER = 67       # Metal5
-GROUND_SPACING = 20.0   # µm, gap between inductor outer edge and the ground
+GROUND_SPACING = 20.0   # µm, gap between the inductor's outer diameter and the ring
 GROUND_DEPTH = 20.0     # µm, width of the ground ring bars
 SINGLE_TURN_FEED_LAYER = "TopMetal2"  # stackup name of the metal a single turn feeds on
 
@@ -71,8 +73,11 @@ class InductorOcta(BaseGeometry):
     name: str = "inductor_octa"
     # Conformal SiO2/passivation over TopMetal2 (gds2palace L6n2 study): the planar
     # stackup fills the gaps between turns with oxide and overstates the turn-to-turn
-    # capacitance. Paired with refined_cellsize = 5 in the simcfg, the study's fast
-    # "daily driver" setting; it meshes smaller than planar at 2 µm.
+    # capacitance. The simcfg meshes it with refined_cellsize = 2 rather than the study's
+    # fast 5: with the ports flush with the ring's outer edge, the ring face, the 0.85 µm
+    # port sheet and the feed's end face lie in one plane, and at 5 µm gmsh filled it with
+    # flat tetrahedra in about 40% of the 4-5 turn layouts, which Palace cannot solve. At
+    # 2 µm none of 70 such layouts had one, at about twice the elements.
     stackup_xml: str = StackupXML.SG13G2_FEM_200um_passi3D
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "inductor_octa.simcfg")
     input_parameter_iterator: InputParameterIterator = field(
@@ -158,9 +163,9 @@ class InductorOcta(BaseGeometry):
             LBE=False,
             forEM=True,
             ground_layer=GROUND_LAYER,
-            ground_style="ring",
             ring_spacing=GROUND_SPACING,
             ring_width=GROUND_DEPTH,
+            feeds_to_ring_edge=True,
             filename=output_path,
         )
         return output_path

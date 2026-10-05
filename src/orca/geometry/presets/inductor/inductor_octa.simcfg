@@ -10,7 +10,7 @@
         "fstart": 1.0,
         "fstop": 500.0,
         "fstep": 1.0,
-        "refined_cellsize": 5.0,
+        "refined_cellsize": 2.0,
         "order": 2,
         "cells_per_wavelength": 10.0,
         "meshsize_max": 100.0,
