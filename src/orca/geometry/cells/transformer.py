@@ -383,13 +383,13 @@ def tf_octa_c(
     # OP: top winding, right side, upper port
     c.add_port(
         name="op",
-        center=(round(port_xr - gnd_ring_width, 2), round(y_top_p, 2)),
+        center=(port_xr - gnd_ring_width, y_top_p),
         width=top_linewidth,
         orientation=0,
         layer=(201, 0),
     )
     add_port_marker(
-        (round(port_xr - gnd_ring_width, 2), round(y_top_p, 2)),
+        (port_xr - gnd_ring_width, y_top_p),
         top_linewidth,
         (201, 0),
         0,
@@ -397,13 +397,13 @@ def tf_octa_c(
     # ON: top winding, right side, lower port
     c.add_port(
         name="on",
-        center=(round(port_xr - gnd_ring_width, 2), round(y_top_n, 2)),
+        center=(port_xr - gnd_ring_width, y_top_n),
         width=top_linewidth,
         orientation=0,
         layer=(202, 0),
     )
     add_port_marker(
-        (round(port_xr - gnd_ring_width, 2), round(y_top_n, 2)),
+        (port_xr - gnd_ring_width, y_top_n),
         top_linewidth,
         (202, 0),
         0,
@@ -412,26 +412,26 @@ def tf_octa_c(
     if draw_top_tap:
         c.add_port(
             name="oci",
-            center=(round(port_xl + gnd_ring_width, 2), 0.0),
+            center=(port_xl + gnd_ring_width, 0.0),
             width=top_centertap_width,
             orientation=180,
             layer=(205, 0),
         )
         add_port_marker(
-            (round(port_xl + gnd_ring_width, 2), 0.0), top_centertap_width, (205, 0), 180
+            (port_xl + gnd_ring_width, 0.0), top_centertap_width, (205, 0), 180
         )
 
     ### BOT LAYER (ports on the LEFT) -> Port 3 and 4 -> Layer 203, 204
     # IP: bottom winding, left side, upper port
     c.add_port(
         name="ip",
-        center=(round(port_xl + gnd_ring_width, 2), round(y_bot_p, 2)),
+        center=(port_xl + gnd_ring_width, y_bot_p),
         width=bottom_linewidth,
         orientation=180,
         layer=(203, 0),
     )
     add_port_marker(
-        (round(port_xl + gnd_ring_width, 2), round(y_bot_p, 2)),
+        (port_xl + gnd_ring_width, y_bot_p),
         bottom_linewidth,
         (203, 0),
         180,
@@ -439,13 +439,13 @@ def tf_octa_c(
     # IN: bottom winding, left side, lower port
     c.add_port(
         name="in",
-        center=(round(port_xl + gnd_ring_width, 2), round(y_bot_n, 2)),
+        center=(port_xl + gnd_ring_width, y_bot_n),
         width=bottom_linewidth,
         orientation=180,
         layer=(204, 0),
     )
     add_port_marker(
-        (round(port_xl + gnd_ring_width, 2), round(y_bot_n, 2)),
+        (port_xl + gnd_ring_width, y_bot_n),
         bottom_linewidth,
         (204, 0),
         180,
@@ -454,13 +454,13 @@ def tf_octa_c(
     if draw_bottom_tap:
         c.add_port(
             name="ico",
-            center=(round(port_xr - gnd_ring_width, 2), 0.0),
+            center=(port_xr - gnd_ring_width, 0.0),
             width=bottom_centertap_width,
             orientation=0,
             layer=(206, 0),
         )
         add_port_marker(
-            (round(port_xr - gnd_ring_width, 2), 0.0), bottom_centertap_width, (206, 0), 0
+            (port_xr - gnd_ring_width, 0.0), bottom_centertap_width, (206, 0), 0
         )
 
     # -------------------------------------------------
@@ -479,12 +479,12 @@ def tf_octa_c(
         # Top bar
         top = gf.components.rectangle(size=(outer_w, gnd_ring_width), layer=LAYER_RING)
         top_ref = c << top
-        top_ref.move((round(port_xl, 2), round(tf_y - gnd_ring_width, 2)))
+        top_ref.move((port_xl, tf_y - gnd_ring_width))
 
         # Bottom bar
         bot = gf.components.rectangle(size=(outer_w, gnd_ring_width), layer=LAYER_RING)
         bot_ref = c << bot
-        bot_ref.move((round(port_xl, 2), round(-tf_y, 2)))
+        bot_ref.move((port_xl, -tf_y))
 
         # Left bar
         left_h = outer_h - 2 * gnd_ring_width
@@ -493,7 +493,7 @@ def tf_octa_c(
                 size=(gnd_ring_width, left_h), layer=LAYER_RING
             )
             left_ref = c << left
-            left_ref.move((round(port_xl, 2), round(-tf_y + gnd_ring_width, 2)))
+            left_ref.move((port_xl, -tf_y + gnd_ring_width))
 
         # Right bar
         if left_h > 0:
@@ -502,7 +502,7 @@ def tf_octa_c(
             )
             right_ref = c << right
             right_ref.move(
-                (round(port_xr - gnd_ring_width, 2), round(-tf_y + gnd_ring_width, 2))
+                (port_xr - gnd_ring_width, -tf_y + gnd_ring_width)
             )
     else:
         raise ValueError(
