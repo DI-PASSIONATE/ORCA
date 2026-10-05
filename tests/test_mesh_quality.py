@@ -6,13 +6,12 @@ import math
 import os
 
 import pandas as pd
-import pytest
 
 import orca.pipeline.gds_conversion_stage as conversion_stage
 from orca.geometry.presets import InductorOcta
 from orca.pipeline.context import PipelineContext
 from orca.pipeline.gds_conversion_stage import GDSConverter
-from orca.simulation.gds_converter import worst_element_quality
+
 
 def _tetrahedron_mesh(path, apex_height: float) -> str:
     """A one-tetrahedron mesh in gmsh's MSH 2.2 format; height 0 makes it flat."""
