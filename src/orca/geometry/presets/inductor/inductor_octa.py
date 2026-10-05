@@ -14,18 +14,26 @@ from orca.geometry.input_parameters import InputParameterIterator, RangeParamete
 from orca.geometry.presets.paths import StackupXML
 
 if TYPE_CHECKING:
+    import numpy as np
+    import skrf as rf
+
     from orca.training.datasets.base_dataset import BaseDataset
 
-# All ports run up from a ground on Metal5 (matches "from_layername": "Metal5" in
-# the simcfg): ports 1/2 to the feeds on TopMetal1, port 3 to the center tap on
-# TopMetal2. The ground is a closed square ring around the spiral for every N, so
-# one connected reference serves all three ports whether the center tap leaves
-# between the feeds (even N) or at the top (odd N). The feeds and the center tap run out to the ring's outer edge,
-# where the ports sit. The feed on TopMetal1 requires N >= 2 turns (see
-# symmetric_octa_IHP: N == 1 feeds on TopMetal2 instead).
+# The spiral is that of the upstream gds2palace example (synthesize_ihp_inductor_v4).
+# Its EM ground is a closed square Metal5 ring at a fixed distance around it, rather
+# than upstream's Metal1 frame D/2 away, which makes large inductors very large. The
+# feeds run out to the ring's outer edge, where the ports sit, so each port's
+# reference plane is the boundary of the cell and simulated cells can be placed side
+# by side, ports touching. With the 20 µm gap and the 10 µm ring the feeds reach 30 µm
+# beyond the outer diameter, the lead length of the upstream example. All ports
+# run up from the Metal5 ground (matches "from_layername": "Metal5" in the simcfg):
+# ports 1/2 to the feeds, port 3 to the center tap on TopMetal2. The feeds are on
+# TopMetal1, as the simcfg says, except for a single turn, which feeds on TopMetal2;
+# simulation_ports moves ports 1/2 there for N == 1, as the upstream script does.
 GROUND_LAYER = 67       # Metal5
-GROUND_SPACING = 20.0   # µm, gap between inductor outer edge and the ground
-GROUND_DEPTH = 20.0     # µm, width of the ground ring bars
+GROUND_SPACING = 20.0   # µm, gap between the inductor's outer diameter and the ring
+GROUND_DEPTH = 10.0     # µm, width of the ground ring bars, as the transformer's
+SINGLE_TURN_FEED_LAYER = "TopMetal2"  # stackup name of the metal a single turn feeds on
 
 
 # Built per instance rather than shared as a class attribute - see the note in
@@ -59,15 +67,18 @@ class InductorOcta(BaseGeometry):
     Represents a symmetric octagonal spiral inductor geometry (IHP SG13G2).
 
     3-port spiral inductor (LA, LB and the center tap LC), ported from the
-    gds2palace IHP example by Volker Muehlhaus. Requires N >= 2 turns, since the feedline sits on
-    TopMetal1 (single-turn inductors feed on TopMetal2 instead).
+    gds2palace IHP example by Volker Muehlhaus. Multi-turn spirals feed on TopMetal1,
+    a single turn on TopMetal2; the ports follow the feeds (:meth:`simulation_ports`).
     """
 
     name: str = "inductor_octa"
     # Conformal SiO2/passivation over TopMetal2 (gds2palace L6n2 study): the planar
     # stackup fills the gaps between turns with oxide and overstates the turn-to-turn
-    # capacitance. Paired with refined_cellsize = 5 in the simcfg, the study's fast
-    # "daily driver" setting; it meshes smaller than planar at 2 µm.
+    # capacitance. The simcfg meshes it with refined_cellsize = 2 rather than the study's
+    # fast 5: with the ports flush with the ring's outer edge, the ring face, the 0.85 µm
+    # port sheet and the feed's end face lie in one plane, and at 5 µm gmsh filled it with
+    # flat tetrahedra in about 40% of the 4-5 turn layouts, which Palace cannot solve. At
+    # 2 µm none of 70 such layouts had one, at about twice the elements.
     stackup_xml: str = StackupXML.SG13G2_FEM_200um_passi3D
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "inductor_octa.simcfg")
     input_parameter_iterator: InputParameterIterator = field(
@@ -90,6 +101,22 @@ class InductorOcta(BaseGeometry):
             input_normalizer=MinMaxNormalizer(self.input_parameter_iterator),
             output_normalizer=StandardNormalizer(),
         )
+
+    def simulation_ports(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        ports = super().simulation_ports(params)
+        if round(params["turns"]) == 1:
+            # The feeds (LA, LB) of a single turn are on TopMetal2, not TopMetal1
+            for port in ports:
+                if port["portnumber"] in (1, 2):
+                    port["to_layername"] = SINGLE_TURN_FEED_LAYER
+        return ports
+
+    def electrical_parameters(self, ntwk: "rf.Network") -> dict[str, "np.ndarray"]:
+        from orca.utils.postprocessing import inductor_parameters
+
+        # Ports 1 and 2 feed the two ends (LA, LB); port 3, the center tap, is AC-grounded
+        # as in differential use
+        return inductor_parameters(ntwk, ends=(0, 1), shorted=(2,))
 
     def feasibility_constraints(self) -> list[str]:
         # get_min_outer_diameter as one expression; kept in step with it by a test.
@@ -137,9 +164,9 @@ class InductorOcta(BaseGeometry):
             LBE=False,
             forEM=True,
             ground_layer=GROUND_LAYER,
-            ground_style="ring",
             ring_spacing=GROUND_SPACING,
             ring_width=GROUND_DEPTH,
+            feeds_to_ring_edge=True,
             filename=output_path,
         )
         return output_path

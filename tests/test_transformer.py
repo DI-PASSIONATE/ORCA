@@ -8,7 +8,7 @@ import klayout.db as kdb
 import pytest
 
 from orca.geometry.cells.transformer import check_tf_octa_c_parameters, tf_octa_c
-from orca.geometry.drc import check_gds_file
+from orca.geometry.drc import check_gds_file, port_contacts
 from orca.geometry.layers import SG13G2
 from orca.geometry.presets import TransformerOcta
 
@@ -80,6 +80,29 @@ def test_each_winding_with_its_feeds_and_tap_is_one_polygon(tmp_path):
         assert _metal(path, layer).count() == 1
 
 
+@pytest.mark.parametrize(
+    "params",
+    [
+        # Draws whose port markers were rounded 5 nm past the feed ends: all six ports,
+        # the right-hand ones (op, on, ico) and the left-hand ones (ip, in, oci) open
+        {"bottom_winding_diameter": 28.5, "top_winding_diameter": 23.6,
+         "relative_displacement": 0.17, "bottom_linewidth": 7.8, "top_linewidth": 6.2},
+        {"bottom_winding_diameter": 28.6, "top_winding_diameter": 24.7,
+         "relative_displacement": 0.02, "bottom_linewidth": 7.6, "top_linewidth": 5.2},
+        {"bottom_winding_diameter": 29.2, "top_winding_diameter": 28.8,
+         "relative_displacement": 0.07, "bottom_linewidth": 3.5, "top_linewidth": 3.1},
+    ],
+    ids=["all-open", "right-open", "left-open"],
+)
+def test_port_markers_touch_the_feed_ends(tmp_path, params):
+    geometry = TransformerOcta()
+    ports = port_contacts(geometry.ports_for(params), geometry.stackup_xml)
+
+    result = check_gds_file(_draw(tmp_path, params), ports=ports)
+
+    assert result.port_findings == {}
+
+
 def test_feed_gap_wider_than_the_flat_side_is_rejected():
     # A 20 µm octagon's flat side is 20 * sin(22.5 deg) = 7.65 µm along the centre line
     check_tf_octa_c_parameters(bottom_winding_diameter=20.0, top_winding_diameter=20.0,
@@ -107,9 +130,30 @@ def test_gap_beyond_the_inner_flat_side_draws_without_folding(tmp_path):
     assert check_gds_file(path).clean
 
 
-def test_ports_inside_the_windings_are_rejected():
-    with pytest.raises(ValueError, match="inside the windings"):
-        check_tf_octa_c_parameters(top_linewidth=6.0, gnd_upper_spacing=12.0, gnd_ring_width=10.0)
+def test_ring_without_clearance_is_rejected():
+    for no_clearance in (
+        lambda: check_tf_octa_c_parameters(gnd_upper_spacing=0.0),
+        lambda: check_tf_octa_c_parameters(gnd_lower_spacing=0.0),
+        lambda: check_tf_octa_c_parameters(gnd_side_spacing=0.0),
+    ):
+        with pytest.raises(ValueError, match="under the windings"):
+            no_clearance()
+
+
+def test_ring_keeps_its_clearance_from_the_winding_metal(tmp_path):
+    # The ring's inner edges keep GROUND_SPACING from the windings' outermost metal, as
+    # the inductor's ring does from its spiral
+    path = _draw(tmp_path, SMALLEST | {"relative_displacement": 0.2, "bottom_linewidth": 6.0})
+    windings = (_metal(path, SG13G2.TopMetal1) + _metal(path, SG13G2.TopMetal2)).merged()
+    ring = _metal(path, SG13G2.Metal5)
+    opening = (kdb.Region(ring.bbox()) - ring).merged()
+
+    # the feeds and center taps cross the ring; the octagons alone set the clearance
+    windings_body = windings - (kdb.Region(ring.bbox()) - opening)
+    spacing = 20.0 / 0.001  # GROUND_SPACING in database units (1 nm)
+    body, inner = windings_body.bbox(), opening.bbox()
+    assert inner.top - body.top == pytest.approx(spacing, abs=5)
+    assert body.bottom - inner.bottom == pytest.approx(spacing, abs=5)
 
 
 @pytest.mark.parametrize(
@@ -151,3 +195,25 @@ def test_offset_scales_with_the_windings_and_lands_on_the_grid(tmp_path):
     (text,) = [s.text.string for s in layout.top_cell().shapes(layout.find_layer(*SG13G2.TEXT)).each()]
     assert "center displacement: 1.240" in text  # each winding centre on the 5 nm grid
     assert check_gds_file(path).snapped_vertices == 0
+
+
+@pytest.mark.parametrize(
+    "params",
+    [SMALLEST, SMALLEST | {"bottom_winding_diameter": 90.0, "top_winding_diameter": 80.0,
+                           "relative_displacement": 0.2, "bottom_linewidth": 8.0}],
+    ids=["smallest", "large-offset"],
+)
+def test_ports_sit_on_the_ring_outer_edge(tmp_path, params):
+    # The reference planes are the cell's boundary, so cells can be abutted with touching
+    # ports, as the inductor's
+    path = _draw(tmp_path, params)
+    layout = kdb.Layout()
+    layout.read(path)
+    top = layout.top_cell()
+    ring = kdb.Region(top.begin_shapes_rec(layout.find_layer(*SG13G2.Metal5))).bbox()
+
+    for marker_layer in range(201, 207):
+        # each marker is a zero-width path across its feed, at constant x
+        (marker,) = top.shapes(layout.find_layer(marker_layer, 0)).each()
+        xs = {point.x for point in marker.path.each_point()}
+        assert xs in ({ring.left}, {ring.right}), marker_layer

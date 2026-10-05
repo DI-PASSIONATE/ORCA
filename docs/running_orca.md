@@ -73,6 +73,9 @@ orca_instance = ORCA(
             # warmup_epochs=1.0,      # Linear learning-rate warmup at the start of training
             # grad_clip_norm=1.0,     # Gradient-norm clipping; None disables it
             # allow_tf32=False,       # TF32 matmuls while training (faster on A100 and newer)
+            # admittance_weight=0.0,  # Loss on the relative Y-parameter error (tracks L and Q)
+            # passivity_weight=0.0,   # Penalty on predicted S with a singular value above 1
+            # above_srf_weight=1.0,   # Loss weight of frequencies above each self-resonance
         ),
         orca.OnnxExporter(),
         orca.ModelTester(),

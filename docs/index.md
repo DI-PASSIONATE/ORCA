@@ -82,7 +82,7 @@ flowchart LR
 | Stage | Purpose |
 |---|---|
 | `GDSGenerator` | Samples geometry parameters and writes GDS layout files |
-| `DRCChecker` | Snaps layouts to the manufacturing grid and drops those violating the SG13G2 design rules |
+| `DRCChecker` | Snaps layouts to the manufacturing grid and drops those violating the SG13G2 design rules or with port markers off their metal |
 | `GDSConverter` | Converts GDS files to Palace-compatible mesh inputs |
 | `PalaceSimulator` | Runs full-wave EM simulations and stores Touchstone results |
 | `ModelTrainer` | Trains a PyTorch neural network on the simulation dataset |

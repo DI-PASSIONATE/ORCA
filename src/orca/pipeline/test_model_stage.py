@@ -19,9 +19,8 @@ from orca.training.predictors import (
     TorchNetworkPredictor,
 )
 from orca.utils.postprocessing import (
-    calculate_electrical_parameters,
+    plot_electrical_parameters,
     plot_errors_vs_frequency,
-    plot_rfic_transformer_metrics,
     pointwise_relative_error,
 )
 
@@ -31,11 +30,6 @@ if TYPE_CHECKING:
     from orca.geometry.base_geometry import BaseGeometry
     from orca.pipeline.context import PipelineContext
 
-
-#: Electrical parameters whose error is an absolute difference instead of a relative one.
-#: The coupling factor k is close to zero for weakly coupled layouts, where a relative error
-#: explodes without saying anything about the model.
-ABSOLUTE_ERROR_PARAMETERS = frozenset({"k"})
 
 #: Name of the S-parameter error among the per-frequency errors
 S_PARAMETER_ERROR = "|S|"
@@ -55,12 +49,15 @@ class EvaluationErrors:
         per_frequency: Per quantity (``|S|`` and each electrical parameter that is a
             curve), the error of every geometry at every frequency point, shape
             ``(n_geometries, n_freq)``. Relative errors are in percent, except for
-            :data:`ABSOLUTE_ERROR_PARAMETERS` and ``|S|``.
+            ``|S|`` and the ``absolute_parameters``.
+        absolute_parameters: Electrical parameters whose error is absolute, as the
+            geometry declared them (``BaseGeometry.absolute_error_parameters``).
     """
 
     per_geometry: pd.DataFrame
     frequencies: np.ndarray | None = None
     per_frequency: dict[str, np.ndarray] = field(default_factory=dict)
+    absolute_parameters: frozenset[str] = frozenset()
 
 
 class ModelTester(PipelineStage):
@@ -118,7 +115,7 @@ class ModelTester(PipelineStage):
             logger.error(str(e))
             return context
 
-        errors = self.evaluate(test_dataset, predictor, progress_callback)
+        errors = self.evaluate(test_dataset, predictor, progress_callback, context.geometry)
         results = self.summarize(errors.per_geometry)
 
         if results:
@@ -190,6 +187,7 @@ class ModelTester(PipelineStage):
         test_dataset: GeoToNtwkDataset,
         predictor: NetworkPredictor,
         progress_callback: Callable[[str, int, int, str], None] | None = None,
+        geometry: "BaseGeometry | None" = None,
     ) -> dict[str, Any]:
         """
         Evaluates the predictor on the test dataset.
@@ -197,23 +195,33 @@ class ModelTester(PipelineStage):
         Returns:
             dict: The summary of :meth:`summarize`; empty if nothing was evaluated.
         """
-        return self.summarize(self.evaluate(test_dataset, predictor, progress_callback).per_geometry)
+        errors = self.evaluate(test_dataset, predictor, progress_callback, geometry)
+        return self.summarize(errors.per_geometry)
 
     def evaluate(
         self,
         test_dataset: GeoToNtwkDataset,
         predictor: NetworkPredictor,
         progress_callback: Callable[[str, int, int, str], None] | None = None,
+        geometry: "BaseGeometry | None" = None,
     ) -> EvaluationErrors:
         """
         The errors of every test geometry, overall and at every frequency point.
+
+        Args:
+            test_dataset: The held-out networks and their parameters.
+            predictor: The model to test.
+            progress_callback: Called after every geometry.
+            geometry: Supplies the electrical parameters to compare
+                (``BaseGeometry.electrical_parameters``); None compares S-parameters only.
 
         Returns:
             EvaluationErrors: ``per_geometry`` holds one row per geometry: ``name``, the
             geometry parameters, the mean and maximum absolute S-parameter error, the
             mean absolute error per frequency band (``s_error <band>``), and the median
             error of each electrical parameter, relative in percent (``<param> error %``)
-            or, for :data:`ABSOLUTE_ERROR_PARAMETERS`, absolute (``<param> abs error``).
+            or, for the geometry's ``absolute_error_parameters``, absolute
+            (``<param> abs error``).
             Empty in plot mode.
         """
         num_samples = len(test_dataset)
@@ -231,8 +239,13 @@ class ModelTester(PipelineStage):
             ntwk_gt.name = "Ground Truth"
 
             if self.plot:
-                plot_rfic_transformer_metrics(ntwk_gt)
-                plot_rfic_transformer_metrics(ntwk_pred)
+                if geometry is not None:
+                    plot_electrical_parameters(
+                        ntwk_gt.f,
+                        geometry.electrical_parameters(ntwk_gt),
+                        geometry.electrical_parameters(ntwk_pred),
+                        title=test_dataset.names[i],
+                    )
                 continue
 
             abs_error = np.abs(ntwk_pred.s - ntwk_gt.s)  # (n_freq, n_ports, n_ports)
@@ -245,8 +258,10 @@ class ModelTester(PipelineStage):
             }
             for label, in_band in self._frequency_bands(ntwk_gt.f).items():
                 row[f"s_error {label}"] = float(per_frequency[in_band].mean())
-            electrical, electrical_curves = self._electrical_errors(
-                ntwk_pred, ntwk_gt, test_dataset.names[i]
+            electrical, electrical_curves = (
+                self._electrical_errors(ntwk_pred, ntwk_gt, test_dataset.names[i], geometry)
+                if geometry is not None
+                else ({}, {})
             )
             row |= electrical
             rows.append(row)
@@ -281,6 +296,9 @@ class ModelTester(PipelineStage):
                 for quantity, stack in curves.items()
                 if len(stack) == n_on_grid
             },
+            absolute_parameters=(
+                geometry.absolute_error_parameters if geometry is not None else frozenset()
+            ),
         )
 
     @staticmethod
@@ -360,7 +378,7 @@ class ModelTester(PipelineStage):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 levels = np.nanpercentile(stack, list(PERCENTILES.values()), axis=0)
-            absolute = quantity == S_PARAMETER_ERROR or quantity in ABSOLUTE_ERROR_PARAMETERS
+            absolute = quantity == S_PARAMETER_ERROR or quantity in errors.absolute_parameters
             tables.append(
                 pd.DataFrame(
                     {
@@ -404,10 +422,13 @@ class ModelTester(PipelineStage):
 
     @staticmethod
     def _electrical_errors(
-        predicted_ntwk: "rf.Network", reference_ntwk: "rf.Network", name: str
+        predicted_ntwk: "rf.Network",
+        reference_ntwk: "rf.Network",
+        name: str,
+        geometry: "BaseGeometry",
     ) -> tuple[dict[str, float], dict[str, np.ndarray]]:
         """
-        The error of each electrical parameter that can be derived.
+        The error of each electrical parameter the geometry declares, where it can be derived.
 
         Returns:
             tuple: The median error per parameter, keyed by its per-geometry column name;
@@ -415,8 +436,8 @@ class ModelTester(PipelineStage):
             (not, say, the self-resonance frequency).
         """
         try:
-            predicted = calculate_electrical_parameters(predicted_ntwk)
-            reference = calculate_electrical_parameters(reference_ntwk)
+            predicted = geometry.electrical_parameters(predicted_ntwk)
+            reference = geometry.electrical_parameters(reference_ntwk)
         except Exception as e:  # noqa: BLE001 - skip samples whose metrics cannot be derived
             logger.debug(f"Could not compute electrical parameters for {name}: {e}")
             return {}, {}
@@ -424,7 +445,7 @@ class ModelTester(PipelineStage):
         medians: dict[str, float] = {}
         curves: dict[str, np.ndarray] = {}
         for param, gt in reference.items():
-            if param in ABSOLUTE_ERROR_PARAMETERS:
+            if param in geometry.absolute_error_parameters:
                 curve = np.abs(np.atleast_1d(predicted[param]) - np.atleast_1d(gt)).astype(float)
                 curve[~np.isfinite(curve)] = np.nan
                 column = f"{param} abs error"

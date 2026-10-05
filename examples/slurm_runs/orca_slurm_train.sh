@@ -14,7 +14,7 @@
 #     --gres=gpu:rtx3080:1 --partition=rtx3080   or   --gres=gpu:v100:1 --partition=v100
 #SBATCH --gres=gpu:a100:1
 #SBATCH --partition=a100
-#SBATCH --time=24:00:00
+#SBATCH --time=12:00:00
 #SBATCH --job-name=ORCA-TRAIN
 #SBATCH --export=NONE
 

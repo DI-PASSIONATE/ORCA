@@ -110,7 +110,7 @@ Each stage can be left out, e.g. to retrain on existing simulation results. An i
 | Stage | Class | What it does |
 |-------|-------|--------------|
 | GDS generation | `GDSGenerator` | Samples the geometry's parameters and draws a GDS layout for each |
-| Design-rule check | `DRCChecker` | Snaps layouts to the manufacturing grid and drops those that violate the IHP SG13G2 rules |
+| Design-rule check | `DRCChecker` | Snaps layouts to the manufacturing grid and drops those that violate the IHP SG13G2 rules or have a port marker off its metal |
 | GDS conversion | `GDSConverter` | Meshes the layouts for Palace with [gds2palace](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2) |
 | EM simulation | `PalaceSimulator` | Runs Palace and stores the S-parameters as Touchstone files |
 | Model training | `ModelTrainer` | Trains (and by default tunes) a PyTorch model from geometry and frequency to S-parameters |

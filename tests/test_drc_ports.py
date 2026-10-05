@@ -1,0 +1,212 @@
+"""Tests for the port contact check: every gds2palace port marker must touch its metals."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import klayout.db as kdb
+import pandas as pd
+import pytest
+
+from orca.geometry.drc import PortContact, check_gds_file, check_ports, port_contacts
+from orca.geometry.layers import SG13G2
+from orca.geometry.presets import InductorOcta, StackupXML, TransformerOcta
+from orca.pipeline.context import PipelineContext
+from orca.pipeline.drc_stage import DRCChecker
+from orca.simulation.simulate import read_simconfig
+
+#: A vertical port from Metal5 up to TopMetal2, marked on layer 201
+PORT = PortContact(number=1, marker_layer=201, metals=(("Metal5", 67), ("TopMetal2", 134)))
+
+
+def _layout(marker_x_um: float, marker: str = "path") -> kdb.Layout:
+    """A TopMetal2 feed ending at x = 0 over a Metal5 bar starting there, plus a port marker."""
+    layout = kdb.Layout()
+    top = layout.create_cell("top")
+    um = lambda value: round(value / layout.dbu)  # noqa: E731 - one-line unit helper
+    top.shapes(layout.layer(*SG13G2.TopMetal2)).insert(kdb.Box(um(-20), um(-2), 0, um(2)))
+    top.shapes(layout.layer(*SG13G2.Metal5)).insert(kdb.Box(0, um(-10), um(10), um(10)))
+    x = um(marker_x_um)
+    if marker == "path":
+        line = kdb.Path([kdb.Point(x, um(-2)), kdb.Point(x, um(2))], 0)
+        top.shapes(layout.layer(201, 0)).insert(line)
+    else:
+        top.shapes(layout.layer(201, 0)).insert(kdb.Box(x - um(0.1), um(-2), x, um(2)))
+    return layout
+
+
+@pytest.mark.parametrize("marker", ["path", "box"])
+def test_marker_on_the_feed_end_is_connected(marker):
+    assert check_ports(_layout(0.0, marker), (PORT,)) == {}
+
+
+@pytest.mark.parametrize("marker", ["path", "box"])
+def test_marker_5nm_off_the_feed_end_is_open(marker):
+    # Beyond the feed end, over the ground bar: it touches Metal5 but not the feed
+    assert check_ports(_layout(0.105, marker), (PORT,)) == {"port1.open_TopMetal2": 1}
+
+
+def test_missing_marker_is_reported():
+    layout = _layout(0.0)
+    layout.clear_layer(layout.find_layer(201, 0))
+
+    assert check_ports(layout, (PORT,)) == {"port1.missing": 1}
+
+
+def test_port_contacts_follow_the_simconfig_and_stackup():
+    geometry = TransformerOcta()
+    contacts = port_contacts(
+        read_simconfig(geometry.simconfig_filename)["ports"], geometry.stackup_xml
+    )
+
+    assert [c.number for c in contacts] == [1, 2, 3, 4, 5, 6]
+    assert contacts[0] == PORT
+    assert contacts[2].metals == (("Metal5", 67), ("TopMetal1", 126))
+
+
+def test_port_on_a_layer_the_stackup_lacks_is_rejected():
+    ports = [{"portnumber": 1, "source_layernum": 201,
+              "from_layername": "Metal5", "to_layername": "Metal9"}]
+
+    with pytest.raises(ValueError, match="Metal9"):
+        port_contacts(ports, StackupXML.SG13G2_FEM_200um)
+
+
+@pytest.mark.parametrize("geometry", [InductorOcta(), TransformerOcta()], ids=lambda g: g.name)
+def test_sampled_preset_layouts_have_every_port_connected(tmp_path, geometry):
+    iterator = geometry.input_parameter_iterator
+    iterator.set_sample_count(30, seed=5, feasible=geometry.is_feasible)
+
+    failures = {}
+    for i, params in enumerate(iterator):
+        path = str(tmp_path / f"{geometry.name}_{i}.gds")
+        geometry.create_gds_file(f"{geometry.name}_{i}", path, params)
+        ports = port_contacts(geometry.ports_for(params), geometry.stackup_xml)
+        result = check_gds_file(path, ports=ports)
+        if not result.ports_connected:
+            failures[str(params)] = result.port_findings
+
+    assert not failures
+
+
+def test_drc_stage_drops_open_ports_even_when_violations_are_kept(tmp_path):
+    context = PipelineContext(geometry=TransformerOcta(), base_dir=str(tmp_path), num_processes=1)
+    gds_dir = context.geometry_dir
+    tmp_path.joinpath(gds_dir).mkdir(parents=True, exist_ok=True)
+    good = {"bottom_winding_diameter": 21.4, "top_winding_diameter": 20.1,
+            "relative_displacement": 0.135, "bottom_linewidth": 7.0, "top_linewidth": 5.2}
+    rows = []
+    for name, x in (("connected.gds", 0.0), ("open.gds", 0.105)):
+        if name == "connected.gds":
+            TransformerOcta.create_gds_file("connected", f"{gds_dir}/{name}", good)
+        else:
+            _layout(x).write(f"{gds_dir}/{name}")
+        rows.append({"name": name} | good)
+    pd.DataFrame(rows).to_csv(context.gds_csv_path, index=False)
+
+    context = DRCChecker(drop_violations=False).run(context)
+
+    passed = pd.read_csv(context.drc_csv_path)
+    assert list(passed["name"]) == ["connected.gds"]
+    report = pd.read_csv(context.drc_report_path).set_index("name")
+    assert "port1.open_TopMetal2:1" in report.loc["open.gds", "rules"]
+
+
+def test_default_ports_are_the_simconfigs():
+    geometry = TransformerOcta()
+
+    ports = geometry.ports_for({})
+
+    assert ports == read_simconfig(geometry.simconfig_filename)["ports"]
+    ports[0]["to_layername"] = "Metal1"  # a copy: changing it leaves the geometry alone
+    assert geometry.ports_for({})[0]["to_layername"] == "TopMetal2"
+
+
+@pytest.mark.parametrize(("turns", "feed_layer"), [(1, "TopMetal2"), (1.0, "TopMetal2"),
+                                                   (2, "TopMetal1"), (5, "TopMetal1")])
+def test_inductor_ports_follow_the_feed_layer(turns, feed_layer):
+    ports = InductorOcta().ports_for({"turns": turns, "width": 4.0, "space": 3.0,
+                                      "diameter": 100.0})
+
+    assert [p["to_layername"] for p in ports] == [feed_layer, feed_layer, "TopMetal2"]
+    assert {p["from_layername"] for p in ports} == {"Metal5"}
+
+
+@dataclass
+class _RenumberedPorts(TransformerOcta):
+    def simulation_ports(self, params):
+        return super().simulation_ports(params)[::-1]
+
+
+@dataclass
+class _DroppedPort(TransformerOcta):
+    def simulation_ports(self, params):
+        return super().simulation_ports(params)[:-1]
+
+
+@pytest.mark.parametrize("geometry", [_RenumberedPorts(), _DroppedPort()],
+                         ids=["renumbered", "dropped"])
+def test_ports_must_keep_the_simconfigs_numbers_and_order(geometry):
+    with pytest.raises(ValueError, match="simulation_ports"):
+        geometry.ports_for({})
+
+
+def test_drc_stage_checks_each_layout_with_its_own_ports(tmp_path):
+    geometry = InductorOcta()
+    context = PipelineContext(geometry=geometry, base_dir=str(tmp_path), num_processes=1)
+    gds_dir = tmp_path.joinpath(context.geometry_dir)
+    gds_dir.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for name, turns in (("one_turn.gds", 1), ("three_turns.gds", 3)):
+        params = {"turns": turns, "width": 4.0, "space": 3.0, "diameter": 160.0}
+        geometry.create_gds_file(name, str(gds_dir / name), params)
+        rows.append({"name": name} | params)
+    pd.DataFrame(rows).to_csv(context.gds_csv_path, index=False)
+
+    context = DRCChecker().run(context)
+
+    report = pd.read_csv(context.drc_report_path).set_index("name")
+    assert not report["rules"].fillna("").str.contains("port").any(), report["rules"]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        # the smallest single turns
+        {"turns": 1, "width": 2.02, "space": 2.32, "diameter": 32.0},
+        {"turns": 1, "width": 2.1, "space": 2.98, "diameter": 34.0},
+        # a larger multi-turn spiral
+        {"turns": 3, "width": 6.0, "space": 3.0, "diameter": 200.0},
+    ],
+    ids=["small-D32", "small-D34", "large"],
+)
+def test_inductor_ports_sit_on_ground_at_every_size(tmp_path, params):
+    geometry = InductorOcta()
+    path = str(tmp_path / "inductor.gds")
+    geometry.create_gds_file("inductor", path, params)
+
+    result = check_gds_file(path, ports=port_contacts(geometry.ports_for(params), geometry.stackup_xml))
+
+    assert result.port_findings == {}
+
+
+@pytest.mark.parametrize("params", [{"turns": 1, "width": 2.46, "space": 2.36, "diameter": 32.0},
+                                    {"turns": 2, "width": 5.0, "space": 3.0, "diameter": 120.0},
+                                    {"turns": 3, "width": 8.0, "space": 4.1, "diameter": 260.0}],
+                         ids=["one-turn", "two-turns", "three-turns"])
+def test_inductor_ports_sit_on_the_ring_outer_edge(tmp_path, params):
+    # The reference planes are the cell's boundary, so simulated cells can be abutted
+    # with their ports touching: each port is flush with the ring's outer edge
+    path = str(tmp_path / "inductor.gds")
+    InductorOcta().create_gds_file("inductor", path, params)
+    layout = kdb.Layout()
+    layout.read(path)
+    top = layout.top_cell()
+    ring = kdb.Region(top.begin_shapes_rec(layout.find_layer(*SG13G2.Metal5))).bbox()
+
+    for marker_layer in (201, 202, 203):
+        marker = kdb.Region(top.begin_shapes_rec(layout.find_layer(marker_layer, 0))).bbox()
+        if marker.center().y < 0:
+            assert marker.bottom == ring.bottom
+        else:
+            assert marker.top == ring.top

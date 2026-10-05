@@ -18,7 +18,7 @@ architecture lives in a geometry class.
 | `models/` | `OrcaModel` — architecture, hyperparameter space, loss, guarantees |
 | `trainer.py` | `Trainer` / `TrainingConfig` — optimizer, schedule, early stopping, history |
 | `tuner.py` | `HyperparameterTuner` — optuna study with k-fold cross-validation over geometries, or one fixed hold-out (`n_fold_cv=1`) |
-| `losses.py` | Loss modules (`ComplexMSELoss`, `MSEPlusLogCoshLoss`) |
+| `losses.py` | Loss modules (`ComplexMSELoss`, `MSEPlusLogCoshLoss`, `SParameterLoss`), self-resonance detection and sample weights |
 
 The model owns *what* is fitted (architecture and loss); the trainer owns *how* it is
 fitted. `TrainingConfig` holds the hyperparameters the trainer owns, and
@@ -71,6 +71,29 @@ to be re-pointed. Codec and model both declare `PhysicsGuarantees`; the exporter
 writes their union into the ONNX metadata, so a model exported with the
 upper-triangle codec is marked `reciprocal` whatever the architecture is.
 
+### Loss terms and sample weights
+
+A model trains with its `default_loss()` (L1 on the normalized outputs for the MLP).
+`SParameterLoss` wraps that data loss with terms that judge the prediction as a circuit,
+and `ModelTrainer` builds it from three settings:
+
+| Setting | Adds |
+| --- | --- |
+| `admittance_weight` | `admittance_error`: relative L1 error of Y = (I + S)⁻¹(I − S), of all of Y and of its real part, which track L and Q |
+| `passivity_weight` | `passivity_violation`: how far σ_max of the predicted S exceeds max(1, σ_max of the simulated S) |
+| `above_srf_weight` | per-sample weights from `srf_sample_weights`: points above each geometry's first self-resonance count this much relative to those below |
+
+The terms are computed per sample on the denormalized S-matrices, which the codec's
+`decode_tensor` rebuilds, so the data loss has to be elementwise (a torch loss with a
+`reduction` attribute). Sample weights live on the dataset (`set_sample_weights`), are
+appended to its `tensors` and batched like the inputs, also through the tuner's `Subset`
+folds; the trainer passes each batch's weights to the loss as a third argument. They are
+normalized to average 1, so the epoch loss stays on the scale of the data loss.
+
+`first_self_resonance` needs no knowledge of the ports: it counts the negative eigenvalues
+of the susceptance matrix Im(Y), one per inductive mode, and returns where their number
+first drops. For InductorOcta this is the differential self-resonance.
+
 ### Adding an output codec
 
 ```python
@@ -84,6 +107,8 @@ class MyCodec(OutputCodec):
 
     def encode(self, ntwk): ...                       # skrf.Network -> (n_freq, output_dim)
     def decode(self, raw): ...                        # (n_freq, output_dim) -> (n_freq, N, N) complex
+    def decode_tensor(self, raw): ...                 # the same in torch, differentiable; optional,
+                                                      # needed by the admittance and passivity losses
 ```
 
 ### Basis expansions

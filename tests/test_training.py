@@ -6,6 +6,7 @@ import math
 import os
 import random
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -66,6 +67,11 @@ class ToyGeometry(BaseGeometry):
     stackup_xml: str = ""
     simconfig_filename: str = ""
     input_parameter_iterator: InputParameterIterator = field(default_factory=_iterator)
+
+    absolute_error_parameters: ClassVar[frozenset[str]] = frozenset({"|S21|"})
+
+    def electrical_parameters(self, ntwk) -> dict[str, np.ndarray]:
+        return {"|S11|": np.abs(ntwk.s[:, 0, 0]), "|S21|": np.abs(ntwk.s[:, 1, 0])}
 
     @staticmethod
     def create_gds_file(name: str, output_path: str, params: dict) -> str:
@@ -297,12 +303,14 @@ def test_tester_evaluates_the_split_the_trainer_recorded(result_dir, tmp_path):
     per_geometry = pd.read_csv(later.test_errors_csv_path)
     assert set(per_geometry["name"]) == test_names
     assert {"a", "b", "mean_abs_s_error", "max_abs_s_error"} <= set(per_geometry.columns)
-    # k near zero would make a relative error meaningless, so it is reported as absolute
-    assert "k abs error" in per_geometry.columns
-    assert "k error %" not in per_geometry.columns
+    # The geometry's electrical parameters, absolute where it says so
+    assert "|S11| error %" in per_geometry.columns
+    assert "|S21| abs error" in per_geometry.columns
+    assert "|S21| error %" not in per_geometry.columns
 
     profile = pd.read_csv(later.errors_vs_frequency_csv_path)
-    assert {"|S|", "Lp", "k"} <= set(profile["parameter"])
+    assert {"|S|", "|S11|", "|S21|"} <= set(profile["parameter"])
+    assert set(profile.loc[profile["parameter"] == "|S21|", "unit"]) == {"abs"}
     s_rows = profile[profile["parameter"] == "|S|"]
     assert len(s_rows) == len(FREQUENCIES)
     assert (s_rows["p5"] <= s_rows["median"]).all()

@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from orca import BaseGeometry
 from orca.geometry.cells.transformer import check_tf_octa_c_parameters, tf_octa_c
@@ -9,6 +9,9 @@ from orca.geometry.input_parameters import InputParameterIterator, RangeParamete
 from orca.geometry.presets.paths import StackupXML
 
 if TYPE_CHECKING:
+    import numpy as np
+    import skrf as rf
+
     from orca.training.datasets.base_dataset import BaseDataset
 
 # Layout choices fixed for every sample (µm). They are part of the device the model
@@ -19,8 +22,11 @@ CENTER_TAP_WIDTH = 3.0
 #: Gap between the two feed lines of a winding: the crossing 3 µm tap plus 1 µm on
 #: either side. Close feeds are a tight differential pair with a small loop inductance.
 FEED_GAP = 5.0
-#: The ports sit on the ground ring's inner edge, GROUND_SPACING - GROUND_RING_WIDTH =
-#: 10 µm beyond the windings' vertices, so short feeds are part of every model.
+#: The Metal5 ground ring keeps GROUND_SPACING = 20 µm clear of the windings' outermost
+#: metal and is GROUND_RING_WIDTH = 10 µm wide, as the inductor's. The feeds run across it
+#: to its outer edge, 30 µm beyond the windings, where the ports sit: the reference planes
+#: are the boundary of the cell, so simulated cells (inductors too) can be abutted with
+#: touching ports. The feeds and their crossing of the ring are part of every model.
 GROUND_SPACING = 20.0
 GROUND_RING_WIDTH = 10.0
 
@@ -64,15 +70,31 @@ class TransformerOcta(BaseGeometry):
 
     One single-turn winding on TopMetal2 (ports ``op``/``on`` on the right, center tap
     ``oci`` to the left) over one on TopMetal1 (ports ``ip``/``in`` on the left, center
-    tap ``ico`` to the right), inside a Metal5 ground ring the ports refer to.
+    tap ``ico`` to the right), inside a Metal5 ground ring the ports refer to. The ports
+    sit on the ring's outer edge.
     """
 
     name: str = "tf_octa_c_ports"
-    stackup_xml: str = StackupXML.SG13G2_FEM_200um
+    # Conformal SiO2/passivation over TopMetal2, as for the inductor (gds2palace L6n2
+    # study). The simcfg meshes it with refined_cellsize = 2: the ports are flush with
+    # the ring's outer edge, and at coarser sizes gmsh can fill that plane with flat
+    # tetrahedra that Palace cannot solve (GDSConverter drops such meshes).
+    stackup_xml: str = StackupXML.SG13G2_FEM_200um_passi3D
     simconfig_filename: str = os.path.join(os.path.dirname(__file__), "tf_octa_c_ports.simcfg")
     input_parameter_iterator: InputParameterIterator = field(
         default_factory=_input_parameters
     )
+
+    # Close to zero for weakly coupled windings, where a relative error says nothing
+    absolute_error_parameters: ClassVar[frozenset[str]] = frozenset({"k"})
+
+    def electrical_parameters(self, ntwk: "rf.Network") -> dict[str, "np.ndarray"]:
+        from orca.utils.postprocessing import transformer_parameters
+
+        # Ports (simcfg order): 1 op, 2 on (top winding), 3 ip, 4 in (bottom winding),
+        # 5 oci and 6 ico (the center taps), which are AC-grounded as in differential use.
+        # The top winding (op/on) is the primary, as in COBRA's Lp/Qp goals.
+        return transformer_parameters(ntwk, primary=(0, 1), secondary=(2, 3), shorted=(4, 5))
 
     def create_dataset(self) -> "BaseDataset":
         # Imported here so the geometry can be drawn and simulated without the

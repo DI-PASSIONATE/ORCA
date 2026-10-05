@@ -1,3 +1,4 @@
+import glob
 import os
 from contextlib import ExitStack, redirect_stdout
 from typing import Any
@@ -13,7 +14,8 @@ def create_palace_model_from_gds(
     stackup_xml: str,
     simconfig_filename: str,
     show_mesh_results: bool = False,
-) -> tuple[str, dict[str, Any], str, str, str]:
+    ports: list[dict[str, Any]] | None = None,
+) -> tuple[str, dict[str, Any], str, str, str, float]:
     """
     Uses gds2palace to create a Palace model from a GDS file and simulation configuration.
     The simconfig is a json and can either be created manually or by using setupEM GUI and saving the configuration.
@@ -28,10 +30,13 @@ def create_palace_model_from_gds(
         stackup_xml (str): Path to the XML file describing the layer stackup.
         simconfig_filename (str): Path to the simulation configuration file (json).
         show_mesh_results (bool): Show the gmsh GUI with the mesh and keep gds2palace's console output.
+        ports (list[dict[str, Any]] | None): The sample's ports, in the format of the simconfig's
+            ``ports`` list (``BaseGeometry.ports_for``). None uses the simconfig's own.
 
     Returns:
-        tuple[str, dict, str, str, str]: geometry_name, params, Palace config name, simulation
-        directory and data directory of the created Palace model.
+        tuple[str, dict, str, str, str, float]: geometry_name, params, Palace config name,
+        simulation directory and data directory of the created Palace model, and the worst
+        element quality of its mesh (:func:`worst_element_quality`).
     """
     # Imported here: the PyPI gmsh wheel loads libGLU, which headless machines (CI runners,
     # HPC compute nodes) often lack, and `import orca` must not depend on it.
@@ -57,9 +62,9 @@ def create_palace_model_from_gds(
         # The settings dictionary contains all simulation parameters (e.g. frequency range, mesh settings...)
         settings = simconfig["saved_values"]
 
-        # Add all ports from simconfig
+        # Add the sample's ports; everything else comes from the simconfig
         simulation_ports = simulation_setup.all_simulation_ports()
-        for port in simconfig["ports"]:
+        for port in simconfig["ports"] if ports is None else ports:
             simulation_ports.add_port(
                 simulation_setup.simulation_port(
                     portnumber=port["portnumber"],
@@ -121,4 +126,43 @@ def create_palace_model_from_gds(
         # for convenience, write run script to model directory
         utilities.create_run_script(settings["sim_path"])
 
-        return geometry_name, params, config_name, sim_path, data_dir
+    meshes = glob.glob(os.path.join(sim_path, "*.msh"))
+    quality = worst_element_quality(meshes[0]) if meshes else float("nan")
+    return geometry_name, params, config_name, sim_path, data_dir, quality
+
+
+def worst_element_quality(mesh_filename: str) -> float:
+    """
+    The worst shape quality of the volume elements of a gmsh mesh.
+
+    The quality is gmsh's minimum scaled inverse condition number (``minSICN``): 1 for a
+    regular tetrahedron, 0 for a flat one, negative for an inverted one. A flat element
+    has no volume, which puts a zero on the diagonal of Palace's system matrix; Palace
+    then stops with ``HasPositiveFiniteDiagonal(...) is false``.
+
+    Args:
+        mesh_filename (str): Path to the ``.msh`` file.
+
+    Returns:
+        float: The lowest quality of any volume element; NaN for a mesh without one, and
+        -inf for a mesh gmsh cannot read back. gmsh occasionally writes such a corrupt mesh
+        (elements referencing node 0, which does not exist), which Palace cannot use either.
+    """
+    import gmsh  # imported here like in create_palace_model_from_gds (libGLU on HPC nodes)
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        try:
+            gmsh.open(mesh_filename)
+        except Exception:  # noqa: BLE001 - gmsh raises a bare Exception for an unreadable mesh
+            return float("-inf")
+        _, tags, _ = gmsh.model.mesh.getElements(3)
+        lowest = [
+            min(gmsh.model.mesh.getElementQualities(element_tags, "minSICN"))
+            for element_tags in tags
+            if len(element_tags)
+        ]
+        return min(lowest) if lowest else float("nan")
+    finally:
+        gmsh.finalize()

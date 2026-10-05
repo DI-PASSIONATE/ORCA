@@ -160,6 +160,11 @@ class PipelineContext:
         return os.path.join(self.palace_sim_dir, f"{self.geometry.name}.csv")
 
     @property
+    def mesh_report_path(self) -> str:
+        """Where the GDS conversion stage writes the worst element quality of each mesh."""
+        return os.path.join(self.palace_sim_dir, f"{self.geometry.name}_mesh_report.csv")
+
+    @property
     def result_dir(self) -> str:
         """Directory holding the Touchstone results the model is trained on."""
         return self.result_dir_override or os.path.join(self.base_dir, "results")
@@ -224,6 +229,7 @@ class PipelineContext:
             "gds_coverage_plot": self.gds_coverage_plot_path,
             "drc_report": self.drc_report_path,
             "palace_sim_dir": self.palace_sim_dir,
+            "mesh_report": self.mesh_report_path,
             "result_dir": self.result_dir,
             "result_csv": self.result_csv,
             "model_dir": self.model_dir,
