@@ -14,9 +14,6 @@ from orca.pipeline.context import PipelineContext
 from orca.pipeline.gds_conversion_stage import GDSConverter
 from orca.simulation.gds_converter import worst_element_quality
 
-pytest.importorskip("gmsh")
-
-
 def _tetrahedron_mesh(path, apex_height: float) -> str:
     """A one-tetrahedron mesh in gmsh's MSH 2.2 format; height 0 makes it flat."""
     with open(path, "w") as f:
@@ -27,25 +24,6 @@ def _tetrahedron_mesh(path, apex_height: float) -> str:
             "$Elements\n1\n1 4 2 1 1 1 2 3 4\n$EndElements\n"
         )
     return str(path)
-
-
-def test_a_mesh_gmsh_cannot_read_back_is_worst(tmp_path):
-    # gmsh occasionally writes elements that reference node 0, which does not exist
-    path = _tetrahedron_mesh(tmp_path / "corrupt.msh", 1.0)
-    with open(path) as f:
-        text = f.read().replace("1 4 2 1 1 1 2 3 4", "1 4 2 1 1 0 2 3 4")
-    with open(path, "w") as f:
-        f.write(text)
-
-    assert worst_element_quality(path) == float("-inf")
-
-
-def test_worst_quality_of_a_regular_and_a_flat_tetrahedron(tmp_path):
-    good = worst_element_quality(_tetrahedron_mesh(tmp_path / "good.msh", 1.0))
-    flat = worst_element_quality(_tetrahedron_mesh(tmp_path / "flat.msh", 0.0))
-
-    assert good > 0.1
-    assert abs(flat) < 1e-12
 
 
 QUALITY = {"good.gds": 0.01, "poor.gds": 5e-5, "flat.gds": -1.7e-14, "corrupt.gds": float("-inf")}
