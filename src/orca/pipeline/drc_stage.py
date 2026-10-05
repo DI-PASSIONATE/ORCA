@@ -1,3 +1,4 @@
+import json
 import os
 from collections import Counter
 from collections.abc import Callable
@@ -28,8 +29,8 @@ class DRCChecker(PipelineStage):
     cannot be built. This stage repairs what can be repaired in place (the grid)
     and records the rest, so the conversion stage only picks up clean layouts.
 
-    It also checks that every port marker of the geometry's simconfig touches the
-    metals its port connects. A marker that misses its metal by a few nanometres
+    It also checks that every port marker touches the metals its port connects, with
+    each layout's own ports (``BaseGeometry.ports_for``). A marker that misses its metal by a few nanometres
     still simulates, as an open circuit, so the result describes another circuit
     than the parameters say. Such layouts are always left out.
 
@@ -55,7 +56,7 @@ class DRCChecker(PipelineStage):
                 table the later stages use. Off, every layout goes on and the violations
                 are only reported.
             check_ports (bool): Check that every port marker touches the metals its port
-                connects in the simconfig. Layouts with an open port are left out
+                connects, with the ports of each sample. Layouts with an open port are left out
                 whatever ``drop_violations`` says: their simulation would describe a
                 circuit with that port disconnected.
         """
@@ -82,7 +83,7 @@ class DRCChecker(PipelineStage):
 
         gds_data = pd.read_csv(gds_csv)
         gds_dir = os.path.dirname(gds_csv)
-        ports = self._port_contacts(context) if self.check_ports else ()
+        ports = self._port_contacts(context, gds_data) if self.check_ports else {}
         logger.info(
             f"Starting DRC of {len(gds_data)} GDS files on a {self.grid_nm} nm grid "
             f"using {context.num_processes} CPU cores."
@@ -96,7 +97,7 @@ class DRCChecker(PipelineStage):
                     os.path.join(gds_dir, name),
                     self.grid_nm,
                     self.snap_to_grid,
-                    ports,
+                    ports.get(name, ()),
                 ): name
                 for name in gds_data["name"]
             }
@@ -159,10 +160,28 @@ class DRCChecker(PipelineStage):
         return context
 
     @staticmethod
-    def _port_contacts(context: "PipelineContext") -> tuple[PortContact, ...]:
-        """The metals each port of the geometry has to touch, from its simconfig and stackup."""
+    def _port_contacts(
+        context: "PipelineContext", gds_data: pd.DataFrame
+    ) -> dict[str, tuple[PortContact, ...]]:
+        """
+        Per layout, the metals each of its ports has to touch: the sample's ports
+        (``BaseGeometry.ports_for``), with layer numbers from the stackup.
+        """
         geometry = context.geometry
-        return port_contacts(read_simconfig(geometry.simconfig_filename), geometry.stackup_xml)
+        datatypes = tuple(
+            read_simconfig(geometry.simconfig_filename)["saved_values"].get("purpose", [0])
+        )
+        # Most samples share one port set; look each distinct set up once
+        by_ports: dict[str, tuple[PortContact, ...]] = {}
+        contacts = {}
+        for row in gds_data.to_dict("records"):
+            name = row.pop("name")
+            ports = geometry.ports_for(row)
+            key = json.dumps(ports, sort_keys=True)
+            if key not in by_ports:
+                by_ports[key] = port_contacts(ports, geometry.stackup_xml, datatypes)
+            contacts[name] = by_ports[key]
+        return contacts
 
     @staticmethod
     def _log_open_ports(results: dict[str, DRCResult], report_path: str) -> None:

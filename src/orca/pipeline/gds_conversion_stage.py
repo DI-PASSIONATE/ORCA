@@ -131,6 +131,7 @@ class GDSConverter(PipelineStage):
                         "stackup_xml": geometry.stackup_xml,
                         "simconfig_filename": geometry.simconfig_filename,
                         "show_mesh_results": False,
+                        "ports": geometry.ports_for(params),
                     },
                     timeout=self.timeout,
                 )

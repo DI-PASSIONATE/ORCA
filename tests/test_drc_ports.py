@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import klayout.db as kdb
 import pandas as pd
 import pytest
@@ -53,7 +55,9 @@ def test_missing_marker_is_reported():
 
 def test_port_contacts_follow_the_simconfig_and_stackup():
     geometry = TransformerOcta()
-    contacts = port_contacts(read_simconfig(geometry.simconfig_filename), geometry.stackup_xml)
+    contacts = port_contacts(
+        read_simconfig(geometry.simconfig_filename)["ports"], geometry.stackup_xml
+    )
 
     assert [c.number for c in contacts] == [1, 2, 3, 4, 5, 6]
     assert contacts[0] == PORT
@@ -61,16 +65,15 @@ def test_port_contacts_follow_the_simconfig_and_stackup():
 
 
 def test_port_on_a_layer_the_stackup_lacks_is_rejected():
-    simconfig = {"ports": [{"portnumber": 1, "source_layernum": 201,
-                            "from_layername": "Metal5", "to_layername": "Metal9"}]}
+    ports = [{"portnumber": 1, "source_layernum": 201,
+              "from_layername": "Metal5", "to_layername": "Metal9"}]
 
     with pytest.raises(ValueError, match="Metal9"):
-        port_contacts(simconfig, StackupXML.SG13G2_FEM_200um)
+        port_contacts(ports, StackupXML.SG13G2_FEM_200um)
 
 
 @pytest.mark.parametrize("geometry", [InductorOcta(), TransformerOcta()], ids=lambda g: g.name)
 def test_sampled_preset_layouts_have_every_port_connected(tmp_path, geometry):
-    ports = port_contacts(read_simconfig(geometry.simconfig_filename), geometry.stackup_xml)
     iterator = geometry.input_parameter_iterator
     iterator.set_sample_count(30, seed=5, feasible=geometry.is_feasible)
 
@@ -78,6 +81,7 @@ def test_sampled_preset_layouts_have_every_port_connected(tmp_path, geometry):
     for i, params in enumerate(iterator):
         path = str(tmp_path / f"{geometry.name}_{i}.gds")
         geometry.create_gds_file(f"{geometry.name}_{i}", path, params)
+        ports = port_contacts(geometry.ports_for(params), geometry.stackup_xml)
         result = check_gds_file(path, ports=ports)
         if not result.ports_connected:
             failures[str(params)] = result.port_findings
@@ -106,3 +110,60 @@ def test_drc_stage_drops_open_ports_even_when_violations_are_kept(tmp_path):
     assert list(passed["name"]) == ["connected.gds"]
     report = pd.read_csv(context.drc_report_path).set_index("name")
     assert "port1.open_TopMetal2:1" in report.loc["open.gds", "rules"]
+
+
+def test_default_ports_are_the_simconfigs():
+    geometry = TransformerOcta()
+
+    ports = geometry.ports_for({})
+
+    assert ports == read_simconfig(geometry.simconfig_filename)["ports"]
+    ports[0]["to_layername"] = "Metal1"  # a copy: changing it leaves the geometry alone
+    assert geometry.ports_for({})[0]["to_layername"] == "TopMetal2"
+
+
+@pytest.mark.parametrize(("turns", "feed_layer"), [(1, "TopMetal2"), (1.0, "TopMetal2"),
+                                                   (2, "TopMetal1"), (5, "TopMetal1")])
+def test_inductor_ports_follow_the_feed_layer(turns, feed_layer):
+    ports = InductorOcta().ports_for({"turns": turns, "width": 4.0, "space": 3.0,
+                                      "diameter": 100.0})
+
+    assert [p["to_layername"] for p in ports] == [feed_layer, feed_layer, "TopMetal2"]
+    assert {p["from_layername"] for p in ports} == {"Metal5"}
+
+
+@dataclass
+class _RenumberedPorts(TransformerOcta):
+    def simulation_ports(self, params):
+        return super().simulation_ports(params)[::-1]
+
+
+@dataclass
+class _DroppedPort(TransformerOcta):
+    def simulation_ports(self, params):
+        return super().simulation_ports(params)[:-1]
+
+
+@pytest.mark.parametrize("geometry", [_RenumberedPorts(), _DroppedPort()],
+                         ids=["renumbered", "dropped"])
+def test_ports_must_keep_the_simconfigs_numbers_and_order(geometry):
+    with pytest.raises(ValueError, match="simulation_ports"):
+        geometry.ports_for({})
+
+
+def test_drc_stage_checks_each_layout_with_its_own_ports(tmp_path):
+    geometry = InductorOcta()
+    context = PipelineContext(geometry=geometry, base_dir=str(tmp_path), num_processes=1)
+    gds_dir = tmp_path.joinpath(context.geometry_dir)
+    gds_dir.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for name, turns in (("one_turn.gds", 1), ("three_turns.gds", 3)):
+        params = {"turns": turns, "width": 4.0, "space": 3.0, "diameter": 160.0}
+        geometry.create_gds_file(name, str(gds_dir / name), params)
+        rows.append({"name": name} | params)
+    pd.DataFrame(rows).to_csv(context.gds_csv_path, index=False)
+
+    context = DRCChecker().run(context)
+
+    report = pd.read_csv(context.drc_report_path).set_index("name")
+    assert not report["rules"].fillna("").str.contains("port").any(), report["rules"]

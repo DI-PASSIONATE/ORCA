@@ -284,15 +284,19 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
     frame_width = min(20, gridsnap(5 * w)) if ring_width is None else gridsnap(ring_width)
     frame_margin = gridsnap(D / 2) if ring_spacing is None else gridsnap(ring_spacing)
 
-    # Feed length: when forEM, extend the feedlines so the pins/ports always
-    # land on the OUTER edge of the ground ring, or just inside the ground
-    # strip / slotted ring; otherwise keep the default.
+    # Feed length: when forEM, extend the feedlines so the pins/ports land on the
+    # ground: just inside the ground strip / slotted ring, or GROUND_STRIP_OVERLAP
+    # inside the OUTER edge of the ring; otherwise keep the default.
+    # ORCA change: the ring's feeds used to end exactly on its outer edge. The end
+    # face of the feed, the port sheet and the ring's side face then lie in one
+    # plane, and gmsh fills that plane with flat, zero-volume tetrahedra in about
+    # 40% of the layouts with 4-5 turns, which Palace cannot solve.
     if not forEM:
         feed_length = 30
     elif ground_style in ("strip", "slotted_ring"):
         feed_length = gridsnap(frame_margin + GROUND_STRIP_OVERLAP)
     else:
-        feed_length = gridsnap(frame_margin + frame_width)
+        feed_length = gridsnap(frame_margin + frame_width - min(GROUND_STRIP_OVERLAP, frame_width / 2))
 
     # --- Feedline drawing  ---
     # for single turn, we draw everything on single layer TopMetal2;

@@ -44,7 +44,8 @@ pipeline orchestration, and GUI stay in their own packages.
 - **Geometries:** a `BaseGeometry` subclass provides `name`, `stackup_xml`,
   `simconfig_filename`, `input_parameter_iterator`, `create_gds_file`, and
   `create_dataset`; `is_feasible(params)` is optional and rejects draws before
-  they are drawn, and `feasibility_constraints()` states the same rules as
+  they are drawn, `simulation_ports(params)` is optional and changes port fields
+  (never their number or order) per sample, and `feasibility_constraints()` states the same rules as
   expressions (`geometry/constraints.py` grammar) for the ONNX metadata — a
   test must keep the two in agreement. Never clamp or repair parameters inside `create_gds_file` —
   the parameter table records the requested values, so the model would learn a

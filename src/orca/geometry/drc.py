@@ -11,7 +11,7 @@ here can be looked up in the IHP design rule manual directly.
 Three entry points: :func:`snap_to_grid` moves every vertex of a layout onto
 the grid, :func:`check_layout` counts the violations per rule, and
 :func:`check_ports` checks that every gds2palace port marker touches the metals
-its port connects (:func:`port_contacts` reads those from a simconfig). Only the
+its port connects (:func:`port_contacts` looks those up in the stackup). Only the
 *drawing* datatype of each layer is checked, as in the PDK deck; pin and text
 layers are left alone.
 """
@@ -294,18 +294,23 @@ def check_layout(
     return violations
 
 
-def port_contacts(simconfig: dict[str, Any], stackup_xml: str) -> tuple[PortContact, ...]:
-    """The metals each port of a simconfig has to touch, with GDS numbers from the stackup.
+def port_contacts(
+    ports: list[dict[str, Any]], stackup_xml: str, datatypes: tuple[int, ...] = (0,)
+) -> tuple[PortContact, ...]:
+    """The metals each port has to touch, with GDS numbers from the stackup.
 
     A port between two layers (``from_layername``/``to_layername``, a vertical sheet
     in gds2palace) has to touch both; an in-plane port (``target_layername``) the one.
 
     Args:
-        simconfig: Simulation configuration as read by ``read_simconfig``.
+        ports: Port entries in the format of a simconfig's ``ports`` list, e.g. one
+            sample's from ``BaseGeometry.ports_for``.
         stackup_xml: gds2palace stackup XML that maps the layer names to GDS numbers.
+        datatypes: Datatypes gds2palace reads the layout from (the simconfig's
+            ``purpose``).
 
     Returns:
-        tuple[PortContact, ...]: One entry per port, in simconfig order.
+        tuple[PortContact, ...]: One entry per port, in the given order.
 
     Raises:
         ValueError: A port names a layer the stackup does not define.
@@ -317,10 +322,8 @@ def port_contacts(simconfig: dict[str, Any], stackup_xml: str) -> tuple[PortCont
         for element in root.iter("Layer")
         if element.get("Name") and element.get("Layer", "").isdigit()
     }
-    datatypes = tuple(simconfig.get("saved_values", {}).get("purpose", [0]))
-
     contacts = []
-    for port in simconfig["ports"]:
+    for port in ports:
         target = port.get("target_layername")
         names = [target] if target else [port.get("from_layername"), port.get("to_layername")]
         metals = []
@@ -336,7 +339,7 @@ def port_contacts(simconfig: dict[str, Any], stackup_xml: str) -> tuple[PortCont
                 number=port["portnumber"],
                 marker_layer=port["source_layernum"],
                 metals=tuple(metals),
-                datatypes=datatypes,
+                datatypes=tuple(datatypes),
             )
         )
     return tuple(contacts)

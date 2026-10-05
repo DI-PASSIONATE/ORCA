@@ -11,7 +11,6 @@ from orca.geometry.cells.transformer import check_tf_octa_c_parameters, tf_octa_
 from orca.geometry.drc import check_gds_file, port_contacts
 from orca.geometry.layers import SG13G2
 from orca.geometry.presets import TransformerOcta
-from orca.simulation.simulate import read_simconfig
 
 _names = itertools.count()
 
@@ -97,7 +96,7 @@ def test_each_winding_with_its_feeds_and_tap_is_one_polygon(tmp_path):
 )
 def test_port_markers_touch_the_feed_ends(tmp_path, params):
     geometry = TransformerOcta()
-    ports = port_contacts(read_simconfig(geometry.simconfig_filename), geometry.stackup_xml)
+    ports = port_contacts(geometry.ports_for(params), geometry.stackup_xml)
 
     result = check_gds_file(_draw(tmp_path, params), ports=ports)
 

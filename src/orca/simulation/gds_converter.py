@@ -13,6 +13,7 @@ def create_palace_model_from_gds(
     stackup_xml: str,
     simconfig_filename: str,
     show_mesh_results: bool = False,
+    ports: list[dict[str, Any]] | None = None,
 ) -> tuple[str, dict[str, Any], str, str, str]:
     """
     Uses gds2palace to create a Palace model from a GDS file and simulation configuration.
@@ -28,6 +29,8 @@ def create_palace_model_from_gds(
         stackup_xml (str): Path to the XML file describing the layer stackup.
         simconfig_filename (str): Path to the simulation configuration file (json).
         show_mesh_results (bool): Show the gmsh GUI with the mesh and keep gds2palace's console output.
+        ports (list[dict[str, Any]] | None): The sample's ports, in the format of the simconfig's
+            ``ports`` list (``BaseGeometry.ports_for``). None uses the simconfig's own.
 
     Returns:
         tuple[str, dict, str, str, str]: geometry_name, params, Palace config name, simulation
@@ -57,9 +60,9 @@ def create_palace_model_from_gds(
         # The settings dictionary contains all simulation parameters (e.g. frequency range, mesh settings...)
         settings = simconfig["saved_values"]
 
-        # Add all ports from simconfig
+        # Add the sample's ports; everything else comes from the simconfig
         simulation_ports = simulation_setup.all_simulation_ports()
-        for port in simconfig["ports"]:
+        for port in simconfig["ports"] if ports is None else ports:
             simulation_ports.add_port(
                 simulation_setup.simulation_port(
                     portnumber=port["portnumber"],

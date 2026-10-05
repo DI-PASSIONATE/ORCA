@@ -20,15 +20,17 @@ if TYPE_CHECKING:
     from orca.training.datasets.base_dataset import BaseDataset
 
 # All ports run up from a ground on Metal5 (matches "from_layername": "Metal5" in
-# the simcfg): ports 1/2 to the feeds on TopMetal1, port 3 to the center tap on
-# TopMetal2. The ground is a closed square ring around the spiral for every N, so
+# the simcfg): ports 1/2 to the feeds, port 3 to the center tap on TopMetal2. The
+# feeds are on TopMetal1, as the simcfg says, except for a single turn, which
+# symmetric_octa_IHP draws on TopMetal2 alone; simulation_ports moves ports 1/2
+# there for N == 1, so no pad or via has to bridge the gap. The ground is a closed square ring around the spiral for every N, so
 # one connected reference serves all three ports whether the center tap leaves
-# between the feeds (even N) or at the top (odd N). The feeds and the center tap run out to the ring's outer edge,
-# where the ports sit. The feed on TopMetal1 requires N >= 2 turns (see
-# symmetric_octa_IHP: N == 1 feeds on TopMetal2 instead).
+# between the feeds (even N) or at the top (odd N). The feeds and the center tap end
+# 2 µm inside the ring's outer edge, where the ports sit.
 GROUND_LAYER = 67       # Metal5
 GROUND_SPACING = 20.0   # µm, gap between inductor outer edge and the ground
 GROUND_DEPTH = 20.0     # µm, width of the ground ring bars
+SINGLE_TURN_FEED_LAYER = "TopMetal2"  # stackup name of the metal a single turn feeds on
 
 
 # Built per instance rather than shared as a class attribute - see the note in
@@ -62,8 +64,8 @@ class InductorOcta(BaseGeometry):
     Represents a symmetric octagonal spiral inductor geometry (IHP SG13G2).
 
     3-port spiral inductor (LA, LB and the center tap LC), ported from the
-    gds2palace IHP example by Volker Muehlhaus. Requires N >= 2 turns, since the feedline sits on
-    TopMetal1 (single-turn inductors feed on TopMetal2 instead).
+    gds2palace IHP example by Volker Muehlhaus. Multi-turn spirals feed on TopMetal1,
+    a single turn on TopMetal2; the ports follow the feeds (:meth:`simulation_ports`).
     """
 
     name: str = "inductor_octa"
@@ -93,6 +95,15 @@ class InductorOcta(BaseGeometry):
             input_normalizer=MinMaxNormalizer(self.input_parameter_iterator),
             output_normalizer=StandardNormalizer(),
         )
+
+    def simulation_ports(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        ports = super().simulation_ports(params)
+        if round(params["turns"]) == 1:
+            # The feeds (LA, LB) of a single turn are on TopMetal2, not TopMetal1
+            for port in ports:
+                if port["portnumber"] in (1, 2):
+                    port["to_layername"] = SINGLE_TURN_FEED_LAYER
+        return ports
 
     def electrical_parameters(self, ntwk: "rf.Network") -> dict[str, "np.ndarray"]:
         from orca.utils.postprocessing import inductor_parameters
