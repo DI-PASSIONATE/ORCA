@@ -162,14 +162,20 @@ def draw_via_array(all_geometries_list, layer, purpose, p1, p2):
 #   Inductor calculations
 # ========================
 
+def via_landing_length(w):
+    # Length along the track over which a TopVia2 array joins TopMetal1 and TopMetal2: w, but
+    # at least room for two vias, so a narrow track is not joined by a single one
+    size_for_two_vias = gridsnap(2 * VIA_SIZE + VIA_GAP + 2 * VIA_MARGIN)
+    if w >= size_for_two_vias:
+        return w
+    return gridsnap(1.1 * size_for_two_vias)
+
+
 def get_min_outer_diameter(N, w, s):
     crossover_size = 3 * w + 2 * s
 
     # make sure we don't create a single via
-    size_for_two_vias = 2 * VIA_SIZE + VIA_GAP + 2 * VIA_MARGIN
-    overlap_size = w
-    if w < size_for_two_vias:
-        overlap_size = 1.1 * size_for_two_vias
+    overlap_size = via_landing_length(w)
 
     min_crossover_size = (2 * s + w) * (math.sqrt(2) - 1) + (s + w) + 2 * overlap_size
 
@@ -253,7 +259,10 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
     y0 = 0
 
     # --- Geometry calculations ---
-    via_size = w
+    # ORCA fix: upstream joined each crossover and feed end over a w x w overlap, which
+    # holds a single TopVia2 for w below 3.86 um. The landing is now at least two vias long,
+    # as get_min_outer_diameter already assumed; from 3.86 um on the layout is upstream's.
+    via_size = via_landing_length(w)
     crossover_size = (2 * s + w) * (math.sqrt(2) - 1) + (s + w)
     crossover_size = gridsnap(2 * via_size + crossover_size)
 
@@ -300,14 +309,29 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
             p2=(x0 + w / 2 + feedline_spacing / 2, y0 - D / 2 - feed_length))
 
     if N > 1:
-        # for all N except single turn, we need via from TopMetal1 feedline to TopMetal2 trace
-        add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
-                p1=(x0 - w / 2 - feedline_spacing / 2, y0 - Di / 2),
-                p2=(x0 + w / 2 - feedline_spacing / 2, y0 - Di / 2 - w))
+        # ORCA fix: the inner end of a feed overlaps the innermost turn by w x w only, so
+        # both metals widen there into a via_size long landing for the same via array as
+        # the crossovers. At the smallest diameters of N >= 3 the turn bends up right at
+        # the feed and barely covers the feed's outer half, so the landing keeps to the
+        # inner half and reaches into the open gap between the feeds; for N = 2, whose
+        # feeds are closer, only as far as keeps them s apart and outward over the
+        # (there straight) turn by the rest.
+        inward = 0 if via_size == w else min(via_size - w / 2, (feedline_spacing - w - s) / 2)
+        inner_edge = feedline_spacing / 2 - w / 2
+        landing = [((x0 + side * (inner_edge - inward), y0 - Di / 2),
+                    (x0 + side * (inner_edge - inward + via_size), y0 - Di / 2 - w))
+                   for side in (-1, 1)]
+        if via_size > w:
+            for p1, p2 in landing:
+                add_box(all_geometries_list, layer=CROSSOVER_LAYER_NUM,
+                        purpose=PURPOSE_DRAWING, p1=p1, p2=p2)
+                add_box(all_geometries_list, layer=SPIRAL_LAYER_NUM,
+                        purpose=PURPOSE_DRAWING, p1=p1, p2=p2)
 
-        add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
-                p1=(x0 - w / 2 + feedline_spacing / 2, y0 - Di / 2),
-                p2=(x0 + w / 2 + feedline_spacing / 2, y0 - Di / 2 - w))
+        # for all N except single turn, we need via from TopMetal1 feedline to TopMetal2 trace
+        for p1, p2 in landing:
+            add_via(all_geometries_list, layer=VIA_LAYER_NUM, purpose=PURPOSE_DRAWING,
+                    p1=p1, p2=p2)
 
     # create pin label in IHP PDK-style on layer IND.text
     cell.add(gdspy.Label("LA", (x0 - feedline_spacing / 2, y0 - D / 2 - feed_length + w / 4),
@@ -375,7 +399,7 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
         if (i == N):
             x1 = gridsnap(x0 - feedline_spacing / 2 + w / 2)
         else:
-            x1 = gridsnap(x0 - crossover_size / 2 + w)
+            x1 = gridsnap(x0 - crossover_size / 2 + via_size)
         y1 = gridsnap(y0 + (-D / 2 + w / 2 + (i - 1) * (w + s)))
         points.append((x1, y1))
         x1 = x0 - gridsnap(segment_length / 2)
@@ -391,7 +415,7 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
 
         # upper left quadrant
         points = []
-        x1 = gridsnap(x0 - crossover_size / 2 + w)
+        x1 = gridsnap(x0 - crossover_size / 2 + via_size)
         y1 = gridsnap(y0 + D / 2 - w / 2 - (i - 1) * (w + s))
         points.append((x1, y1))
         x1 = x0 - gridsnap(segment_length / 2)
@@ -412,7 +436,7 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
         if (i == N):
             x1 = gridsnap(x0 + feedline_spacing / 2 - w / 2)
         else:
-            x1 = gridsnap(x0 + crossover_size / 2 - w)
+            x1 = gridsnap(x0 + crossover_size / 2 - via_size)
         y1 = gridsnap(y0 + (-D / 2 + w / 2 + (i - 1) * (w + s)))
         points.append((x1, y1))
         x1 = x0 + gridsnap(segment_length / 2)
@@ -428,7 +452,7 @@ def symmetric_octa_IHP(N, D, w, s, includeCenterTap=False, LBE=False, forEM=Fals
 
         # upper right quadrant
         points = []
-        x1 = gridsnap(x0 + crossover_size / 2 - w)
+        x1 = gridsnap(x0 + crossover_size / 2 - via_size)
         y1 = gridsnap(y0 + D / 2 - w / 2 - (i - 1) * (w + s))
         points.append((x1, y1))
         x1 = x0 + gridsnap(segment_length / 2)

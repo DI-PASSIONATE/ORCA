@@ -23,7 +23,7 @@ def main():
 
     orca_instance = orca.ORCA(
         [
-            orca.GDSGenerator(num_samples=6000),
+            orca.GDSGenerator(num_samples=4000),
             orca.DRCChecker(),
             orca.GDSConverter(),
             #orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
