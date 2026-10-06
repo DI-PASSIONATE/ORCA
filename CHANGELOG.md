@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `orca.simulate_geometry(geometry, params, output_dir, name, ...)` draws, meshes and simulates
+  one sample with Palace, the way the pipeline does, and returns its network; it raises
+  `orca.SimulationError` when that fails. COBRA's EM fine-tuning uses it.
+- `orca.simulation.simulate.patch_palace_config`, the Palace config overrides of
+  `PalaceSimulator`, as a public function.
+
 ## [2.0.0] - 2026-10-03
 
 ### Added

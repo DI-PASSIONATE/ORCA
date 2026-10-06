@@ -14,6 +14,7 @@ from .pipeline.gds_conversion_stage import GDSConverter
 from .pipeline.gds_gen_stage import GDSGenerator
 from .pipeline.pipeline_stage import PipelineStage
 from .pipeline.simulation_stage import PalaceSimulator
+from .simulation.geometry_simulation import SimulationError, simulate_geometry
 from .training.codecs import FlatReImCodec, OutputCodec, UpperTriangleReImCodec
 from .training.guarantees import PhysicsGuarantees
 from .training.spec import FrequencyMode, IOSpec
@@ -36,7 +37,9 @@ __all__ = [
     "PipelineContext",
     "PipelineStage",
     "RangeParameter",
+    "SimulationError",
     "UpperTriangleReImCodec",
+    "simulate_geometry",
 ]
 
 # Everything that needs PyTorch (the "train" extra) is imported on first access
