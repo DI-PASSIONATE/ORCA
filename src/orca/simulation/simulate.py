@@ -134,21 +134,17 @@ def read_simconfig(simconfig_filename: str) -> dict:
     with open(simconfig_filename) as file:
         simconfig = json.load(file)
 
-    # Add e9 suffix to frequency values if they are in GHz
-    if "fstart" in simconfig["saved_values"]:
-        fstart = simconfig["saved_values"]["fstart"]
-        if fstart < 1e6:  # assuming values less than 1 MHz are in GHz
-            simconfig["saved_values"]["fstart"] = fstart * 1e9
-    if "fstop" in simconfig["saved_values"]:
-        fstop = simconfig["saved_values"]["fstop"]
-        if fstop < 1e6:  # assuming values less than 1 MHz are in GHz
-            simconfig["saved_values"]["fstop"] = fstop * 1e9
-    if "fstep" in simconfig["saved_values"]:
-        fstep = simconfig["saved_values"]["fstep"]
-        if fstep < 1e6:  # assuming values less than 1 MHz are in GHz
-            simconfig["saved_values"]["fstep"] = fstep * 1e9
-    if "fdump" in simconfig["saved_values"]:
-        fdump = simconfig["saved_values"]["fdump"]
-        if fdump < 1e6:  # assuming values less than 1 MHz are in GHz
-            simconfig["saved_values"]["fdump"] = fdump * 1e9
+    # gds2palace takes frequencies in Hz; values below 1 MHz are taken as GHz and converted.
+    # fpoint and fdump, extra frequencies outside the sweep, may be a number or a list.
+    saved_values = simconfig["saved_values"]
+    for key in ("fstart", "fstop", "fstep", "fpoint", "fdump"):
+        if key in saved_values:
+            saved_values[key] = _ghz_to_hz(saved_values[key])
     return simconfig
+
+
+def _ghz_to_hz(value: float | list[float]) -> float | list[float]:
+    def convert(f: float) -> float:
+        return f * 1e9 if f < 1e6 else f
+
+    return [convert(f) for f in value] if isinstance(value, list) else convert(value)

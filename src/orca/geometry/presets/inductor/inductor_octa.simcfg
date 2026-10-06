@@ -7,9 +7,25 @@
         "purpose": [
             0
         ],
-        "fstart": 1.0,
+        "fstart": 0.0,
         "fstop": 500.0,
         "fstep": 1.0,
+        "fpoint": [
+            0.1,
+            0.2,
+            0.3,
+            0.5,
+            0.7,
+            1.5,
+            2.5,
+            3.5,
+            4.5,
+            5.5,
+            6.5,
+            7.5,
+            8.5,
+            9.5
+        ],
         "refined_cellsize": 2.0,
         "order": 2,
         "cells_per_wavelength": 10.0,

@@ -59,7 +59,7 @@ def _input_parameters() -> InputParameterIterator:
         RangeParameter("bottom_linewidth", 2.0, 8.0, step=0.1),
         RangeParameter("top_linewidth", 2.0, 8.0, step=0.1),
         picking_strategy="sobol",
-        frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
+        frequency=[0.0, 500e9],  # DC to 500 GHz, as the simcfg sweeps it
     )
 
 

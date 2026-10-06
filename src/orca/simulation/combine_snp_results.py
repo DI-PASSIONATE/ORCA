@@ -252,8 +252,17 @@ def extrapolate_to_DC(snp_filename):
     # check if we have point below 1 GHz, otherwise exit
     if nw.frequency.npoints > 20:
         if nw.frequency.start <= 1e9:
-            # extrapolate to DC
-            extrapolated = nw.extrapolate_to_dc(kind="cubic", coords="polar")
+            # extrapolate to DC. skrf takes the DC point from the first two frequencies
+            # (linearly, in magnitude and phase) but then resamples the whole network onto
+            # an even grid from DC, which would replace an uneven sweep (extra points near
+            # DC) with interpolated values; only its DC point is kept.
+            dc = nw.extrapolate_to_dc(kind="cubic", coords="polar")
+            extrapolated = rf.Network(
+                frequency=rf.Frequency.from_f(np.concatenate(([0.0], nw.f)), unit="Hz"),
+                s=np.concatenate((dc.s[:1], nw.s)),
+                z0=np.concatenate((nw.z0[:1], nw.z0)),
+                name=nw.name,
+            )
             filename, _ = os.path.splitext(snp_filename)
             out_filename = filename + "_dc"  # without extension
             extrapolated.comments = "DC point added by extrapolation"

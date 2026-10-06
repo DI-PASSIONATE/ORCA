@@ -9,6 +9,7 @@ from orca.geometry.cells.inductor import (
     VIA_SIZE,
     get_min_outer_diameter,
     symmetric_octa_IHP,
+    via_landing_length,
 )
 from orca.geometry.input_parameters import InputParameterIterator, RangeParameter
 from orca.geometry.presets.paths import StackupXML
@@ -56,7 +57,7 @@ def _input_parameters() -> InputParameterIterator:
         RangeParameter("space", 2.0, 6.0, step=0.02),
         RangeParameter("diameter", 30.0, 300.0, step=2.0, sampling="log"),
         picking_strategy="sobol",
-        frequency=[1e9, 500e9],  # 1 GHz to 500 GHz
+        frequency=[0.0, 500e9],  # DC to 500 GHz, as the simcfg sweeps it
         kept_on_rejection=("diameter",),
     )
 
@@ -121,7 +122,7 @@ class InductorOcta(BaseGeometry):
     def feasibility_constraints(self) -> list[str]:
         # get_min_outer_diameter as one expression; kept in step with it by a test.
         two_vias = 2 * VIA_SIZE + VIA_GAP + 2 * VIA_MARGIN
-        overlap = f"(width if width >= {two_vias:g} else 1.1 * {two_vias:g})"
+        overlap = f"(width if width >= {two_vias:g} else {via_landing_length(0):g})"
         crossover = (
             f"max(3 * width + 2 * space, "
             f"(2 * space + width) * (sqrt2 - 1) + (space + width) + 2 * {overlap})"
