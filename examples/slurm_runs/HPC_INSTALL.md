@@ -125,6 +125,27 @@ which python
 python --version
 ```
 
+## Simulating on the Fritz cluster
+
+A run is split into two jobs, so the many nodes of the simulation job are not held while one node
+draws and meshes the layouts:
+
+- `orca_slurm_prepare.sh` runs `prepare.py` on a single node: GDS generation, DRC and the conversion to Palace models.
+- `orca_slurm_simulate.sh` runs `simulate.py` on many nodes (`#SBATCH --nodes`): the Palace simulations.
+
+Submit both from the Fritz frontend with
+
+```sh
+cd ORCA/examples/slurm_runs
+bash submit.sh
+```
+
+The simulation job waits for the preparation job and only starts if it succeeded; otherwise Slurm
+cancels it. Both write to `output/<geometry>/` in this folder, so keep the geometry and its name the
+same in `prepare.py` and `simulate.py`. A job that hits its time limit can be submitted again and
+continues where it stopped: `bash submit.sh` after the preparation job, `sbatch orca_slurm_simulate.sh`
+after the simulation job.
+
 ## Training on the TinyGPU cluster
 
 Training needs no Palace, but a CUDA build of PyTorch, so it gets its own environment. $HOME and $WORK are shared with Fritz, as is the conda setup above, so the simulation results can be trained on in place.

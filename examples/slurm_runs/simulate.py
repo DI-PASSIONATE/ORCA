@@ -5,14 +5,13 @@ from orca.geometry.presets import InductorOcta
 
 
 def main():
+    # Same geometry (and name) as in prepare.py, so its Palace models are found
     # geometry = TransformerOcta(name="tf_octa_c_ports")
     geometry = InductorOcta(name="inductor_octa")
 
     orca_instance = orca.ORCA(
         [
-            orca.GDSGenerator(num_samples=4000),
-            orca.DRCChecker(),
-            orca.GDSConverter(),
+            # Simulates the models prepare.py wrote to output/<geometry name>/palace_sims.
             # launcher="slurm" runs the simulations as srun job steps on the nodes of this allocation
             # (#SBATCH --nodes in the job script). bind="numa" with num_parallel_sims=0 runs one
             # simulation per NUMA domain of every node (4 x 18 ranks on a Fritz node), which suits the
@@ -25,19 +24,14 @@ def main():
                 num_parallel_sims=0,
                 bind="numa",
             ),
-            # orca.ModelTrainer(n_train_samples=1000),
-            # orca.OnnxExporter(),
-            # orca.ModelTester(),
         ]
     )
 
-    # num_processes=None uses all cores of the current node for the GDS stages. Each Palace simulation
-    # gets at most that many MPI ranks, capped to the cores of its slot (18 for a NUMA domain).
-    # If the job hits its time limit, submit it again: every stage keeps what the previous job
-    # finished (results/<name>.csv lists each completed simulation) and only does the rest; the
-    # fixed seed gives the missing samples the same parameters as in an uninterrupted run. Pass
-    # overwrite=True to a stage to start it from scratch instead.
-    orca_instance.run(geometry=geometry, num_processes=None, force_overwrite=True, seed=40)
+    # Each Palace simulation gets at most num_processes MPI ranks (None: all cores of the node this
+    # script runs on), capped to the cores of its slot (18 for a NUMA domain). If the job hits its
+    # time limit, submit it again (sbatch orca_slurm_simulate.sh): results/<name>.csv lists each
+    # completed simulation, and only the rest are run.
+    orca_instance.run(geometry=geometry, num_processes=None, force_overwrite=True)
 
 
 if __name__ == "__main__":

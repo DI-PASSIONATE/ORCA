@@ -3,7 +3,7 @@
 # ###### THIS SCRIPT IS EXPLICITLY FOR THE TINYGPU CLUSTER @ NHR/FAU #######
 # You may need to adjust the partition, GPU type, modules etc. for your specific cluster setup.
 # ##########################################################################
-# Trains a model on the results of a finished simulation job (orca_slurm_simulate.sh on Fritz).
+# Trains a model on the results of finished simulation jobs (submit.sh on Fritz).
 # $HOME and $WORK are shared between the NHR@FAU clusters, so submit from the folder simulate.py
 # ran in, from the TinyGPU frontend (tinyx.nhr.fau.de):
 #     sbatch.tinygpu orca_slurm_train.sh

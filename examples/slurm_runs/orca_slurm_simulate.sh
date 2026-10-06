@@ -3,12 +3,19 @@
 # ###### THIS SCRIPT IS EXPLICITLY FOR THE FRITZ CLUSTER @ NHR/FAU #######
 # You may need to adjust the modules, nodes, tasks etc. for your specific cluster setup.
 # ########################################################################
+# Second of the two simulation jobs: the Palace simulations of the models orca_slurm_prepare.sh
+# wrote. Submit both jobs with submit.sh, which holds this job until the first one has finished
+# successfully. On its own (e.g. to resume after a time limit) submit it from the same folder:
+#     sbatch orca_slurm_simulate.sh
+#
 # Palace simulations run on the allocated nodes (Fritz icelake: 2 sockets x 36 cores, 4 NUMA domains).
-# With launcher="slurm", num_parallel_sims=0, bind="numa" in main.py, ORCA runs 4 simulations per
-# node on every node of this allocation, so the node count only has to be set here.
+# With launcher="slurm", num_parallel_sims=0, bind="numa" in simulate.py, ORCA runs 4 simulations
+# per node on every node of this allocation, so the node count only has to be set here (2 to 64
+# nodes in the multinode partition).
 #SBATCH --nodes=25
 #SBATCH --ntasks-per-node=72
-#SBATCH --time=24:00:00
+#SBATCH --partition=multinode
+#SBATCH --time=12:00:00
 #SBATCH --job-name=ORCA-FEM-SIM
 #SBATCH --export=NONE
 

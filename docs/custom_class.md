@@ -266,6 +266,8 @@ The simulation configuration file (.simcfg) defines how to mesh and run the elec
 You can either tweak the preset .simcfg files next to their geometry classes in `src/orca/geometry/presets/inductor/` and `src/orca/geometry/presets/transformer/`, create your own from scratch,
 or use the GUI provided by [setupEM](https://github.com/VolkerMuehlhaus/setupEM/tree/main) to create the .simcfg file interactively.
 
+The frequencies are given in GHz (any value below 1 MHz is read as GHz): a linear sweep from `fstart` to `fstop` in steps of `fstep`, plus the single frequencies listed in `fpoint`. Palace cannot solve at DC, so with `"fstart": 0.0` gds2palace starts the sweep at `fstep` and solves 10 and 20 MHz instead; the DC point of the `dc` Touchstone files is then extrapolated from there. The presets do this and add `fpoint` frequencies between 0.1 and 9.5 GHz, so that the extrapolation starts close to DC and inductors that resonate at a few GHz have more than a handful of points below their self-resonance. Palace's adaptive sweep makes the extra frequencies nearly free. Set the geometry's `frequency=` band to what the simcfg sweeps, starting at 0 when the results include the DC point, as it is written to the ONNX metadata that COBRA checks its analyses against.
+
 Example:
 
 ```json
