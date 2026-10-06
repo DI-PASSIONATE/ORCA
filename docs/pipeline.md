@@ -69,3 +69,18 @@ The trained PyTorch model is exported to ONNX format with a fixed frequency swee
 ## Stage 7 — Model testing (`ModelTester`)
 
 The trained model (or, if training did not run in this pipeline, the exported ONNX model) is evaluated against the held-out geometries listed in `models/<name>_split.csv`. Without that file, for example for a model tested against a fresh results folder, every row of the result table is used and a warning says so. Besides the mean absolute S-parameter error and the median relative error of each electrical parameter, the stage reports the spread: the median, 95th percentile and worst geometry, the error in each of `n_frequency_bands` frequency bands, and the 95th percentile of each electrical parameter's error. The errors of every test geometry, next to its parameters, are written to `models/<name>_test_errors.csv`, for example to plot the error against each parameter and find under-sampled regions. The error is also resolved over frequency: `models/<name>_errors_vs_frequency.png` shows, for the S-parameters and each electrical parameter, the median and the 25th–75th and 5th–95th percentiles over the test geometries at every frequency point, so you can see which frequency ranges the model gets right; the values are in `models/<name>_errors_vs_frequency.csv`. The electrical parameters are the geometry's own (`electrical_parameters()`, see [Custom Classes](custom_class.md)), since only the geometry knows which port is which. `InductorOcta` reports its differential inductance `L`, resistance `R`, quality factor `Q` and self-resonance `srf_f`, with the center tap AC-grounded as in differential operation; `TransformerOcta` reports `Lp`, `Ls`, `Rp`, `Rs`, `Qp`, `Qs`, the coupling factor `k` and the primary's self-resonance, each winding driven differentially with both center taps AC-grounded. A geometry that declares none is tested on its S-parameters only. The coupling factor k is reported as an absolute error, since a relative one explodes for weakly coupled layouts; a geometry lists such parameters in `absolute_error_parameters`. Prediction errors are logged to help assess whether the surrogate is accurate enough for use in [COBRA](https://github.com/DI-PASSIONATE/COBRA).
+
+## Simulating one sample outside the pipeline
+
+`simulate_geometry` runs stages 1, 3 and 4 for a single parameter set and returns the resulting network, for example to check a surrogate prediction against Palace. [COBRA](https://github.com/DI-PASSIONATE/COBRA)'s EM fine-tuning uses it.
+
+```python
+from orca import simulate_geometry
+from orca.geometry.presets import InductorOcta
+
+params = {"turns": 2, "width": 6.0, "space": 3.0, "diameter": 150.0}
+ntwk = simulate_geometry(InductorOcta(), params, "output/check", name="check",
+                         palace_executable="palace", num_processes=8)
+```
+
+It applies the same rules as the pipeline: the sample must pass `is_feasible`, gets its own ports (`simulation_ports(params)`), is not simulated when its mesh is at or below `min_element_quality`, and runs with the same Palace config overrides. Meshing runs in a fresh process, so the function can be called from a GUI worker thread. It returns the most corrected Touchstone result (`dc_deembedded` if the sweep allows a DC point) and raises `orca.SimulationError` when any step fails.
