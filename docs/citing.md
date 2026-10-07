@@ -19,7 +19,7 @@ If you use ORCA in your research, please cite our [SBCCI 2026 paper](https://doi
   pages={1--5},
   organization={IEEE},
   doi={10.1109/SBCCI69725.2026.11706804},
-  keywords={artificial intelligence, design automation, EDA, neural network, open-source, optimization, Palace, radio frequency integrated circuit, surrogate model}
+  keywords={artificial intelligence, design automation, EDA, neural network, open-source, optimization, Palace, Qucs-S, radio frequency integrated circuit, surrogate model, Xyce}
 }
 ```
 

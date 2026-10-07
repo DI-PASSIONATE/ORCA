@@ -43,7 +43,8 @@ authors:
     given-names: Norman
     orcid: "https://orcid.org/0000-0002-2777-4722"
     affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
-version: 2.0.0
+version: 2.1.0
+date-released: 2026-10-06
 repository-code: "https://github.com/DI-PASSIONATE/ORCA"
 url: "https://di-passionate.github.io/ORCA/"
 license: Apache-2.0
@@ -90,6 +91,8 @@ preferred-citation:
   collection-title: "2026 39th SBC/SBMicro/IEEE Symposium on Integrated Circuits and Systems Design (SBCCI)"
   conference:
     name: "Symposium on Integrated Circuits and Systems Design"
+    date-start: 2026-08-24
+    date-end: 2026-08-28
   publisher:
     name: IEEE
   doi: "10.1109/SBCCI69725.2026.11706804"
