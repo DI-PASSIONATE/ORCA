@@ -7,7 +7,7 @@ description: >-
 
 # Cite ORCA
 
-If you use ORCA in your research, please cite our upcoming SBCCI 2026 paper:
+If you use ORCA in your research, please cite our [SBCCI 2026 paper](https://doi.org/10.1109/SBCCI69725.2026.11706804):
 
 ```bibtex
 @INPROCEEDINGS{2026_COBRA,
@@ -15,7 +15,10 @@ If you use ORCA in your research, please cite our upcoming SBCCI 2026 paper:
   booktitle={2026 39th SBC/SBMicro/IEEE Symposium on Integrated Circuits and Systems Design (SBCCI)},
   title={{COBRA: An AI-Assisted Circuit-Level Optimizer for Open Source Based RFIC Design}},
   year={2026},
+  month={aug},
+  pages={1--5},
   organization={IEEE},
+  doi={10.1109/SBCCI69725.2026.11706804},
   keywords={artificial intelligence, design automation, EDA, neural network, open-source, optimization, Palace, radio frequency integrated circuit, surrogate model}
 }
 ```

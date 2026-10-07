@@ -12,14 +12,14 @@ authors:
   - family-names: Simone
     given-names: Gianluca
     orcid: "https://orcid.org/0009-0002-6315-1538"
-    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+    affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
   - family-names: Lurz
     given-names: David
     orcid: "https://orcid.org/0009-0003-6526-5464"
-    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+    affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
   - family-names: Grund
     given-names: Martin
-    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+    affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
   - family-names: Schneider
     given-names: Fabian
     orcid: "https://orcid.org/0009-0007-5891-7582"
@@ -27,22 +27,22 @@ authors:
   - family-names: Loose
     given-names: Michael
     orcid: "https://orcid.org/0000-0002-8422-5391"
-    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+    affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
   - family-names: Breun
     given-names: Sascha
     orcid: "https://orcid.org/0000-0002-9600-2988"
-    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+    affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
   - family-names: Koch
     given-names: Manuel
     orcid: "https://orcid.org/0009-0002-7827-7205"
-    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+    affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
   - family-names: Weigel
     given-names: Robert
-    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+    affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
   - family-names: Franchi
     given-names: Norman
     orcid: "https://orcid.org/0000-0002-2777-4722"
-    affiliation: "Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
+    affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
 version: 2.0.0
 repository-code: "https://github.com/DI-PASSIONATE/ORCA"
 url: "https://di-passionate.github.io/ORCA/"
@@ -92,4 +92,9 @@ preferred-citation:
     name: "Symposium on Integrated Circuits and Systems Design"
   publisher:
     name: IEEE
+  doi: "10.1109/SBCCI69725.2026.11706804"
+  url: "https://ieeexplore.ieee.org/document/11706804"
+  start: 1
+  end: 5
+  month: 8
   year: 2026

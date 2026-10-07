@@ -13,11 +13,11 @@
 
 Gianluca Simone\*, David Lurz\*, Martin Grund\*, Fabian Schneider°, Michael Loose\*, Sascha Breun\*, Manuel Koch\*, Robert Weigel\*, Norman Franchi\*
 
-\* Institute for Intelligent Electronics and Systems (LITES), Friedrich-Alexander-Universität (FAU), Erlangen-Nürnberg, Germany
+\* Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität (FAU), Erlangen-Nürnberg, Germany
 
 ° Chair of Integrated Electronic Systems, Otto-von-Guericke-University Magdeburg, Germany
 
-[Paper (Coming Soon)](#cite-this-work) | [Documentation](https://DI-PASSIONATE.github.io/ORCA/) | [BibTeX](#cite-this-work)
+[Paper](https://doi.org/10.1109/SBCCI69725.2026.11706804) | [Documentation](https://DI-PASSIONATE.github.io/ORCA/) | [BibTeX](#cite-this-work)
 
 > [!NOTE]
 > ORCA is still under active development. The current codebase is functional and can be used for experimentation, but we keep adding features, improving documentation, and refining the API. If you encounter any issues or have questions, please [open an issue](https://github.com/DI-PASSIONATE/ORCA/issues) or reach out.
@@ -133,7 +133,7 @@ The full documentation is at [di-passionate.github.io/ORCA](https://di-passionat
 
 ## Cite This Work
 
-If you use ORCA in your research, please cite our upcoming SBCCI 2026 paper (or use GitHub's **Cite this repository** button, backed by [`CITATION.cff`](https://github.com/DI-PASSIONATE/ORCA/blob/main/CITATION.cff)):
+If you use ORCA in your research, please cite our [SBCCI 2026 paper](https://doi.org/10.1109/SBCCI69725.2026.11706804) (or use GitHub's **Cite this repository** button, backed by [`CITATION.cff`](https://github.com/DI-PASSIONATE/ORCA/blob/main/CITATION.cff)):
 
 ```bibtex
 @INPROCEEDINGS{2026_COBRA,
@@ -141,7 +141,10 @@ If you use ORCA in your research, please cite our upcoming SBCCI 2026 paper (or 
   booktitle={2026 39th SBC/SBMicro/IEEE Symposium on Integrated Circuits and Systems Design (SBCCI)},
   title={{COBRA: An AI-Assisted Circuit-Level Optimizer for Open Source Based RFIC Design}},
   year={2026},
+  month={aug},
+  pages={1--5},
   organization={IEEE},
+  doi={10.1109/SBCCI69725.2026.11706804},
   keywords={artificial intelligence, design automation, EDA, neural network, open-source, optimization, Palace, radio frequency integrated circuit, surrogate model}
 }
 ```
