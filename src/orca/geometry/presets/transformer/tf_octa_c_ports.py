@@ -31,19 +31,11 @@ GROUND_SPACING = 20.0
 GROUND_RING_WIDTH = 10.0
 
 # Which combinations make a useful transformer. The coupling factor depends on the
-# ratio of the winding diameters and on their offset relative to the size: in the
-# earlier campaign, windings under 0.7 of their partner's diameter or offset by more
-# than a fifth of it reached k ~ 0.05-0.3, where matched, centred ones reached ~0.5.
-MIN_DIAMETER_RATIO = 0.75
+# ratio of the winding diameters and on their offset relative to the size.
+MIN_DIAMETER_RATIO = 0.55
 #: Upper bound of relative_displacement, the offset between the winding centres as a
-#: share of their mean diameter. An input in its own right rather than a rule on an
-#: offset in µm: a rule would reject most offsets drawn for small windings (only 0-4 µm
-#: of 0-15 µm suit a 20 µm pair), and the replacement draws would pile up at large ones.
-MAX_RELATIVE_DISPLACEMENT = 0.2
-
-# Built per instance rather than shared as a class attribute: a dataclass default
-# holds one object for every instance of the class, so two geometries would share
-# one iterator. The dataset is built per instance too, by create_dataset().
+#: share of their mean diameter.
+MAX_RELATIVE_DISPLACEMENT = 0.3
 
 
 def _input_parameters() -> InputParameterIterator:
