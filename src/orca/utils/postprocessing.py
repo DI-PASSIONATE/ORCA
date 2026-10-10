@@ -109,8 +109,14 @@ def _first_inductive_to_capacitive(freq_ghz: np.ndarray, reactance: np.ndarray) 
     """
     Where a reactance first falls from positive to negative, interpolated linearly; NaN if
     never. The DC point is skipped: its reactance is zero up to rounding, of either sign.
+    So are sign flips before the reactance has risen above 1% of its peak magnitude:
+    just above DC a simulated winding's reactance is noise around zero (milliohms
+    against hundreds of ohms at resonance), which can flip sign there.
     """
-    cross = np.flatnonzero((freq_ghz[:-1] > 0) & (reactance[:-1] > 0) & (reactance[1:] <= 0))
+    risen = np.fmax.accumulate(reactance) > 0.01 * np.max(np.abs(reactance), initial=0.0)
+    cross = np.flatnonzero(
+        (freq_ghz[:-1] > 0) & (reactance[:-1] > 0) & (reactance[1:] <= 0) & risen[:-1]
+    )
     if cross.size == 0:
         return float("nan")
     i = cross[0]

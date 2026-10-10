@@ -123,3 +123,12 @@ def test_srf_ignores_the_sign_of_the_reactance_at_dc():
     reactance = np.array([1e-12, -500.0, -250.0])
 
     assert np.isnan(_first_inductive_to_capacitive(frequencies / 1e9, reactance))
+
+
+def test_srf_ignores_sign_noise_just_above_dc():
+    # Reactance of TransformerOcta sample 2598 as simulated: milliohm noise flips sign
+    # at 20 MHz, long before the real resonance between 396 and 398 GHz
+    frequencies = np.array([0.0, 0.01, 0.02, 0.1, 0.2, 390.0, 392.0, 394.0, 396.0, 398.0, 400.0])
+    reactance = np.array([2e-15, 0.0068, -0.019, 0.0017, 0.020, 388, 373, 299, 152, -15.9, -127])
+
+    assert _first_inductive_to_capacitive(frequencies, reactance) == pytest.approx(397.8, abs=0.1)
