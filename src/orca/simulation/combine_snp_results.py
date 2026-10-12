@@ -8,6 +8,9 @@
 # updated 08-Nov-2025 Mue: added evaluation for optional port impedance file port_information.json that is created by new gds2palace code
 # updated 13-Nov-2025 Mue: added simple de-embedding of parasitic port inductance (flat ribbon calculation)
 # updated 26-Nov-2025 Mue: also read Elmer FEM files
+# updated 12-Oct-2026 (upstream 34647982): port de-embedding cascaded all negative port
+#   inductances at port 1 (none at the other ports); each port now gets its own value,
+#   in port number order
 
 import json
 import math
@@ -317,8 +320,8 @@ def port_deembedding(snp_filename, port_info_available, port_info_data):
                 # store into dict for this port number, just in case the port numbers in the file are in wrong sorting order
                 Lport[str(portnum)] = L
 
-        # convert the dict with port L into a list, to have the final values in correct order
-        L_values = [-L for L in Lport.values()]
+        # convert the dict with port L into a list, in port number order
+        L_values = [-Lport[key] for key in sorted(Lport, key=int)]
 
         # load SnP data and apply negative series L at each port
         ntwk = rf.Network(snp_filename)
@@ -331,10 +334,11 @@ def port_deembedding(snp_filename, port_info_available, port_info_data):
             logger.debug(f"Cascading L= {L * 1e12:.2f} pH at port {n + 1}")
             # series inductor
             inductor = media.inductor(L=L)
-            # cascade with the main network
-            # due to internal renumbering the new port always appears at the end
-            # after iterating over all ports we have the correct order again
-            ntwk = connect(inductor, 0, ntwk, 0)
+            # cascade with the main network at port n
+            # connect() puts the inductor's remaining port at index 0,
+            # so move it back to index n to keep the original port order
+            ntwk = connect(inductor, 1, ntwk, n)
+            ntwk.renumber(list(range(n + 1)), [n, *range(n)])
 
         filename, _ = os.path.splitext(snp_filename)
         out_filename = filename + "_deembedded"  # without extension
