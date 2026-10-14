@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-14
+
+### Changed
+
+- `TransformerOcta` accepts a wider parameter range: windings down to 0.55 (was 0.75) of their
+  partner's diameter and a `relative_displacement` up to 0.3 (was 0.2). The ONNX
+  `input_parameter_ranges` and `input_constraints` of newly trained models follow.
+- `examples/main.py` runs the whole pipeline again, with the new training loss options.
+
+### Fixed
+
+- Port de-embedding cascaded the negative port inductances of all ports at port 1 and none at
+  the others. Each port now gets its own. This changes the `_deembedded` and `_dc_deembedded`
+  results of every multi-port device; re-run the merge, or the simulations, and retrain models
+  trained on data simulated with 2.1.0 or earlier.
+- The self-resonance frequency (`srf_f`) is no longer taken from sign flips of the reactance
+  just above DC, where it is numerical noise around zero.
+
+## [2.1.0] - 2026-10-06
+
 ### Added
 
 - `orca.simulate_geometry(geometry, params, output_dir, name, ...)` draws, meshes and simulates
@@ -14,6 +34,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `orca.SimulationError` when that fails. COBRA's EM fine-tuning uses it.
 - `orca.simulation.simulate.patch_palace_config`, the Palace config overrides of
   `PalaceSimulator`, as a public function.
+- `BaseGeometry.simulation_ports(params)` changes port fields (such as `to_layername`) per
+  sample; the port numbers and order stay those of the simconfig.
+- `BaseGeometry.electrical_parameters(ntwk)` and `absolute_error_parameters`: each geometry
+  declares the figures of merit `ModelTester` reports and plots. `orca.utils.postprocessing`
+  provides `inductor_parameters`, `transformer_parameters` and `plot_electrical_parameters`.
+- `DRCChecker(check_ports=True)` checks that every port marker touches the metals its port
+  connects, and always drops layouts with an open port.
+- `GDSConverter` checks every new mesh for flat, inverted or corrupt elements and leaves those
+  samples out (`min_element_quality`, `warn_element_quality`); the worst element quality of
+  each mesh goes to `<name>_mesh_report.csv`.
+- `ModelTrainer` loss options: `admittance_weight` (relative error of the admittance matrix),
+  `passivity_weight` (penalty on non-passive predictions) and `above_srf_weight` (weight of the
+  points above the first self-resonance). `orca.SParameterLoss` is the loss behind them.
+- Simconfigs take extra frequencies in `fpoint`, and `fstart` may be 0 for a DC point.
+- Slurm example scripts split simulation into a prepare job (GDS, DRC, conversion) and a
+  simulate job (`examples/slurm_runs/submit.sh`).
+
+### Changed
+
+- `TransformerOcta` and `InductorOcta` share one stackup (`SG13G2_FEM_200um_passi3D`), the
+  ground ring width and port definitions on the outer edge of the ground ring. The inductor
+  sweep adds points near DC, and multi-turn inductors join their crossovers with at least two
+  vias. Models trained on the old presets need retraining.
+- The DC point is extrapolated from the first simulated frequencies only, instead of
+  resampling the whole network onto an even grid.
+- `GDSConverter(timeout=...)` defaults to 180 s (was 60 s).
+- **Breaking:** `orca.utils.postprocessing` no longer has `calculate_electrical_parameters`,
+  `plot_rfic_transformer_metrics` or `to_mixed_mode`; use the functions listed above.
+- **Breaking:** the inductor cell's `ground_style` argument is removed; it always draws a ring.
 
 ## [2.0.0] - 2026-10-03
 

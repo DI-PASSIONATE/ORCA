@@ -1,5 +1,5 @@
 import orca
-from orca.geometry.presets import TransformerOcta  #, InductorOcta
+from orca.geometry.presets import TransformerOcta  # or InductorOcta
 
 PLOT = False
 
@@ -7,28 +7,28 @@ PLOT = False
 # simconfig_filename, input_parameter_iterator, create_gds_file) and pass an instance
 # to orca_instance.run() below; see docs/custom_class.md for a complete example.
 
+# Fixed hyperparameters skip tuning; pass them as ModelTrainer(hyperparameters=...).
 # hyperparameters = {
-#     'learning_rate': 0.00039373410570074516,
-#     'batch_size': 2048,
-#     'num_layers': 8,
-#     'hidden_size': 1775,
-#     'activation_function': 'GELU',
-#     'basis_degree': 14
+#     "learning_rate": 0.0004,
+#     "batch_size": 2048,
+#     "num_layers": 8,
+#     "hidden_size": 1775,
+#     "activation_function": "GELU",
+#     "basis_degree": 14,
 # }
 
 def main():
     # Use predefined geometry from examples
-    # geometry = InductorOcta(name="inductor_octa")
     geometry = TransformerOcta(name="transformer_octa")
+    # geometry = InductorOcta(name="inductor_octa")  # with InductorOcta imported above
 
     orca_instance = orca.ORCA(
         [
-            # orca.GDSGenerator(num_samples=4000),
-            # orca.DRCChecker(),
-            # orca.GDSConverter(),
-            #orca.PalaceSimulator(palace_executable="apptainer exec ~/Documents/git/palace/palace.sif palace"),
+            orca.GDSGenerator(num_samples=4000),
+            orca.DRCChecker(),
+            orca.GDSConverter(),
+            orca.PalaceSimulator(palace_executable="palace"),
             orca.ModelTrainer(
-                #hyperparameters=hyperparameters,
                 basis="chebyshev",
                 max_epochs=300,
                 allow_tf32=True,
@@ -37,7 +37,7 @@ def main():
                 passivity_weight=1.0,
             ),
             orca.OnnxExporter(),
-            orca.ModelTester(),
+            orca.ModelTester(plot=PLOT),
         ]
     )
 
