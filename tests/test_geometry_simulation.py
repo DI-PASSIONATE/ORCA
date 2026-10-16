@@ -112,3 +112,31 @@ def test_infeasible_parameters_are_not_drawn(tmp_path, fake_palace):
         simulate_geometry(InductorOcta(), infeasible, str(tmp_path / "out"), name="sample")
     assert not os.path.exists(tmp_path / "out" / "sample.gds")
     assert "mesh" not in fake_palace
+
+
+def test_returns_the_requested_result(tmp_path, fake_palace):
+    fake_palace["variants"] = ["dc_deembedded", "deembedded", "dc", "normal"]
+
+    ntwk = simulate_geometry(
+        InductorOcta(), SINGLE_TURN, str(tmp_path / "out"), name="sample", result_type="deembedded"
+    )
+
+    assert ntwk.s[0, 0, 0] == pytest.approx(S_VALUE["deembedded"])
+
+
+def test_requested_result_falls_back_to_the_raw_one(tmp_path, fake_palace):
+    fake_palace["variants"] = ["dc", "normal"]
+
+    ntwk = simulate_geometry(
+        InductorOcta(), SINGLE_TURN, str(tmp_path / "out"), name="sample", result_type="deembedded"
+    )
+
+    assert ntwk.s[0, 0, 0] == pytest.approx(S_VALUE["normal"])
+
+
+def test_invalid_result_type_raises(tmp_path, fake_palace):
+    with pytest.raises(ValueError, match="result_type"):
+        simulate_geometry(
+            InductorOcta(), SINGLE_TURN, str(tmp_path / "out"), name="sample", result_type="all"
+        )
+    assert "mesh" not in fake_palace

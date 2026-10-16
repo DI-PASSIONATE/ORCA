@@ -43,6 +43,7 @@ def simulate_geometry(
     num_processes: int = 1,
     min_element_quality: float = 1e-6,
     save_log: bool = False,
+    result_type: str | None = None,
 ) -> rf.Network:
     """
     Draws, meshes and simulates one sample of a geometry with Palace and returns its network.
@@ -66,14 +67,23 @@ def simulate_geometry(
         min_element_quality (float): Meshes whose worst element quality is at or below this are
             not simulated, as in ``GDSConverter``.
         save_log (bool): Write Palace's output to ``palace.log`` in the model directory.
+        result_type (str | None): The Touchstone variant to return, one of
+            :data:`RESULT_PREFERENCE`; falls back to the raw ``"normal"`` result when that
+            variant was not written. For example, ``"deembedded"`` leaves out the 0 Hz point
+            that the ``dc`` variants add by extrapolation. ``None`` returns the most corrected
+            result.
 
     Returns:
-        rf.Network: The most corrected result Palace produced (see :data:`RESULT_PREFERENCE`).
+        rf.Network: The *result_type* result, or by default the most corrected result Palace
+        produced (see :data:`RESULT_PREFERENCE`).
 
     Raises:
         SimulationError: The parameters are infeasible, the mesh is degenerate, Palace failed,
             or no Touchstone file was written.
+        ValueError: *result_type* is not one of :data:`RESULT_PREFERENCE`.
     """
+    if result_type is not None and result_type not in RESULT_PREFERENCE:
+        raise ValueError(f"Invalid result_type: {result_type}. Must be one of {RESULT_PREFERENCE}.")
     if not geometry.is_feasible(params):
         raise SimulationError(
             f"{type(geometry).__name__} cannot draw {params}: is_feasible rejects them."
@@ -113,7 +123,7 @@ def simulate_geometry(
             f"The Palace simulation of {name} failed in {sim_path}; the log output above "
             "has the reason."
         )
-    return rf.Network(_result_file(output_dir, name, geometry.n_ports))
+    return rf.Network(_result_file(output_dir, name, geometry.n_ports, result_type))
 
 
 def _create_palace_model(**kwargs: Any) -> tuple[str, dict[str, Any], str, str, str, float]:
@@ -122,18 +132,23 @@ def _create_palace_model(**kwargs: Any) -> tuple[str, dict[str, Any], str, str, 
         return executor.submit(create_palace_model_from_gds, **kwargs).result()
 
 
-def _result_file(output_dir: str, name: str, n_ports: int) -> str:
-    """The most corrected Touchstone file written for *name*."""
+def _result_file(output_dir: str, name: str, n_ports: int, result_type: str | None = None) -> str:
+    """The *result_type* Touchstone file written for *name*, by default the most corrected one."""
+    if result_type is None:
+        preference = RESULT_PREFERENCE
+    else:
+        preference = tuple(dict.fromkeys((result_type, "normal")))
     candidates = [
         os.path.join(output_dir, touchstone_filename(name, n_ports, variant))
-        for variant in RESULT_PREFERENCE
+        for variant in preference
     ]
-    for variant, path in zip(RESULT_PREFERENCE, candidates, strict=True):
+    for variant, path in zip(preference, candidates, strict=True):
         if os.path.isfile(path):
-            if variant != RESULT_PREFERENCE[0]:
+            if variant != preference[0]:
                 logger.info(
                     f"Using the {variant} result of {name}: the DC point is only extrapolated "
-                    "when the sweep starts at or below 1 GHz with more than 20 points."
+                    "when the sweep starts at or below 1 GHz with more than 20 points, and the "
+                    "ports are only de-embedded when their geometry is known."
                 )
             return path
     raise SimulationError(
