@@ -43,8 +43,8 @@ authors:
     given-names: Norman
     orcid: "https://orcid.org/0000-0002-2777-4722"
     affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
-version: 2.1.1
-date-released: 2026-10-14
+version: 2.2.0
+date-released: 2026-10-16
 repository-code: "https://github.com/DI-PASSIONATE/ORCA"
 url: "https://di-passionate.github.io/ORCA/"
 license: Apache-2.0

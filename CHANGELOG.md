@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-16
+
+### Added
+
+- `simulate_geometry(..., result_type=...)` returns the given Touchstone variant (for example
+  `"deembedded"`, without the extrapolated 0 Hz point) instead of the most corrected one, and
+  falls back to the raw result when that variant was not written.
+
 ## [2.1.1] - 2026-10-14
 
 ### Changed
