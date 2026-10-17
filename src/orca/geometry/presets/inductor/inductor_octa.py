@@ -112,6 +112,10 @@ class InductorOcta(BaseGeometry):
                     port["to_layername"] = SINGLE_TURN_FEED_LAYER
         return ports
 
+    def windings(self) -> list[list[int]]:
+        # One winding: its ends (ports 1, 2) and the center tap (port 3)
+        return [[1, 2, 3]]
+
     def electrical_parameters(self, ntwk: "rf.Network") -> dict[str, "np.ndarray"]:
         from orca.utils.postprocessing import inductor_parameters
 

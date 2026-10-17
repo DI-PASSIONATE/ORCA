@@ -4,11 +4,13 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import onnx
+import pandas as pd
 import torch
 
 from orca.geometry.constraints import validate_constraint
 from orca.logger import logger
 from orca.pipeline.pipeline_stage import PipelineStage
+from orca.simulation.combine_snp_results import touchstone_type_of
 from orca.training.onnx_wrapper import ONNXWrapper
 
 if TYPE_CHECKING:
@@ -106,6 +108,23 @@ class OnnxExporter(PipelineStage):
             meta.key = "physics_guarantees"
             meta.value = json.dumps(guarantees.as_dict())
 
+        # The ports of each winding, so COBRA can give the predicted 0 Hz point the DC
+        # structure of real windings (see BaseGeometry.windings).
+        windings = geometry.windings()
+        if windings:
+            validate_windings(windings, geometry.n_ports)
+            meta = onnx_model.metadata_props.add()
+            meta.key = "windings"
+            meta.value = json.dumps(windings)
+
+        # Which Palace result the model learned (raw or de-embedded, with or without the
+        # 0 Hz point), so an EM verification compares against the same reference plane.
+        touchstone_type = training_touchstone_type(context.result_csv)
+        if touchstone_type is not None:
+            meta = onnx_model.metadata_props.add()
+            meta.key = "touchstone_type"
+            meta.value = touchstone_type
+
         onnx.save(onnx_model, output_path)
 
         if progress_callback:
@@ -113,3 +132,40 @@ class OnnxExporter(PipelineStage):
 
         context.model_path = output_path
         return context
+
+
+def validate_windings(windings: list[list[int]], n_ports: int) -> None:
+    """
+    Check that *windings* are disjoint, non-empty groups of ports 1 to *n_ports*.
+
+    Raises:
+        ValueError: If they are not.
+    """
+    ports = [port for winding in windings for port in winding]
+    if (
+        not all(winding for winding in windings)
+        or not all(type(port) is int and 1 <= port <= n_ports for port in ports)
+        or len(set(ports)) != len(ports)
+    ):
+        raise ValueError(
+            f"windings() returned {windings}; it must be disjoint, non-empty lists of port "
+            f"numbers 1 to {n_ports}."
+        )
+
+
+def training_touchstone_type(result_csv: str) -> str | None:
+    """
+    The Touchstone variant of the result files in *result_csv*, the table the model was
+    trained on, or None if the table is missing or mixes variants.
+    """
+    if not os.path.exists(result_csv):
+        return None
+    variants = {touchstone_type_of(name) for name in pd.read_csv(result_csv)["name"]}
+    if len(variants) != 1:
+        if variants:
+            logger.warning(
+                f"The training data mixes Touchstone variants {sorted(variants)}; the "
+                "touchstone_type metadata is left out."
+            )
+        return None
+    return variants.pop()

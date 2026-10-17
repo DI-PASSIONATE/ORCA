@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `BaseGeometry.windings()`: the ports of each winding, written to the ONNX `windings`
+  metadata. `InductorOcta` declares `[[1, 2, 3]]`,
+  `TransformerOcta` `[[1, 2, 5], [3, 4, 6]]`.
+- The ONNX `touchstone_type` metadata names the Palace result variant the model was trained on
+  (`normal`, `dc`, `deembedded` or `dc_deembedded`), so COBRA's EM fine-tuning can use the same
+  one.
+- `input_parameter_ranges` gives the `step` of integer parameters (e.g. turns), whose geometry
+  exists only on that grid.
+
 ## [2.2.0] - 2026-10-16
 
 ### Added
