@@ -528,3 +528,33 @@ def test_run_seed_seeds_every_global_generator(tmp_path):
 
     assert runs[0] == runs[1]
     assert all(context is not None and context.seed == 7 for context in contexts)
+
+
+@dataclass
+class ToyWindingGeometry(ToyGeometry):
+    """The toy 2-port as one winding between its ports."""
+
+    @property
+    def n_ports(self) -> int:
+        return 2
+
+    def windings(self) -> list[list[int]]:
+        return [[1, 2]]
+
+
+def test_exported_model_declares_its_windings_and_training_variant(result_dir, tmp_path):
+    import onnx
+
+    from orca.pipeline.export_onnx_stage import OnnxExporter
+
+    context = PipelineContext(
+        geometry=ToyWindingGeometry(), base_dir=str(tmp_path / "run"), result_dir_override=result_dir, seed=3
+    )
+    context = ModelTrainer(hyperparameters=TINY_MLP, test_frac=0.25, val_frac=0.25).run(context)
+
+    context = OnnxExporter().run(context)
+
+    metadata = {prop.key: prop.value for prop in onnx.load(context.onnx_path).metadata_props}
+    assert json.loads(metadata["windings"]) == [[1, 2]]
+    assert metadata["touchstone_type"] == "normal"  # the toy files carry no variant suffix
+    assert json.loads(metadata["input_parameter_ranges"])["a"] == {"min": 1.0, "max": 4.0}

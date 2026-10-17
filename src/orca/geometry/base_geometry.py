@@ -137,6 +137,24 @@ class BaseGeometry(ABC):
         """
         return []
 
+    def windings(self) -> list[list[int]]:
+        """
+        The ports (1-based, in simconfig order) at the terminals of each winding.
+
+        At DC a winding is a resistance between its terminals with no path to ground, and
+        two windings are not connected at all. The ONNX exporter writes the list to the
+        ``windings`` metadata key, so COBRA can give the predicted 0 Hz point exactly that
+        structure: near DC a winding is almost a short, so a small error in the predicted
+        S-parameters is a large admittance error, which leaks bias current to ground or
+        couples the windings. For example ``[[1, 2, 3]]`` for an inductor with a center
+        tap, ``[[1, 2, 5], [3, 4, 6]]`` for a transformer whose taps are ports 5 and 6.
+
+        A port in no winding counts as open at DC. Do not declare windings for a
+        component with an intended DC path to ground or between its windings. The default
+        declares none, and COBRA then keeps the prediction's own 0 Hz point.
+        """
+        return []
+
     def electrical_parameters(self, ntwk: rf.Network) -> dict[str, np.ndarray]:  # noqa: ARG002 - hook with a default
         """
         The figures of merit of a simulated or predicted network, which ``ModelTester``

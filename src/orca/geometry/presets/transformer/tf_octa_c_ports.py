@@ -80,6 +80,10 @@ class TransformerOcta(BaseGeometry):
     # Close to zero for weakly coupled windings, where a relative error says nothing
     absolute_error_parameters: ClassVar[frozenset[str]] = frozenset({"k"})
 
+    def windings(self) -> list[list[int]]:
+        # The top winding op/on with its tap oci, the bottom one ip/in with ico
+        return [[1, 2, 5], [3, 4, 6]]
+
     def electrical_parameters(self, ntwk: "rf.Network") -> dict[str, "np.ndarray"]:
         from orca.utils.postprocessing import transformer_parameters
 

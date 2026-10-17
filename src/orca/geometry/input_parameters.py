@@ -451,11 +451,18 @@ class InputParameterIterator:
         """
         Returns a dictionary mapping parameter names, then ``frequency``, to their
         ``{"min": ..., "max": ...}`` range.
+
+        An integer :class:`RangeParameter`, such as a number of turns, also gets its
+        ``"step"``: its geometry exists only at ``min + k * step``, so a consumer must not
+        ask the model in between. A float parameter's step is only the grid it is drawn
+        on; the model interpolates between those values, so it is left out.
         """
         ranges = {}
         for name, parameter in self.parameters.items():
             low, high = parameter.bounds
             ranges[name] = {"min": low, "max": high}
+            if isinstance(parameter, RangeParameter) and parameter.dtype is int:
+                ranges[name]["step"] = float(parameter.step or 1)
         if self.frequency is not None:
             ranges["frequency"] = {
                 "min": float(min(self.frequency)),

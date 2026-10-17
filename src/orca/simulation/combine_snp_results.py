@@ -56,6 +56,24 @@ def touchstone_filename(base_name: str, n_ports: int, touchstone_type: str) -> s
     return f"{stem}{TOUCHSTONE_SUFFIXES[touchstone_type]}.s{n_ports}p"
 
 
+def touchstone_type_of(filename: str) -> str:
+    """
+    The variant a Touchstone file written by :func:`touchstone_filename` holds, from its name.
+
+    Args:
+        filename (str): File name such as "tf_octa_c_ports_3_dc_deembedded.s6p".
+
+    Returns:
+        str: "dc_deembedded", "deembedded", "dc" or "normal".
+    """
+    stem = os.path.splitext(os.path.basename(filename))[0]
+    # Longest suffix first: "_dc_deembedded" also ends in "_deembedded"
+    for variant in ("dc_deembedded", "deembedded", "dc"):
+        if stem.endswith(TOUCHSTONE_SUFFIXES[variant]):
+            return variant
+    return "normal"
+
+
 def todb(x):
     return 20 * np.log10(np.abs(x))
 

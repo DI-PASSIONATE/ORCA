@@ -148,11 +148,25 @@ def test_ranges_list_parameters_then_frequency():
     )
 
     assert iterator.get_ranges() == {
-        "turns": {"min": 1.0, "max": 5.0},
+        "turns": {"min": 1.0, "max": 5.0, "step": 1.0},
         "layer": {"min": 126.0, "max": 134.0},
         "frequency": {"min": 1e9, "max": 500e9},
     }
     assert iterator.get_min_max_values() == ([1.0, 126.0, 1e9], [5.0, 134.0, 500e9])
+
+
+def test_ranges_give_the_step_of_integer_parameters_only():
+    iterator = InputParameterIterator(
+        RangeParameter("turns", 2, 6, step=2, dtype=int),
+        RangeParameter("width", 2.0, 15.0, step=0.02),
+        RangeParameter("space", 2.0, 6.0),
+    )
+
+    ranges = iterator.get_ranges()
+
+    assert ranges["turns"] == {"min": 2.0, "max": 6.0, "step": 2.0}
+    assert "step" not in ranges["width"]
+    assert "step" not in ranges["space"]
 
 
 def _unit_box(strategy: str, n: int, seed: int, boundary_fraction: float = 0.0) -> np.ndarray:
