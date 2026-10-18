@@ -60,3 +60,15 @@ def test_a_mixed_or_missing_table_declares_no_variant(tmp_path):
 
     assert training_touchstone_type(_table(tmp_path, mixed)) is None
     assert training_touchstone_type(str(tmp_path / "absent.csv")) is None
+
+
+def test_the_version_names_the_commit_only_in_a_checkout(monkeypatch):
+    from importlib.metadata import version
+
+    from orca.pipeline import export_onnx_stage
+
+    release = version("orca-rfic")
+    assert export_onnx_stage.orca_version().startswith(release)
+
+    monkeypatch.setattr(export_onnx_stage.shutil, "which", lambda _name: None)
+    assert export_onnx_stage.orca_version() == release

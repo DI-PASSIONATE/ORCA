@@ -543,6 +543,8 @@ class ToyWindingGeometry(ToyGeometry):
 
 
 def test_exported_model_declares_its_windings_and_training_variant(result_dir, tmp_path):
+    from importlib.metadata import version
+
     import onnx
 
     from orca.pipeline.export_onnx_stage import OnnxExporter
@@ -557,4 +559,5 @@ def test_exported_model_declares_its_windings_and_training_variant(result_dir, t
     metadata = {prop.key: prop.value for prop in onnx.load(context.onnx_path).metadata_props}
     assert json.loads(metadata["windings"]) == [[1, 2]]
     assert metadata["touchstone_type"] == "normal"  # the toy files carry no variant suffix
+    assert metadata["orca_version"].startswith(version("orca-rfic"))
     assert json.loads(metadata["input_parameter_ranges"])["a"] == {"min": 1.0, "max": 4.0}

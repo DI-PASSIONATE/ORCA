@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one.
 - `input_parameter_ranges` gives the `step` of integer parameters (e.g. turns), whose geometry
   exists only on that grid.
+- The ONNX `orca_version` metadata records the ORCA release that exported the model, and the
+  `git describe` of its checkout when ORCA runs from one.
 
 ## [2.2.0] - 2026-10-16
 

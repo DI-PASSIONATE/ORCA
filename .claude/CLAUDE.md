@@ -5,8 +5,8 @@ models of RFIC passives. A run is a pipeline: generate GDS layouts with
 gdsfactory → convert them for Palace (`gds2palace`) → EM-simulate with Palace →
 train a PyTorch model on the S-parameters → export it to ONNX → test it. The
 ONNX models are consumed by COBRA (`../COBRA`), which reads the
-`input_parameter_ranges`, `input_constraints`, `physics_guarantees`, `windings`
-and `touchstone_type` metadata ORCA writes.
+`input_parameter_ranges`, `input_constraints`, `physics_guarantees`, `windings`,
+`touchstone_type` and `orca_version` metadata ORCA writes.
 
 ## Repository Structure
 

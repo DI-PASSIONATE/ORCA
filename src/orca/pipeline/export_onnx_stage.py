@@ -1,6 +1,9 @@
 import json
 import os
+import shutil
+import subprocess
 from collections.abc import Callable
+from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING
 
 import onnx
@@ -125,6 +128,12 @@ class OnnxExporter(PipelineStage):
             meta.key = "touchstone_type"
             meta.value = touchstone_type
 
+        # Where the model came from, for reports and for tracing a model back to the ORCA
+        # that built it (e.g. one trained on data from before a simulation fix).
+        meta = onnx_model.metadata_props.add()
+        meta.key = "orca_version"
+        meta.value = orca_version()
+
         onnx.save(onnx_model, output_path)
 
         if progress_callback:
@@ -169,3 +178,32 @@ def training_touchstone_type(result_csv: str) -> str | None:
             )
         return None
     return variants.pop()
+
+
+def orca_version() -> str:
+    """
+    The installed ORCA release, plus ``git describe`` of its checkout when it runs from one.
+
+    An editable install reports the last release even with changes on top of it, so the
+    commit is what identifies such a build, e.g. ``"2.2.0 (git v2.2.0-1-gccf1103-dirty)"``.
+    """
+    try:
+        release = version("orca-rfic")
+    except PackageNotFoundError:
+        release = "unknown"
+    package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # src/orca -> the repository root, which only a source checkout has
+    git = shutil.which("git")
+    if git is None or not os.path.exists(os.path.join(package_dir, "..", "..", ".git")):
+        return release
+    try:
+        described = subprocess.run(
+            [git, "-C", package_dir, "describe", "--always", "--dirty", "--tags"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return release
+    return f"{release} (git {described})" if described else release
