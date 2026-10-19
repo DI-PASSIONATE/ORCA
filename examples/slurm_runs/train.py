@@ -1,15 +1,15 @@
 import os
 
 import orca
-from orca.geometry.presets import InductorOcta
 
-# from orca.geometry.presets import TransformerOcta
+# from orca.geometry.presets import InductorOcta
+from orca.geometry.presets import TransformerOcta
 
 
 def main():
     # Same geometry (and name) as in simulate.py, so the results are found
-    # geometry = TransformerOcta(name="tf_octa_c_ports")
-    geometry = InductorOcta(name="inductor_octa")
+    geometry = TransformerOcta(name="tf_octa_c_ports")
+    # geometry = InductorOcta(name="inductor_octa")
 
     run_dir = os.path.join(os.getcwd(), "output", geometry.name)
     result_dir = os.path.join(run_dir, "results")
@@ -27,7 +27,7 @@ def main():
                 # Stop tuning after 10 h, leaving the rest of the 24 h limit for the final
                 # training, the export and the test. A trial still running at that point is
                 # pruned after its current epoch.
-                tuning_timeout=10 * 3600,
+                tuning_timeout=4 * 3600,
                 max_epochs=300,
                 # TF32 matrix multiplies while training: faster on the A100, ignored on the
                 # V100. Testing and the exported model stay in FP32.

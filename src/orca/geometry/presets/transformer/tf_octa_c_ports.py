@@ -39,17 +39,12 @@ MAX_RELATIVE_DISPLACEMENT = 0.3
 
 
 def _input_parameters() -> InputParameterIterator:
-    # Lengths in µm, on a 0.1 µm grid. Sized for mm-wave and sub-THz transformers
-    # (D-band to ~300 GHz): their self-resonance must lie well above the operating band,
-    # which takes windings of roughly 20-90 µm. The diameters are log-sampled, and since
-    # nothing else rejects small windings more often than large ones, the share of
-    # layouts falls with size: about 29 % have a winding of 20-30 µm, 8 % of 70-90 µm.
     return InputParameterIterator(
-        RangeParameter("bottom_winding_diameter", 20.0, 90.0, step=0.1, sampling="log"),
-        RangeParameter("top_winding_diameter", 20.0, 90.0, step=0.1, sampling="log"),
+        RangeParameter("bottom_winding_diameter", 20.0, 120.0, step=0.1, sampling="log"),
+        RangeParameter("top_winding_diameter", 20.0, 120.0, step=0.1, sampling="log"),
         RangeParameter("relative_displacement", 0.0, MAX_RELATIVE_DISPLACEMENT, step=0.005),
-        RangeParameter("bottom_linewidth", 2.0, 8.0, step=0.1),
-        RangeParameter("top_linewidth", 2.0, 8.0, step=0.1),
+        RangeParameter("bottom_linewidth", 2.0, 12.0, step=0.1),
+        RangeParameter("top_linewidth", 2.0, 12.0, step=0.1),
         picking_strategy="sobol",
         frequency=[0.0, 500e9],  # DC to 500 GHz, as the simcfg sweeps it
     )

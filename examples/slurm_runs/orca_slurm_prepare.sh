@@ -10,7 +10,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=72
 #SBATCH --partition=singlenode
-#SBATCH --time=02:00:00
+#SBATCH --time=01:00:00
 #SBATCH --job-name=ORCA-PREPARE
 #SBATCH --export=NONE
 
