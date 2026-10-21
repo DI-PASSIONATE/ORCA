@@ -1,25 +1,25 @@
+
 import orca
 from orca.geometry.presets import TransformerOcta  # or InductorOcta
 
 PLOT = False
 
-# To run the pipeline on your own geometry, subclass BaseGeometry (name, stackup_xml,
-# simconfig_filename, input_parameter_iterator, create_gds_file) and pass an instance
-# to orca_instance.run() below; see docs/custom_class.md for a complete example.
-
 # Fixed hyperparameters skip tuning; pass them as ModelTrainer(hyperparameters=...).
-# hyperparameters = {
-#     "learning_rate": 0.0004,
-#     "batch_size": 2048,
-#     "num_layers": 8,
-#     "hidden_size": 1775,
-#     "activation_function": "GELU",
-#     "basis_degree": 14,
-# }
+hyperparameters = {
+    "learning_rate": 0.00037,
+    "batch_size": 1024,
+    "num_layers": 8,
+    "hidden_size": 1805,
+    "activation_function": "GELU",
+    "basis_degree": 14,
+    "epochs": 70,
+    "patience": 20,
+}
+
 
 def main():
     # Use predefined geometry from examples
-    geometry = TransformerOcta(name="transformer_octa")
+    geometry = TransformerOcta(name="tf_octa_c_ports")
     # geometry = InductorOcta(name="inductor_octa")  # with InductorOcta imported above
 
     orca_instance = orca.ORCA(
@@ -30,10 +30,11 @@ def main():
             orca.PalaceSimulator(palace_executable="palace"),
             orca.ModelTrainer(
                 basis="chebyshev",
-                max_epochs=300,
+                max_epochs=70,
+                hyperparameters=hyperparameters,
                 allow_tf32=True,
-                admittance_weight=0.5,
-                above_srf_weight=0.6,
+                admittance_weight=1.0,
+                above_srf_weight=0.3,
                 passivity_weight=1.0,
             ),
             orca.OnnxExporter(),
