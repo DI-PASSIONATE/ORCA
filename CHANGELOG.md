@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-06
+
 ### Added
 
 - `BaseGeometry.windings()`: the ports of each winding, written to the ONNX `windings`
@@ -19,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exists only on that grid.
 - The ONNX `orca_version` metadata records the ORCA release that exported the model, and the
   `git describe` of its checkout when ORCA runs from one.
+
+### Changed
+
+- `TransformerOcta` accepts larger devices: winding diameters up to 120 µm (was 90) and
+  linewidths up to 12 µm (was 8). The ONNX `input_parameter_ranges` of newly trained models
+  follow.
+- `examples/main.py` trains `TransformerOcta` with explicit hyperparameters and updated loss
+  weights.
 
 ## [2.2.0] - 2026-10-16
 

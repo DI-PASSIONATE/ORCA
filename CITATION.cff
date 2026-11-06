@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use ORCA in your research, please cite the SBCCI 2026 paper below."
+message: "If you use ORCA in your research, please cite the SBCCI 2026 paper: https://doi.org/10.1109/SBCCI69725.2026.11706804"
 type: software
 title: "ORCA: Open RF Integrated Circuit Automation"
 abstract: >-
@@ -43,8 +43,8 @@ authors:
     given-names: Norman
     orcid: "https://orcid.org/0000-0002-2777-4722"
     affiliation: "Institute for Smart Electronics and Systems (LITES), Friedrich-Alexander-Universität Erlangen-Nürnberg"
-version: 2.2.0
-date-released: 2026-10-16
+version: 2.3.0
+date-released: 2026-11-06
 repository-code: "https://github.com/DI-PASSIONATE/ORCA"
 url: "https://di-passionate.github.io/ORCA/"
 license: Apache-2.0
