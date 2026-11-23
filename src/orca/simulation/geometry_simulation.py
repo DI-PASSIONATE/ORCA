@@ -12,6 +12,7 @@ from __future__ import annotations
 import multiprocessing as mp
 import os
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from typing import TYPE_CHECKING, Any
 
 import skrf as rf
@@ -55,7 +56,8 @@ def simulate_geometry(
 
     Meshing runs in a fresh process, since gmsh must run in a process's main thread (not in a
     GUI worker thread); only the geometry's file paths are sent to it, so a geometry class
-    loaded from a file works as well.
+    loaded from a file works as well. That process imports the script that called this
+    function, so a script must call it under ``if __name__ == "__main__":``.
 
     Args:
         geometry (BaseGeometry): The geometry to draw.
@@ -128,8 +130,16 @@ def simulate_geometry(
 
 def _create_palace_model(**kwargs: Any) -> tuple[str, dict[str, Any], str, str, str, float]:
     """:func:`create_palace_model_from_gds` in a fresh process (see :func:`simulate_geometry`)."""
-    with ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn")) as executor:
-        return executor.submit(create_palace_model_from_gds, **kwargs).result()
+    try:
+        with ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn")) as executor:
+            return executor.submit(create_palace_model_from_gds, **kwargs).result()
+    except BrokenProcessPool as exc:
+        raise SimulationError(
+            "The meshing process ended abruptly. It is a fresh process that imports the script "
+            "which called simulate_geometry, so a script must call it under "
+            '`if __name__ == "__main__":`; otherwise the process runs the script again and '
+            "dies. If the script has that guard, gmsh crashed or ran out of memory."
+        ) from exc
 
 
 def _result_file(output_dir: str, name: str, n_ports: int, result_type: str | None = None) -> str:

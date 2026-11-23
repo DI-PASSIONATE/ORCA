@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `terminations`: a load impedance to ground per port, e.g. a center tap biased through
   50 Ohm. Before, a center tap could only be AC-grounded (`shorted`) or left open.
 
+### Fixed
+
+- `simulate_geometry` called from a script without an `if __name__ == "__main__":` guard
+  failed with a bare `BrokenProcessPool` from its meshing process; it now raises a
+  `SimulationError` that names the missing guard.
+
 ## [2.3.0] - 2026-11-06
 
 ### Added

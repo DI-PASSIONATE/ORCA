@@ -140,3 +140,17 @@ def test_invalid_result_type_raises(tmp_path, fake_palace):
             InductorOcta(), SINGLE_TURN, str(tmp_path / "out"), name="sample", result_type="all"
         )
     assert "mesh" not in fake_palace
+
+
+def _die_like_an_unguarded_script(**_kwargs):
+    """What the meshing process does when it re-runs a script without a main guard: it dies."""
+    os._exit(1)
+
+
+def test_a_dead_meshing_process_explains_the_main_guard(monkeypatch):
+    monkeypatch.setattr(
+        geometry_simulation, "create_palace_model_from_gds", _die_like_an_unguarded_script
+    )
+
+    with pytest.raises(SimulationError, match='__name__ == "__main__"'):
+        geometry_simulation._create_palace_model(geometry_name="sample")
