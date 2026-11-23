@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,32 +8,55 @@ from orca.logger import logger
 
 
 def differential_impedance(
-    ntwk: rf.Network, pairs: Sequence[tuple[int, int]], shorted: Sequence[int] = ()
+    ntwk: rf.Network,
+    pairs: Sequence[tuple[int, int]],
+    shorted: Sequence[int] = (),
+    terminations: Mapping[int, complex] | None = None,
 ) -> np.ndarray:
     """
     The Z-matrix of port pairs driven differentially, each by a floating source.
 
-    The ports in ``shorted`` are AC-grounded (a center tap in differential operation);
-    every other port that is in no pair is left open. Entry ``(a, b)`` is the voltage
-    across pair ``a`` per current driven through pair ``b`` (into its first port, out of
-    its second): ``Z[pa, pb] - Z[pa, nb] - Z[na, pb] + Z[na, nb]`` of the network with
-    the shorted ports removed.
+    The ports in ``shorted`` are AC-grounded (a center tap in differential operation),
+    the ports in ``terminations`` are loaded to ground with the given impedance (e.g. a
+    center tap biased through 50 Ohm), and every other port that is in no pair is left
+    open. Entry ``(a, b)`` is the voltage across pair ``a`` per current driven through
+    pair ``b`` (into its first port, out of its second): ``Z[pa, pb] - Z[pa, nb] -
+    Z[na, pb] + Z[na, nb]`` of the network so terminated.
 
     Args:
         ntwk (rf.Network): The single-ended network.
         pairs: ``(positive, negative)`` port indices, zero-based, per differential port.
         shorted: Zero-based indices of the ports to short.
+        terminations: Load impedance [Ohm] to ground per zero-based port index. A short
+            is ``shorted``; an open port is simply left out.
 
     Returns:
         np.ndarray: Complex, shape ``(n_freq, len(pairs), len(pairs))``.
+
+    Raises:
+        ValueError: A port is in a pair and terminated, shorted and terminated, or
+            terminated with 0 Ohm.
     """
+    terminations = dict(terminations or {})
+    paired = {port for pair in pairs for port in pair}
+    if paired & (set(shorted) | set(terminations)):
+        raise ValueError("A port in a driven pair cannot be shorted or terminated as well.")
+    if set(shorted) & set(terminations):
+        raise ValueError("A port cannot be both shorted and terminated.")
+    if any(load == 0 for load in terminations.values()):
+        raise ValueError("A 0 Ohm termination is a short: list the port in shorted instead.")
     kept = [port for port in range(ntwk.nports) if port not in shorted]
     position = {port: i for i, port in enumerate(kept)}
-    # Shorting a port is dropping its row and column of Y; the inverse is then the
-    # Z-matrix with that port grounded and the rest open. A pseudo-inverse, since a
-    # winding without a path to ground has a singular Y (its common mode is undefined),
-    # while its differential impedance, orthogonal to that mode, is not.
-    z = np.linalg.pinv(ntwk.y[:, kept][:, :, kept])
+    # Shorting a port is dropping its row and column of Y; a load to ground adds its
+    # admittance to the port's diagonal entry (eliminating the port then is the Schur
+    # complement). The inverse is the Z-matrix seen with the other ports open. A
+    # pseudo-inverse, since a winding without a path to ground has a singular Y (its
+    # common mode is undefined), while its differential impedance, orthogonal to that
+    # mode, is not.
+    y = ntwk.y[:, kept][:, :, kept].copy()
+    for port, load in terminations.items():
+        y[:, position[port], position[port]] += 1 / load
+    z = np.linalg.pinv(y)
     z_diff = np.empty((len(ntwk.f), len(pairs), len(pairs)), dtype=complex)
     for a, (pa, na) in enumerate(pairs):
         for b, (pb, nb) in enumerate(pairs):
@@ -43,7 +66,10 @@ def differential_impedance(
 
 
 def inductor_parameters(
-    ntwk: rf.Network, ends: tuple[int, int] = (0, 1), shorted: Sequence[int] = ()
+    ntwk: rf.Network,
+    ends: tuple[int, int] = (0, 1),
+    shorted: Sequence[int] = (),
+    terminations: Mapping[int, complex] | None = None,
 ) -> dict[str, np.ndarray]:
     """
     Differential inductance, resistance, quality factor and self-resonance of an inductor.
@@ -52,12 +78,14 @@ def inductor_parameters(
         ntwk (rf.Network): The single-ended network.
         ends: Zero-based ports at the two ends of the winding.
         shorted: Ports to AC-ground, such as a center tap.
+        terminations: Load impedance [Ohm] to ground per port, such as a center tap
+            biased through a resistor; ports neither shorted nor terminated stay open.
 
     Returns:
         dict: ``L`` [nH], ``R`` [Ohm] and ``Q`` over frequency, and ``srf_f`` [GHz],
         where the reactance first turns capacitive (NaN if it stays inductive).
     """
-    z = differential_impedance(ntwk, [ends], shorted)[:, 0, 0]
+    z = differential_impedance(ntwk, [ends], shorted, terminations)[:, 0, 0]
     with np.errstate(divide="ignore", invalid="ignore"):
         L = np.imag(z) / (2 * np.pi * ntwk.f) * 1e9
         Q = np.imag(z) / np.real(z)
@@ -74,6 +102,7 @@ def transformer_parameters(
     primary: tuple[int, int],
     secondary: tuple[int, int],
     shorted: Sequence[int] = (),
+    terminations: Mapping[int, complex] | None = None,
 ) -> dict[str, np.ndarray]:
     """
     Inductance, resistance and quality factor of both windings of a transformer, their
@@ -84,12 +113,14 @@ def transformer_parameters(
         primary: Zero-based ports at the two ends of the primary winding.
         secondary: The same for the secondary winding.
         shorted: Ports to AC-ground, such as the center taps.
+        terminations: Load impedance [Ohm] to ground per port, such as center taps
+            biased through a resistor; ports neither shorted nor terminated stay open.
 
     Returns:
         dict: ``Lp``, ``Ls`` [nH], ``Rp``, ``Rs`` [Ohm], ``Qp``, ``Qs`` and ``k`` over
         frequency, and ``srf_f`` [GHz] of the primary (NaN if it stays inductive).
     """
-    z = differential_impedance(ntwk, [primary, secondary], shorted)
+    z = differential_impedance(ntwk, [primary, secondary], shorted, terminations)
     omega = 2 * np.pi * ntwk.f
     zp, zs, zm = z[:, 0, 0], z[:, 1, 1], z[:, 0, 1]
     with np.errstate(divide="ignore", invalid="ignore"):

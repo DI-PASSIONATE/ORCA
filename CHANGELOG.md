@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `inductor_parameters`, `transformer_parameters` and `differential_impedance` take
+  `terminations`: a load impedance to ground per port, e.g. a center tap biased through
+  50 Ohm. Before, a center tap could only be AC-grounded (`shorted`) or left open.
+
 ## [2.3.0] - 2026-11-06
 
 ### Added

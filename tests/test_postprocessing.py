@@ -101,6 +101,77 @@ def test_differential_impedance_of_a_floating_source_across_a_series_element():
     assert differential_impedance(ntwk, [(0, 1)])[0, 0, 0] == pytest.approx(z_series)
 
 
+def _asymmetric_network() -> "skrf.Network":
+    """A passive, reciprocal 4-port without symmetry, so a termination changes the result."""
+    rng = np.random.default_rng(7)
+    a = rng.normal(size=(4, 4))
+    b = rng.normal(size=(4, 4))
+    y = (a @ a.T + np.eye(4)) * 1e-2 + 1j * (b + b.T) * 1e-2
+    return _network(y[None], np.array([1e9]))
+
+
+def _schur_reference(ntwk, pair, loads: dict[int, complex]) -> complex:
+    """The pair's differential impedance with every other port eliminated, loaded by *loads*."""
+    y = ntwk.y[0]
+    driven = list(pair)
+    others = [port for port in range(ntwk.nports) if port not in driven]
+    y_load = np.diag([1 / loads[port] if port in loads else 0.0 for port in others])
+    y_reduced = y[np.ix_(driven, driven)] - y[np.ix_(driven, others)] @ np.linalg.inv(
+        y[np.ix_(others, others)] + y_load
+    ) @ y[np.ix_(others, driven)]
+    z = np.linalg.inv(y_reduced)
+    return z[0, 0] - z[0, 1] - z[1, 0] + z[1, 1]
+
+
+@pytest.mark.parametrize("load", [50.0, 10 - 20j, 200.0])
+def test_a_terminated_port_is_loaded_to_ground(load):
+    ntwk = _asymmetric_network()
+
+    z = differential_impedance(ntwk, [(0, 1)], terminations={2: load})[0, 0, 0]
+
+    assert z == pytest.approx(_schur_reference(ntwk, (0, 1), {2: load}))
+    # Port 3 stays open; an open port 2 gives another value, so the load mattered.
+    assert z != pytest.approx(differential_impedance(ntwk, [(0, 1)])[0, 0, 0], rel=1e-3)
+
+
+def test_terminations_approach_a_short_and_an_open():
+    ntwk = _asymmetric_network()
+
+    shorted = differential_impedance(ntwk, [(0, 1)], shorted=(2,))[0, 0, 0]
+    open_ = differential_impedance(ntwk, [(0, 1)])[0, 0, 0]
+
+    def loaded(load: float) -> complex:
+        return differential_impedance(ntwk, [(0, 1)], terminations={2: load})[0, 0, 0]
+
+    assert loaded(1e-9) == pytest.approx(shorted)
+    assert loaded(1e12) == pytest.approx(open_)
+
+
+@pytest.mark.parametrize(
+    ("shorted", "terminations", "match"),
+    [
+        ((), {0: 50.0}, "driven pair"),
+        ((2,), {2: 50.0}, "both shorted and terminated"),
+        ((), {2: 0}, "list the port in shorted"),
+    ],
+)
+def test_contradictory_terminations_are_rejected(shorted, terminations, match):
+    with pytest.raises(ValueError, match=match):
+        differential_impedance(_asymmetric_network(), [(0, 1)], shorted, terminations)
+
+
+def test_transformer_parameters_take_center_tap_terminations():
+    from orca.utils.postprocessing import transformer_parameters
+
+    ntwk = _transformer()
+    loaded = transformer_parameters(ntwk, (0, 1), (2, 3), terminations={4: 50.0, 5: 50.0})
+    grounded = transformer_parameters(ntwk, (0, 1), (2, 3), shorted=(4, 5))
+
+    # The windings are symmetric, so their center taps carry no differential current.
+    assert loaded["Lp"][0] == pytest.approx(grounded["Lp"][0])
+    assert loaded["k"][0] == pytest.approx(grounded["k"][0])
+
+
 def test_tester_reports_the_geometry_errors():
     from orca.pipeline.test_model_stage import ModelTester
 
