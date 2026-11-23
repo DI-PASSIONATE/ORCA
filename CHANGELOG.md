@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `terminations`: a load impedance to ground per port, e.g. a center tap biased through
   50 Ohm. Before, a center tap could only be AC-grounded (`shorted`) or left open.
 
+### Changed
+
+- Dependencies updated in `uv.lock`, among them gds2palace 0.12.0 (from 0.8.0), scikit-rf
+  2.2.0, PyTorch 2.15.0, onnxruntime 1.32.0 and PySide6 6.12.0.
+
 ### Fixed
 
 - `simulate_geometry` called from a script without an `if __name__ == "__main__":` guard

@@ -166,7 +166,7 @@ def test_drc_stage_checks_each_layout_with_its_own_ports(tmp_path):
     context = DRCChecker().run(context)
 
     report = pd.read_csv(context.drc_report_path).set_index("name")
-    assert not report["rules"].fillna("").str.contains("port").any(), report["rules"]
+    assert not report["rules"].dropna().astype(str).str.contains("port").any(), report["rules"]
 
 
 @pytest.mark.parametrize(

@@ -22,7 +22,7 @@ from torch.optim import AdamW, Optimizer
 from torch.utils.data import DataLoader, Dataset, Subset
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Sequence
+    from collections.abc import Callable, Generator, Iterator, Sequence
 
     from orca.training.models.base_model import OrcaModel
 
@@ -222,7 +222,7 @@ class _TensorBatches:
 
 
 @contextlib.contextmanager
-def matmul_precision(allow_tf32: bool) -> Iterator[None]:
+def matmul_precision(allow_tf32: bool) -> Generator[None]:
     """Run the block with TF32 matrix multiplies allowed or not, then restore the setting."""
     previous = torch.get_float32_matmul_precision()
     torch.set_float32_matmul_precision("high" if allow_tf32 else "highest")

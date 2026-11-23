@@ -21,7 +21,8 @@ ONNX models are consumed by COBRA (`../COBRA`), which reads the
   cells, and presets: one folder per device (`presets/inductor/`,
   `presets/transformer/`) holding each class next to its `.simcfg`, and unmodified
   copies of gds2palace's `XML_stackup/latest/IHP` stackups in `presets/stackups/`
-  (the PyPI wheel does not ship them), referenced as `presets.StackupXML` members.
+  (kept so a gds2palace update cannot change a dataset's stackup; gds2palace ≥ 0.9.1
+  ships its own), referenced as `presets.StackupXML` members.
 - `src/orca/simulation/`: GDS→Palace conversion, Palace launchers (local,
   Apptainer, Slurm), and Touchstone result merging.
 - `src/orca/training/`: models, datasets, output codecs, basis expansions,

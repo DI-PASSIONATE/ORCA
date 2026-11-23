@@ -6,6 +6,7 @@ import math
 import os
 import random
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import ClassVar
 
 import numpy as np
@@ -534,7 +535,7 @@ def test_run_seed_seeds_every_global_generator(tmp_path):
 class ToyWindingGeometry(ToyGeometry):
     """The toy 2-port as one winding between its ports."""
 
-    @property
+    @cached_property
     def n_ports(self) -> int:
         return 2
 
