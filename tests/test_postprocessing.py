@@ -143,8 +143,8 @@ def test_terminations_approach_a_short_and_an_open():
     def loaded(load: float) -> complex:
         return differential_impedance(ntwk, [(0, 1)], terminations={2: load})[0, 0, 0]
 
-    assert loaded(1e-9) == pytest.approx(shorted)
-    assert loaded(1e12) == pytest.approx(open_)
+    assert loaded(1e-6) == pytest.approx(shorted, rel=1e-6)
+    assert loaded(1e12) == pytest.approx(open_, rel=1e-6)
 
 
 @pytest.mark.parametrize(
