@@ -51,6 +51,7 @@ MAX_RECORDED_REJECTIONS = 20_000
 MAX_REDRAWS = 100
 
 
+@dataclass(frozen=True)
 class GeometryParameter(ABC):
     """One input parameter of a geometry: its name, its values and how they are drawn."""
 
@@ -115,7 +116,6 @@ class RangeParameter(GeometryParameter):
         dtype (type[int | float]): Type of the values handed to the geometry.
     """
 
-    name: str
     min: float
     max: float
     step: float | None = None
@@ -200,7 +200,6 @@ class ChoiceParameter(GeometryParameter):
         values (Sequence[float]): The allowed values. Integers stay integers.
     """
 
-    name: str
     values: Sequence[float]
 
     def __post_init__(self) -> None:
