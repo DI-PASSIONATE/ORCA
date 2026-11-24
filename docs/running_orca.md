@@ -44,7 +44,7 @@ For direct integration into scripts or custom workflows:
 ```python
 import orca
 from orca import ORCA
-from orca.geometry.examples.transformer.tf_octa_c_ports import TransformerOcta
+from orca.geometry.presets import TransformerOcta
 
 geometry = TransformerOcta()
 
@@ -57,26 +57,7 @@ orca_instance = ORCA(
             palace_executable="apptainer exec ~/palace/palace.sif palace",
             touchstone_type="dc_deembedded",  # "all", "normal", "deembedded", "dc", "dc_deembedded"
         ),
-        orca.ModelTrainer(
-            # hyperparameters=None,   # Dict or JSON path; if None, Optuna tunes automatically
-            # test_frac=0.15,         # Fraction of geometries held out for testing
-            # val_frac=0.15,          # Fraction of the rest used for validation
-            # n_train_samples=None,   # Optional cap on training geometries
-            # n_fold_cv=5,            # Cross-validation folds (by geometry) during tuning; 1 = val split
-            # n_trials=200,           # Optuna trials
-            # tuning_timeout=None,    # Stop tuning after this many seconds
-            # max_epochs=100,         # Epoch limit of the final training
-            # tuning_max_epochs=30,   # Epoch limit per cross-validation fold
-            # batch_sizes=None,       # Batch sizes to tune over (None: 32-512)
-            # regularization=False,   # Also tune weight decay and dropout
-            # lr_schedule="cosine",   # Learning-rate decay after warmup: "cosine" or "plateau"
-            # warmup_epochs=1.0,      # Linear learning-rate warmup at the start of training
-            # grad_clip_norm=1.0,     # Gradient-norm clipping; None disables it
-            # allow_tf32=False,       # TF32 matmuls while training (faster on A100 and newer)
-            # admittance_weight=0.0,  # Loss on the relative Y-parameter error (tracks L and Q)
-            # passivity_weight=0.0,   # Penalty on predicted S with a singular value above 1
-            # above_srf_weight=1.0,   # Loss weight of frequencies above each self-resonance
-        ),
+        orca.ModelTrainer(),  # options: see Pipeline Stages
         orca.OnnxExporter(),
         orca.ModelTester(),
     ]
@@ -90,15 +71,7 @@ if __name__ == "__main__":
 
 Wrap the call in `if __name__ == "__main__":` (or a `main()` function) as shown: ORCA starts its worker processes with the `spawn` start method, which re-imports your script in every worker. Without the guard each worker would start its own pipeline.
 
-This will:
-
-1. Generate 1000 parameterised GDS layout variants, spread over the parameter ranges with a space-filling design, and plot their coverage to `geometries/<name>_coverage.png`.
-2. Snap them to the manufacturing grid and drop those violating the SG13G2 design rules.
-3. Convert each to a Palace mesh and run full-wave EM simulation.
-4. Store results in Touchstone format under `output/<geometry_name>/`.
-5. Train a neural network on the simulation dataset.
-6. Export the trained model to ONNX format.
-7. Test prediction accuracy against held-out simulation data.
+[Pipeline Stages](pipeline.md) describes what each stage does and its options. Results go to `output/<geometry_name>/`.
 
 !!! tip
 	You can run only a subset of pipeline stages by modifying the list passed to `ORCA(...)`. Stages are sorted by their internal index and some depend on outputs of earlier stages. Stage indices: `GDSGenerator=0`, `DRCChecker=1`, `GDSConverter=2`, `PalaceSimulator=3`, `ModelTrainer=4`, `OnnxExporter=5`, `ModelTester=6`.
