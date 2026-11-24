@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `simulate_geometry` called from a script without an `if __name__ == "__main__":` guard
   failed with a bare `BrokenProcessPool` from its meshing process; it now raises a
   `SimulationError` that names the missing guard.
+- The GUI crashed after a long session on Linux with Python 3.11 and PySide6 6.12.0; that
+  version is now excluded there.
 
 ## [2.3.0] - 2026-11-06
 

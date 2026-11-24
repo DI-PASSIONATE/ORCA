@@ -64,6 +64,7 @@ dependencies = [
     "tqdm",
     "pandas",
     "PySide6",
+    "PySide6!=6.12.0; sys_platform == 'linux' and python_version < '3.12'",
     "qtawesome",
     "colorlog",
     "matplotlib",
