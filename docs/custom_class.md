@@ -34,58 +34,44 @@ The Python class should be a `@dataclass` extending `orca.BaseGeometry` and must
 
 !!! tip "Choosing an output representation"
 
-    The `codec` passed to the dataset decides what the model regresses. `FlatReImCodec`
-    predicts all `N x N` entries; `UpperTriangleReImCodec` predicts only the upper
-    triangle and mirrors it on decode, which halves the output dimension and makes
-    `S = S^T` structural. Use it for reciprocal passives (any ordinary inductor or
-    transformer), and `FlatReImCodec` for anything non-reciprocal. Note that this
-    changes the ONNX output names. See `src/orca/training/README.md`.
+    `FlatReImCodec` predicts all `N x N` S-parameters. `UpperTriangleReImCodec` predicts the
+    upper triangle and mirrors it, for reciprocal passives: half the outputs, and `S = S^T`
+    by construction. It changes the ONNX output names. See `src/orca/training/README.md`.
 
 !!! note "Basis expansions are not set on the geometry"
 
-    Engineered inputs such as a Chebyshev expansion of frequency belong to the
-    model, not the geometry: pass `orca.ModelTrainer(model=..., basis="chebyshev")`.
-    That way the expansion is tuned with the model and traced into the exported ONNX
-    graph. See `src/orca/training/README.md`.
+    Pass them to the training stage: `orca.ModelTrainer(model=..., basis="chebyshev")`.
 
 **Required abstract methods:**
 
 - `create_gds_file(name, output_path, params) -> str` — Generates a GDS layout file from geometry parameters. Returns the path to the created file.
-- `create_dataset() -> BaseDataset` — Builds the dataset (e.g. `GeoToSParamDatasetSingleFrequency`) with its output codec and normalizers, used for training. It is called once per geometry instance, the first time `geometry.dataset` is read, so each instance gets its own dataset and normalizer statistics. A `MinMaxNormalizer` expects the parameter table's columns in the order of the input parameter iterator, with `frequency` last; `ModelTrainer` reorders the table to match and rejects one with missing or extra columns. A custom `BaseDataset` subclass appends the result file name of every sample it loads to `self.sample_groups`, so cross-validation can keep each geometry on one side of a fold.
+- `create_dataset() -> BaseDataset` — Builds the dataset (e.g. `GeoToSParamDatasetSingleFrequency`) with its output codec and normalizers. Called once per geometry instance. The parameter table must have exactly the iterator's columns plus `frequency`. A custom `BaseDataset` appends the result file name of every sample it loads to `self.sample_groups`, so cross-validation can split by geometry.
 
 **Optional methods:**
 
-- `electrical_parameters(ntwk) -> dict[str, np.ndarray]` — The figures of merit of a network of this geometry, which `ModelTester` reports the model's error for next to the S-parameter error: curves over `ntwk.f` (such as L, R and Q) and scalars as 0-d arrays (such as the self-resonance frequency `srf_f`). Which port is which is a property of the layout, so the geometry decides how to read its network. `orca.utils.postprocessing` has the usual ones, with the ports given explicitly: `inductor_parameters(ntwk, ends, shorted)` and `transformer_parameters(ntwk, primary, secondary, shorted)`, which drive each winding differentially with its center tap (`shorted`) AC-grounded. A port that is neither driven nor shorted stays open, or is loaded to ground with `terminations={port: impedance}` (e.g. a center tap biased through 50 Ohm). Import it inside the method. The default returns nothing, so only the S-parameter error is reported. Errors are relative, except for the names in the class attribute `absolute_error_parameters` (e.g. `frozenset({"k"})` for a coupling factor that is near zero for weak coupling). With `ModelTester(plot=True)` the same parameters are plotted, reference against prediction.
-- `feasibility_constraints() -> list[str]` — The same rules as `is_feasible()`, written as boolean expressions over the input parameter names, e.g. `"bottom_linewidth <= bottom_winding_diameter / 3"`. `OnnxExporter` stores them in the model's `input_constraints` metadata, so COBRA can refuse a query for a geometry that cannot be built instead of returning a prediction the model was never trained for. The grammar is a small subset of Python (arithmetic, comparisons, `and`/`or`/`not`, `a if c else b`, and `abs min max sqrt sin cos tan radians ceil floor round`, plus `pi` and `sqrt2`), documented in `orca.geometry.constraints`; anything else is rejected at export. Derive the strings from the same numbers as `is_feasible()` and add a test that they agree on random draws (see `tests/test_constraints.py` for the presets' version).
-- `windings() -> list[list[int]]` — The ports (1-based, in simconfig order) at the terminals of each winding, e.g. `[[1, 2, 3]]` for `InductorOcta` (ends and center tap) and `[[1, 2, 5], [3, 4, 6]]` for `TransformerOcta`. `OnnxExporter` stores them in the model's `windings` metadata, and COBRA replaces the predicted 0 Hz point by that of ideal windings: the predicted resistance inside each winding, no path to ground, no connection between windings. Near DC a winding is almost a short, so a small error in the predicted S-parameters is a large admittance error there, which otherwise leaks bias current to ground or couples the windings. A port in no winding counts as open at DC. The default declares none; leave it so for a component with an intended DC path to ground or between windings.
-- `is_feasible(params) -> bool` — Whether a parameter combination describes a layout that can be drawn (default: always `True`). `GDSGenerator` calls it for every draw of the iterator; rejected draws are counted and, with the `"sobol"`, `"lhs"` and `"random"` strategies, replaced by further draws, so the requested number of samples is met with buildable layouts only. Put cheap, closed-form constraints between parameters here — a winding that must fit its diameter, a feed gap that must fit the octagon's side. The presets derive it from the same check their cell code runs, so the two cannot disagree.
-- `simulation_ports(params) -> list[dict]` — The gds2palace ports of one sample, as entries of the simconfig's `ports` list (default: the simconfig's ports unchanged). Which metal a port has to reach is a property of the layout, so it may depend on the parameters: `InductorOcta` feeds a single turn on TopMetal2 and more turns on TopMetal1, so it returns ports 1/2 with `"to_layername": "TopMetal2"` for `turns == 1`. Change port fields only; the simulation settings stay those of the simconfig, so every sample of one model is meshed and solved alike. Keep every port, with its number and in its order — the Touchstone files and the model's outputs depend on them — which `ports_for(params)`, the method the stages call, checks. `DRCChecker` checks each layout against its own ports and `GDSConverter` hands them to gds2palace.
+- `is_feasible(params) -> bool` — Whether a layout with these parameters can be drawn (default: always). `GDSGenerator` replaces rejected draws. Put cheap, closed-form constraints between parameters here, such as a winding that must fit its diameter.
+- `feasibility_constraints() -> list[str]` — The same rules as expressions over the parameter names, e.g. `"bottom_linewidth <= bottom_winding_diameter / 3"`, for the ONNX metadata, so COBRA rejects geometries that cannot be built. The grammar is documented in `orca.geometry.constraints`. Add a test that they agree with `is_feasible()` (see `tests/test_constraints.py`).
+- `simulation_ports(params) -> list[dict]` — The ports of one sample (default: the simconfig's). Override it when the metal a port lands on depends on the parameters, as in `InductorOcta`. Change port fields only, never a port's number or order.
+- `windings() -> list[list[int]]` — The ports (1-based) of each winding, e.g. `[[1, 2, 5], [3, 4, 6]]` for `TransformerOcta`. COBRA then replaces the predicted 0 Hz point by that of ideal windings. Leave it out for a component with an intended DC path to ground or between windings.
+- `electrical_parameters(ntwk) -> dict[str, np.ndarray]` — Figures of merit such as L, Q and SRF, whose errors `ModelTester` reports: curves over `ntwk.f`, or scalars as 0-d arrays. `orca.utils.postprocessing` has `inductor_parameters(ntwk, ends, shorted)` and `transformer_parameters(ntwk, primary, secondary, shorted)`; ports in `shorted` (e.g. center taps) are AC-grounded, those in `terminations={port: impedance}` loaded to ground, and others open. Import them inside the method. List parameters that can be near zero in `absolute_error_parameters`, e.g. `frozenset({"k"})`.
 
 !!! warning "Reject, never clamp"
 
-    Do not repair a bad parameter inside `create_gds_file()` (for example clamp a
-    too-small diameter to the buildable minimum). The parameter table records the
-    *requested* values, so a repaired layout trains the model on a geometry it does
-    not have, and the surrogate then returns confident results for inputs that
-    were never built. Reject the draw in `is_feasible()` and raise `ValueError`
-    in `create_gds_file()` as the safety net.
+    Do not repair a bad parameter inside `create_gds_file()`. The parameter table records
+    the *requested* values, so the model would learn a geometry that was not built.
+    Reject the draw in `is_feasible()`, and raise `ValueError` in `create_gds_file()` as
+    the safety net.
 
 !!! note "Grid snapping and design rules are not the geometry's job"
 
-    Draw the layout and return; do not snap vertices to the manufacturing grid or
-    re-implement design-rule checks in `create_gds_file()`. The `DRCChecker` stage
-    snaps every generated GDS file to the SG13G2 grid and drops layouts that break
-    the PDK's metal and via rules (see [Pipeline Stages](pipeline.md)). It is the
-    safety net behind `is_feasible()`, not a substitute for it: a rule that can be
-    written down belongs in `is_feasible()`, where it costs nothing and keeps the
-    sample count honest.
+    Do not snap vertices or re-implement design-rule checks in `create_gds_file()`:
+    `DRCChecker` does both (see [Pipeline Stages](pipeline.md)). A rule you can write down
+    belongs in `is_feasible()`, where it costs nothing.
 
 !!! tip "Keep the training imports inside `create_dataset()`"
 
-    The dataset classes and normalizers need PyTorch, which is an optional
-    dependency of ORCA (the `train` extra). Import them inside `create_dataset()`,
-    as in the example below, and your geometry can still generate layouts and run
-    Palace simulations in an environment without PyTorch (e.g. an HPC cluster).
+    Training needs PyTorch, which is optional. With its imports inside `create_dataset()`,
+    the geometry still generates layouts and runs Palace without it, e.g. on an HPC cluster.
 
 The model architecture and its hyperparameters are not part of the geometry: pass them to
 the training stage with `orca.ModelTrainer(model=..., hyperparameters=...)`, or leave
@@ -189,19 +175,18 @@ Picking strategies:
 
 | Strategy | Behaviour |
 |---|---|
-| `"sobol"` (default) | A scrambled Sobol' sequence: a space-filling design that spreads the samples over the parameter box much more evenly than random draws, so the same number of simulations leaves fewer gaps. Reproducible with the run seed. |
-| `"lhs"` | Latin hypercube designs of `num_samples` points: each parameter's range is cut into `num_samples` strata with one sample each. Evener than random, less so than Sobol' in several dimensions together. |
-| `"random"` | Draws every parameter independently from its sampling distribution (with replacement). |
-| `"grid"` / `"uniform_grid"` | About `num_samples ** (1 / number of parameters)` evenly spaced quantiles of each parameter's distribution (always including its min and max), combined. A log-sampled parameter is gridded on a log scale. |
-| `"step_grid"` | Every value of every parameter combined; all parameters need a `step` or be choices. |
+| `"sobol"` (default) | Scrambled Sobol' sequence: covers the parameter box more evenly than random draws. |
+| `"lhs"` | Latin hypercube: one sample in each of `num_samples` strata of every parameter. |
+| `"random"` | Independent draws from each parameter's distribution. |
+| `"grid"` / `"uniform_grid"` | About `num_samples ** (1 / number of parameters)` quantiles of each parameter, combined. |
+| `"step_grid"` | Every value of every parameter combined; all need a `step` or be choices. |
 
-With the three drawing strategies, draws `is_feasible()` rejects are replaced by further draws, and `boundary_fraction` (default 0.05) of the draws are moved onto the boundary of the box: a random number of their parameters, at least one, is set to its min or max. Space-filling and random designs almost never reach the faces, edges and corners themselves, yet a network extrapolates worst there and an optimizer often ends up there. Set it to 0 to switch this off. The grid strategies include each parameter's min and max anyway.
+The first three replace draws that `is_feasible()` rejects. Two options adjust them:
 
-A rejection skews the accepted samples towards the values that are feasible most often: an inductor's small diameters only fit one turn and thin lines, so most small-diameter draws are rejected, and the accepted diameters pile up at the large end. Parameters listed in `kept_on_rejection` keep their drawn value instead, and the other parameters are redrawn around it (up to 100 times) until the combination is feasible, so those parameters follow the distribution they are declared with. The `InductorOcta` preset keeps its diameter this way.
+- `boundary_fraction` (default 0.05) moves that share of the draws onto the faces, edges and corners of the box, which such designs almost never reach. 0 switches it off.
+- `kept_on_rejection` lists parameters that keep their value while the others are redrawn. Without it, values that are rarely feasible, such as small diameters, end up under-represented.
 
-`GDSGenerator` plots the result to `geometries/<name>_coverage.png`: every pair of parameters with the layouts over the rejected draws, so gaps in the sampling can be told apart from regions `is_feasible()` excludes.
-
-The ranges, not the sampling, define what the model covers: `input_parameter_ranges` in the exported ONNX model holds each parameter's `min` and `max`, and an integer parameter's `step` as well, since its geometry exists only on that grid (COBRA warns when an optimization could leave it). Sampling only decides where in that box the simulations are concentrated.
+`input_parameter_ranges` in the exported model holds each parameter's `min` and `max` (and the `step` of integers); sampling only decides where in that box the simulations are.
 
 ### Reference: Dataset Types
 
@@ -212,21 +197,14 @@ The ranges, not the sampling, define what the model covers: `input_parameter_ran
 
 ### Reference: Basis Expansions
 
-Basis expansions widen the model's input before its first layer by appending fixed
-basis functions of it. Nothing about them is learned. They belong to the model,
-not the geometry, so they are chosen on the training stage — `orca.ModelTrainer(model="mlp",
-basis="chebyshev")` — and work with any architecture. Because the expansion is part
-of the model, it is tuned with it and traced into the exported ONNX graph; the ONNX
-input names stay the same.
+Basis expansions append fixed functions of the inputs before the model's first layer. They are part of the model, so they are chosen on the training stage (`orca.ModelTrainer(model="mlp", basis="chebyshev")`), tuned with it and exported in the ONNX graph.
 
 | Class | Name | Description |
 |---|---|---|
 | `IdentityBasis` | `"identity"` | Passes inputs through unchanged (the default) |
 | `ChebyshevBasis` | `"chebyshev"` | Appends `degree` Chebyshev polynomials of one column, `frequency` by default |
 
-`ChebyshevBasis` tunes `basis_degree` automatically when no hyperparameters are
-supplied. It sees *normalized* inputs and clamps to [-1, 1], so a frequency outside
-the training range saturates rather than diverging.
+`basis_degree` is tuned unless hyperparameters are given. Inputs outside the training range saturate rather than diverge.
 
 ### Reference: Normalizers
 
@@ -234,7 +212,7 @@ the training range saturates rather than diverging.
 
 | Class | Description |
 |---|---|
-| `MinMaxNormalizer(input_parameter_iterator)` | Min-max normalisation with the declared parameter ranges (recommended: independent of which samples are trained on, and matches the `input_parameter_ranges` metadata of the exported ONNX model) |
+| `MinMaxNormalizer(input_parameter_iterator)` | Min-max normalisation with the declared parameter ranges (recommended) |
 | `OutputMinMaxNormalizer` | Min-max normalisation fitted to the min/max of the training split |
 
 **Output normalizers** (passed as `output_normalizer` to the dataset):
@@ -260,14 +238,14 @@ stackup_xml: str = StackupXML.SG13G2_FEM_200um
 | `SG13G2_FEM_200um` | `SG13G2_FEM_200um.xml` | SG13G2, planar SiO2 + passivation over TopMetal2, 200 µm chip |
 | `SG13G2_FEM_200um_passi3D` | `SG13G2_FEM_200um_passi3D.xml` | SG13G2, conformal SiO2 around TopMetal2 (derived layers), 200 µm chip |
 
-ORCA keeps its own copies, so a gds2palace update cannot change the stackup of a dataset; their EM layers are the same as in the files gds2palace 0.12 ships. Since 0.9.1, gds2palace installs the latest IHP stackups (`SG13G2_FEM_200um.xml`, `SG13G2_FEM_200um_passi3D.xml`, `SG13CMOS5L_200um.xml`), and `gds2palace.utilities.get_stackup_path("SG13CMOS5L_200um.xml")` returns the path of one. For another technology or variant, copy one from the [`XML_stackup/latest`](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/tree/main/XML_stackup/latest) folder of the gds2palace repository, next to your geometry class, and point `stackup_xml` at it. Avoid the files in `XML_stackup/legacy`; they are kept upstream only for older models. The format is described in the [XML stackup format description](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/blob/main/doc/XML_stackup_format/XML_stackup_format.md).
+The copies keep a gds2palace update from changing a dataset's stackup. For another technology, use a file gds2palace ships (`gds2palace.utilities.get_stackup_path("SG13CMOS5L_200um.xml")`, since 0.9.1) or copy one from its [`XML_stackup/latest`](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/tree/main/XML_stackup/latest) folder next to your geometry class. See the [format description](https://github.com/VolkerMuehlhaus/gds2palace_ihp_sg13g2/blob/main/doc/XML_stackup_format/XML_stackup_format.md).
 
 ### Simulation Configuration File
 The simulation configuration file (.simcfg) defines how to mesh and run the electromagnetic simulation in Palace. 
 You can either tweak the preset .simcfg files next to their geometry classes in `src/orca/geometry/presets/inductor/` and `src/orca/geometry/presets/transformer/`, create your own from scratch,
 or use the GUI provided by [setupEM](https://github.com/VolkerMuehlhaus/setupEM/tree/main) to create the .simcfg file interactively.
 
-The frequencies are given in GHz (any value below 1 MHz is read as GHz): a linear sweep from `fstart` to `fstop` in steps of `fstep`, plus the single frequencies listed in `fpoint`. Palace cannot solve at DC, so with `"fstart": 0.0` gds2palace starts the sweep at `fstep` and solves 10 and 20 MHz instead; the DC point of the `dc` Touchstone files is then extrapolated from there. The presets do this and add `fpoint` frequencies between 0.1 and 9.5 GHz, so that the extrapolation starts close to DC and inductors that resonate at a few GHz have more than a handful of points below their self-resonance. Palace's adaptive sweep makes the extra frequencies nearly free. Set the geometry's `frequency=` band to what the simcfg sweeps, starting at 0 when the results include the DC point, as it is written to the ONNX metadata that COBRA checks its analyses against.
+Frequencies are in GHz: a linear sweep from `fstart` to `fstop` in steps of `fstep`, plus the points in `fpoint`, which are nearly free with Palace's adaptive sweep. Palace cannot solve at DC: with `"fstart": 0.0` it solves 10 and 20 MHz instead, and the DC point of the `dc` Touchstone files is extrapolated from there. Set the geometry's `frequency=` band to what the simcfg sweeps, starting at 0 if the results include the DC point.
 
 Example:
 
@@ -349,4 +327,4 @@ Example:
 }
 ```
 
-The `ports` list is the default for every sample. When the metal a port lands on changes with the parameters, override `simulation_ports(params)` in the geometry class rather than keeping a second simcfg: one file of simulation settings cannot drift apart between samples of the same model. Each port's marker on its `source_layernum` must touch the metals it connects; `DRCChecker` drops layouts where it does not, as such a port would simulate as an open circuit.
+The `ports` list applies to every sample, unless the geometry overrides `simulation_ports(params)`. Each port's marker on its `source_layernum` must touch the metals it connects; `DRCChecker` drops layouts where it does not.
